@@ -5,4 +5,6 @@ Lib/
 Scripts/
 venv/
 pyenv.cfg
-
+highdgraphv2.py
+test.html
+music_viz_3d.html

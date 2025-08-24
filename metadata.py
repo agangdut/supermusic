@@ -263,14 +263,32 @@ def main():
             merged.update({"Error": "Video not found"})
         enriched.append(merged)
 
+    # Columns to omit from the OUTPUT CSV
+    DROP_COLS = {
+        "YouTube Title",
+        "YouTube Channel",
+        "Category",
+        "Genre Guess",
+        "Year Guess",
+        "Artist Guess",
+        "Song Guess",
+        "Album Guess",
+        "Tags",
+        "Duration",          # keep "Duration (s)" instead
+    }
+
 
     # Write out
     with open(args.output, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=enriched[0].keys())
+        # Keep column order from the first row, minus the drops and any empty header
+        fieldnames = [k for k in enriched[0].keys() if k and k not in DROP_COLS]
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
-        writer.writerows(enriched)
+        for row in enriched:
+            writer.writerow(row)
 
     print(f"Wrote enriched metadata for {len(enriched)} rows to {args.output}")
+
 
 if __name__ == "__main__":
     main()
