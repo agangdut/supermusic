@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-import argparse, os, sys, csv, re
-from typing import List
+import argparse
+import csv
+import os
+import re
+import sys
+
 from yt_dlp import YoutubeDL
+
 
 def human_rate_to_bytes(s: str) -> int:
     """Parse '200K', '1M', '4M' → bytes/sec (int)."""
@@ -10,10 +15,11 @@ def human_rate_to_bytes(s: str) -> int:
         raise ValueError(f"Bad rate limit: {s}")
     num = float(m.group(1))
     unit = (m.group(2) or "").upper()
-    mult = {"":1, "K":1024, "M":1024**2, "G":1024**3}[unit]
+    mult = {"": 1, "K": 1024, "M": 1024**2, "G": 1024**3}[unit]
     return int(num * mult)
 
-def urls_from_csv(path: str, id_col: str = "Video ID") -> List[str]:
+
+def urls_from_csv(path: str, id_col: str = "Video ID") -> list[str]:
     with open(path, newline="", encoding="utf-8") as f:
         r = csv.DictReader(f)
         urls = []
@@ -26,14 +32,16 @@ def urls_from_csv(path: str, id_col: str = "Video ID") -> List[str]:
                     urls.append(f"https://www.youtube.com/watch?v={vid}")
         return urls
 
+
 def progress_hook(d):
-    if d.get('status') == 'downloading':
-        pct = d.get('_percent_str', '').strip()
-        eta = d.get('_eta_str', '').strip()
-        speed = d.get('_speed_str', '').strip()
-        print(f"[downloading] {pct}  ETA {eta}  {speed}", end='\r', flush=True)
-    elif d.get('status') == 'finished':
+    if d.get("status") == "downloading":
+        pct = d.get("_percent_str", "").strip()
+        eta = d.get("_eta_str", "").strip()
+        speed = d.get("_speed_str", "").strip()
+        print(f"[downloading] {pct}  ETA {eta}  {speed}", end="\r", flush=True)
+    elif d.get("status") == "finished":
         print(f"\n[post] Downloaded, converting → {d.get('filename')}")
+
 
 def main():
     ap = argparse.ArgumentParser(
@@ -43,23 +51,47 @@ def main():
     src.add_argument("--url", help="YouTube URL (video or playlist)")
     src.add_argument("--csv", help="CSV with a 'Video ID' column (or use --id-col)")
 
-    ap.add_argument("--id-col", default="Video ID", help="Column name with IDs (default: 'Video ID')")
-    ap.add_argument("--outdir", default="mp3music", help="Output folder (created if missing)")
-    ap.add_argument("--template", default="%(title)s.%(ext)s",
-                    help="yt-dlp output template (default: '%(title)s.%(ext)s')")
-    ap.add_argument("--quality", default="0",
-                    help="MP3 quality (ffmpeg -q:a value 0=best VBR … 9=worst)")
+    ap.add_argument(
+        "--id-col",
+        default="Video ID",
+        help="Column name with IDs (default: 'Video ID')",
+    )
+    ap.add_argument(
+        "--outdir", default="mp3music", help="Output folder (created if missing)"
+    )
+    ap.add_argument(
+        "--template",
+        default="%(title)s.%(ext)s",
+        help="yt-dlp output template (default: '%(title)s.%(ext)s')",
+    )
+    ap.add_argument(
+        "--quality",
+        default="0",
+        help="MP3 quality (ffmpeg -q:a value 0=best VBR … 9=worst)",
+    )
 
     ap.add_argument("--rate-limit", help="Limit download rate, e.g. 1M, 500K")
-    ap.add_argument("--ffmpeg", dest="ffmpeg_path", help="Path to ffmpeg/bin (if not on PATH)")
-    ap.add_argument("--restrict-filenames", action="store_true",
-                    help="Use safe filenames (no spaces/special chars)")
-    ap.add_argument("--parse-artist-title", action="store_true",
-                    help="Try to split 'Artist - Title' into tags via parse-metadata")
-    ap.add_argument("--no-thumbnail", action="store_true",
-                    help="Disable embedding the thumbnail as cover art")
-    ap.add_argument("--no-metadata", action="store_true",
-                    help="Disable writing ID3/metadata tags")
+    ap.add_argument(
+        "--ffmpeg", dest="ffmpeg_path", help="Path to ffmpeg/bin (if not on PATH)"
+    )
+    ap.add_argument(
+        "--restrict-filenames",
+        action="store_true",
+        help="Use safe filenames (no spaces/special chars)",
+    )
+    ap.add_argument(
+        "--parse-artist-title",
+        action="store_true",
+        help="Try to split 'Artist - Title' into tags via parse-metadata",
+    )
+    ap.add_argument(
+        "--no-thumbnail",
+        action="store_true",
+        help="Disable embedding the thumbnail as cover art",
+    )
+    ap.add_argument(
+        "--no-metadata", action="store_true", help="Disable writing ID3/metadata tags"
+    )
 
     args = ap.parse_args()
 
@@ -76,12 +108,12 @@ def main():
 
     # yt-dlp options
     ydl_opts = {
-        "paths": {"home": args.outdir},            # send outputs to outdir
-        "outtmpl": {"default": args.template},     # filename template
+        "paths": {"home": args.outdir},  # send outputs to outdir
+        "outtmpl": {"default": args.template},  # filename template
         "format": "bestaudio/best",
         "quiet": False,
-        "noplaylist": False,                       # allow playlists if URL is one
-        "ignoreerrors": True,                      # continue on errors
+        "noplaylist": False,  # allow playlists if URL is one
+        "ignoreerrors": True,  # continue on errors
         "retries": 5,
         "progress_hooks": [progress_hook],
         "prefer_ffmpeg": True,
@@ -115,9 +147,7 @@ def main():
     # This copies the info-dict 'title' split into artist/title when it matches.
     if args.parse_artist_title:
         # Template form works for many official uploads
-        ydl_opts["parse_metadata"] = [
-            "title:%(artist)s - %(title)s"
-        ]
+        ydl_opts["parse_metadata"] = ["title:%(artist)s - %(title)s"]
         # Also try a regex if template fails (looser)
         ydl_opts.setdefault("parse_metadata", []).append(
             r"title:(?P<artist>.+?)\s*[-–]\s*(?P<title>.+)"
@@ -132,6 +162,7 @@ def main():
         sys.exit(2)
 
     print("\n[done] All finished.")
+
 
 if __name__ == "__main__":
     main()

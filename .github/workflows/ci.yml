@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }} • ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]   # keep both since you dev on Windows
+        python-version: ["3.10", "3.11"]      # add "3.12" later if desired
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements*.txt
+            pyproject.toml
+            setup.cfg
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # lightweight dev tools (fast)
+          pip install pytest pytest-cov ruff
+
+      # Optional: tools needed for audio (commented out; enable if your tests need them)
+      # - name: Install ffmpeg & chromaprint (Windows)
+      #   if: runner.os == 'Windows'
+      #   run: |
+      #     choco install -y ffmpeg
+      #     choco install -y chromaprint
+      # - name: Install ffmpeg & chromaprint (Ubuntu)
+      #   if: runner.os == 'Linux'
+      #   run: |
+      #     sudo apt-get update
+      #     sudo apt-get install -y ffmpeg chromaprint
+
+      - name: Lint (ruff)
+        run: |
+          ruff check .
+
+      - name: Run tests
+        env:
+          TOKENIZERS_PARALLELISM: "false"
+        run: |
+          pytest -q --maxfail=1 --disable-warnings --cov --cov-report=term-missing

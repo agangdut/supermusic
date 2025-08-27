@@ -1,9 +1,48 @@
 #!/usr/bin/env python3
-import os, csv, re, argparse
+import argparse
+import csv
+import json
+import os
+import re
+import sys
+
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-import json, sys
 from yt_dlp import YoutubeDL
+
+
+def is_blank(val):
+    return val is None or (isinstance(val, str) and val.strip() == "")
+
+
+def fill_if_missing(row: dict, key: str, value):
+    """Write value only if row[key] is blank or key not present."""
+    if value is None:
+        return
+    if key not in row or is_blank(row.get(key)):
+        row[key] = value
+
+
+def resolve_output_path(out_arg: str, input_path: str) -> str:
+    """
+    If --output is a directory (or looks like one), write INPUTNAME_enriched.csv inside.
+    Ensures the directory exists.
+    """
+    out_arg = os.path.normpath(out_arg)
+    looks_like_dir = (
+        out_arg.endswith(os.sep)
+        or os.path.isdir(out_arg)
+        or os.path.splitext(out_arg)[1] == ""
+    )
+    if looks_like_dir:
+        base = os.path.splitext(os.path.basename(input_path))[0] or "metadata"
+        out_dir = out_arg
+        os.makedirs(out_dir, exist_ok=True)
+        return os.path.join(out_dir, f"{base}_enriched.csv")
+    # ensure parent exists
+    os.makedirs(os.path.dirname(out_arg) or ".", exist_ok=True)
+    return out_arg
+
 
 def yt_dlp_info(video_id: str) -> dict:
     """Return extra metadata from yt-dlp without downloading."""
@@ -24,17 +63,21 @@ def yt_dlp_info(video_id: str) -> dict:
                 "artist": info.get("artist"),
                 "album": info.get("album"),
                 "release_year": info.get("release_year"),
-                "genres": info.get("genres"),          # may be None or a list
+                "genres": info.get("genres"),  # may be None or a list
                 "channel": info.get("channel"),
                 "uploader": info.get("uploader"),
                 "uploader_id": info.get("uploader_id"),
                 "uploader_url": info.get("uploader_url"),
-                "categories": info.get("categories"),  # list of high-level categories, sometimes includes 'Music'
-                "tags": info.get("tags"),              # alternative tag source
-                "thumbnail": info.get("thumbnail"),    # best single thumbnail
+                "categories": info.get(
+                    "categories"
+                ),  # list of high-level categories, sometimes includes 'Music'
+                "tags": info.get("tags"),  # alternative tag source
+                "thumbnail": info.get("thumbnail"),  # best single thumbnail
                 "thumbnails": info.get("thumbnails"),  # list of thumbnails
-                "duration": info.get("duration"),      # seconds (int)
-                "chapters": info.get("chapters"),      # list of {start_time, end_time, title}
+                "duration": info.get("duration"),  # seconds (int)
+                "chapters": info.get(
+                    "chapters"
+                ),  # list of {start_time, end_time, title}
                 "is_live": info.get("is_live"),
                 "availability": info.get("availability"),
             }
@@ -67,33 +110,45 @@ TOPIC_TO_GENRE = {
 }
 YEAR_RE = re.compile(r"\b(19\d{2}|20\d{2})\b")
 
+
 def build_client(api_key: str):
     return build("youtube", "v3", developerKey=api_key)
 
+
 def fetch_categories_map(youtube, region_code="US"):
     out = {}
-    resp = youtube.videoCategories().list(part="snippet", regionCode=region_code).execute()
+    resp = (
+        youtube.videoCategories().list(part="snippet", regionCode=region_code).execute()
+    )
     for item in resp.get("items", []):
         out[item["id"]] = item["snippet"]["title"]
     return out
 
+
 def videos_details(youtube, ids):
     details = []
     for i in range(0, len(ids), 50):  # API max batch = 50
-        resp = youtube.videos().list(
-            part="snippet,contentDetails,topicDetails,statistics",
-            id=",".join(ids[i:i+50])
-        ).execute()
+        resp = (
+            youtube.videos()
+            .list(
+                part="snippet,contentDetails,topicDetails,statistics",
+                id=",".join(ids[i : i + 50]),
+            )
+            .execute()
+        )
         details.extend(resp.get("items", []))
     return details
 
+
 def guess_year(*texts):
     for t in texts:
-        if not t: continue
+        if not t:
+            continue
         m = YEAR_RE.search(t)
         if m:
             return m.group(1)
     return None
+
 
 def guess_genre(item):
     topics = item.get("topicDetails", {}).get("topicIds", [])
@@ -118,6 +173,7 @@ def guess_genre(item):
 
     return "Unknown"
 
+
 def parse_music_info(snippet):
     title = snippet.get("title", "")
     # crude regex to split "Artist - Song" or "Song - Artist"
@@ -126,6 +182,7 @@ def parse_music_info(snippet):
         left, right = m.groups()
         return left.strip(), right.strip()
     return None, None
+
 
 def merge_metadata(original_row, yt_item, catmap, yt_dlp_extra=None):
     sn = yt_item.get("snippet", {})
@@ -167,30 +224,37 @@ def merge_metadata(original_row, yt_item, catmap, yt_dlp_extra=None):
     duration_seconds = td_duration_s
 
     merged = dict(original_row)
-    merged.update({
-        "YouTube Title": sn.get("title"),
-        "YouTube Channel": sn.get("channelTitle"),
-        "Published At": sn.get("publishedAt"),
-        "Category": catmap.get(sn.get("categoryId", ""), ""),
-        "Genre Guess": genre or (td_genres[0] if td_genres else None),
-        "Year Guess": year_guess,
-        "Artist Guess": artist_guess or sn.get("channelTitle"),
-        "Song Guess": song_guess,
-        "Album Guess": td_album,
-        "Tags": ";".join(all_tags),
-        "Duration": duration_iso8601,
-        "Duration (s)": duration_seconds,
-        "Views": stats.get("viewCount"),
-        "Likes": stats.get("likeCount"),
-        "Comments": stats.get("commentCount"),
-        "Thumbnail": td_thumbnail or sn.get("thumbnails", {}).get("high", {}).get("url"),
-    })
+    merged.update(
+        {
+            "YouTube Title": sn.get("title"),
+            "YouTube Channel": sn.get("channelTitle"),
+            "Published At": sn.get("publishedAt"),
+            "Category": catmap.get(sn.get("categoryId", ""), ""),
+            "Genre Guess": genre or (td_genres[0] if td_genres else None),
+            "Year Guess": year_guess,
+            "Artist Guess": artist_guess or sn.get("channelTitle"),
+            "Song Guess": song_guess,
+            "Album Guess": td_album,
+            "Tags": ";".join(all_tags),
+            "Duration": duration_iso8601,
+            "Duration (s)": duration_seconds,
+            "Views": stats.get("viewCount"),
+            "Likes": stats.get("likeCount"),
+            "Comments": stats.get("commentCount"),
+            "Thumbnail": td_thumbnail
+            or sn.get("thumbnails", {}).get("high", {}).get("url"),
+        }
+    )
 
     # Optional: include chapters as a compact string column
     if td_chapters:
+
         def _fmt(ch):
-            st = ch.get("start_time"); et = ch.get("end_time"); tt = ch.get("title", "")
+            st = ch.get("start_time")
+            et = ch.get("end_time")
+            tt = ch.get("title", "")
             return f"{st}-{et}:{tt}"
+
         merged["Chapters"] = " | ".join(_fmt(c) for c in td_chapters)
 
     return merged
@@ -199,9 +263,11 @@ def merge_metadata(original_row, yt_item, catmap, yt_dlp_extra=None):
 def fetch_categories_map(youtube, region_code="US"):
     out = {}
     try:
-        resp = youtube.videoCategories().list(
-            part="snippet", regionCode=region_code
-        ).execute()
+        resp = (
+            youtube.videoCategories()
+            .list(part="snippet", regionCode=region_code)
+            .execute()
+        )
     except HttpError as e:
         explain_http_error(e, "videoCategories.list")
         # Keep going with empty mapping so the rest can still run
@@ -210,14 +276,19 @@ def fetch_categories_map(youtube, region_code="US"):
         out[item["id"]] = item["snippet"]["title"]
     return out
 
+
 def videos_details(youtube, ids):
     details = []
     for i in range(0, len(ids), 50):
         try:
-            resp = youtube.videos().list(
-                part="snippet,contentDetails,topicDetails,statistics",
-                id=",".join(ids[i:i+50])
-            ).execute()
+            resp = (
+                youtube.videos()
+                .list(
+                    part="snippet,contentDetails,topicDetails,statistics",
+                    id=",".join(ids[i : i + 50]),
+                )
+                .execute()
+            )
         except HttpError as e:
             explain_http_error(e, "videos.list")
             continue
@@ -226,17 +297,22 @@ def videos_details(youtube, ids):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Enrich a CSV of YouTube video IDs with YouTube metadata.")
+    ap = argparse.ArgumentParser(
+        description="Enrich a CSV of YouTube video IDs with YouTube metadata."
+    )
     ap.add_argument("--input", required=True, help="Input CSV with Video ID column")
     ap.add_argument("--output", required=True, help="Output CSV with metadata")
     ap.add_argument("--region", default="US", help="Region for category names")
-    ap.add_argument("--use-yt-dlp", action="store_true",
-                help="Use yt-dlp to enrich missing music metadata (artist, track, album, year, genres)")
+    ap.add_argument(
+        "--use-yt-dlp",
+        action="store_true",
+        help="Use yt-dlp to enrich missing music metadata (artist, track, album, year, genres)",
+    )
     args = ap.parse_args()
-
+    args.output = resolve_output_path(args.output, args.input)
 
     api_key = os.environ.get("YOUTUBE_API_KEY")
-    #REMOVED_API_KEY
+    # REMOVED_API_KEY
     if not api_key:
         raise SystemExit("Set YOUTUBE_API_KEY environment variable")
 
@@ -274,9 +350,18 @@ def main():
         "Song Guess",
         "Album Guess",
         "Tags",
-        "Duration",          # keep "Duration (s)" instead
+        "Duration",  # keep "Duration (s)" instead
     }
 
+    # Build the union of keys across all rows, then drop unwanted ones.
+    all_keys = []
+    seen = set()
+    for row in enriched:
+        for k in row.keys():
+            if k and k not in DROP_COLS and k not in seen:
+                seen.add(k)
+                all_keys.append(k)
+    fieldnames = all_keys
 
     # Write out
     with open(args.output, "w", newline="", encoding="utf-8") as f:

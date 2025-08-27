@@ -1,0 +1,20 @@
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0 # Use a specific version for stability
+    hooks:
+      - id: check-yaml # Checks YAML file syntax
+      - id: end-of-file-fixer # Ensures files end with a newline
+      - id: trailing-whitespace # Removes trailing whitespace
+      - id: mixed-line-ending # Enforces consistent line endings (e.g., lf)
+        args: [--fix=lf]
+
+  - repo: https://github.com/psf/black
+    rev: 24.4.2 # Use a specific version of Black
+    hooks:
+      - id: black # Python code formatter
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2 # Use a specific version of isort
+    hooks:
+      - id: isort # Sorts Python imports

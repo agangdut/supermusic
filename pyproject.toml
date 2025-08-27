@@ -1,0 +1,55 @@
+# pyproject.toml
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "supermusic"
+version = "0.1.0"                       # <-- required
+description = "Audio analysis, separation, and interactive reports"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Agang Dut" }]
+
+# Base runtime deps
+dependencies = [
+  "librosa",
+  "soundfile",
+  "numpy",
+  "scipy",
+  "pandas",
+  "plotly",
+  "umap-learn",
+  "ffmpeg-python",
+  "typer",         # or click
+  "fastapi",
+  "uvicorn",
+]
+
+[project.scripts]
+supermusic = "supermusic.cli:app"       # if you expose a Typer/Click app
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "mypy", "pre-commit"]
+separation = ["demucs", "spleeter", "openunmix"]
+transcription = ["basic-pitch", "pretty_midi", "note-seq"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["supermusic*"]
+
+# Include templates/icons/etc shipped with package
+[tool.setuptools.package-data]
+supermusic = ["resources/**/*", "configs/*"]
+
+# Optional lint/test config
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

@@ -1,0 +1,16 @@
+pandas
+numpy
+plotly
+scikit-learn
+umap-learn
+sentence-transformers
+musicbrainzngs
+mutagen
+acoustid
+tqdm
+librosa
+scipy
+customtkinter
+music21
+pretty_midi
+basic-pitch

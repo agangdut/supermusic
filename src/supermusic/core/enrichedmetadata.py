@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """
 enrichedmetadata.py
@@ -22,28 +21,40 @@ AcoustID requires Chromaprint:
   - Windows: install Chromaprint/FPcalc binary and ensure it's on PATH
 """
 
-import argparse, os, sys, time, csv, hashlib, json
+import argparse
+import hashlib
+import json
+import os
+import sys
+import time
 from pathlib import Path
-from typing import Optional, Tuple, List, Dict
 
 import pandas as pd
 from tqdm import tqdm
+
 
 # --- Optional deps (import when needed)
 def _lazy_mutagen():
     from mutagen.easyid3 import EasyID3
     from mutagen.mp3 import MP3
+
     return EasyID3, MP3
+
 
 def _lazy_mb():
     import musicbrainzngs as mb
+
     return mb
+
 
 def _lazy_acoustid():
     import acoustid
+
     return acoustid
 
+
 # ---------------------- MusicBrainz helpers ----------------------
+
 
 def mb_init(app="EnrichedMetadata", version="0.1", contact=None):
     mb = _lazy_mb()
@@ -51,7 +62,8 @@ def mb_init(app="EnrichedMetadata", version="0.1", contact=None):
     mb.set_useragent(app, version, contact=contact or "contact@example.com")
     return mb
 
-def _best_rg_from_recording(rec: dict) -> Tuple[Optional[str], Optional[str]]:
+
+def _best_rg_from_recording(rec: dict) -> tuple[str | None, str | None]:
     """Pick a good release-group from a recording payload."""
     rg = rec.get("release-group")
     if rg and rg.get("id"):
@@ -71,7 +83,8 @@ def _best_rg_from_recording(rec: dict) -> Tuple[Optional[str], Optional[str]]:
             return rg2["id"], rg2.get("title")
     return None, None
 
-def _extract_genres_from_entity(ent: dict) -> List[str]:
+
+def _extract_genres_from_entity(ent: dict) -> list[str]:
     """
     MusicBrainz returns:
       - "genres": list of {"name": "...", "count": int}
@@ -97,7 +110,10 @@ def _extract_genres_from_entity(ent: dict) -> List[str]:
             res.append(g)
     return res
 
-def mb_lookup_by_artist_title(mb, artist: str, title: str) -> Tuple[Optional[dict], Optional[dict], Optional[dict]]:
+
+def mb_lookup_by_artist_title(
+    mb, artist: str, title: str
+) -> tuple[dict | None, dict | None, dict | None]:
     """
     Return (recording, release-group, artist) payloads if found.
     """
@@ -122,14 +138,18 @@ def mb_lookup_by_artist_title(mb, artist: str, title: str) -> Tuple[Optional[dic
         rid = rec.get("id")
         if not rid:
             return rec, None, None
-        full = mb.get_recording_by_id(rid, includes=["genres","tags","artists","releases","release-groups"])
+        full = mb.get_recording_by_id(
+            rid, includes=["genres", "tags", "artists", "releases", "release-groups"]
+        )
         rec_full = full.get("recording", {})
 
         # release-group details
         rgid, _ = _best_rg_from_recording(rec_full)
         rg_full = None
         if rgid:
-            rg_full = mb.get_release_group_by_id(rgid, includes=["genres","tags"]).get("release-group", {})
+            rg_full = mb.get_release_group_by_id(rgid, includes=["genres", "tags"]).get(
+                "release-group", {}
+            )
 
         # primary artist details (first credited)
         art_full = None
@@ -137,13 +157,18 @@ def mb_lookup_by_artist_title(mb, artist: str, title: str) -> Tuple[Optional[dic
         if arts:
             aid = arts[0].get("artist", {}).get("id")
             if aid:
-                art_full = mb.get_artist_by_id(aid, includes=["genres","tags"]).get("artist", {})
+                art_full = mb.get_artist_by_id(aid, includes=["genres", "tags"]).get(
+                    "artist", {}
+                )
 
         return rec_full, rg_full, art_full
     except Exception:
         return None, None, None
 
-def mb_lookup_by_acoustid(mb, acoustid_key: str, path: str) -> Tuple[Optional[dict], Optional[dict], Optional[dict]]:
+
+def mb_lookup_by_acoustid(
+    mb, acoustid_key: str, path: str
+) -> tuple[dict | None, dict | None, dict | None]:
     """
     Use AcoustID fingerprint to identify the track and then pull MB data.
     Requires chromaprint (fpcalc) installed and acoustid_key.
@@ -151,13 +176,18 @@ def mb_lookup_by_acoustid(mb, acoustid_key: str, path: str) -> Tuple[Optional[di
     acoustid = _lazy_acoustid()
     try:
         # identify() returns candidates with MBIDs
-        res = acoustid.match(acoustid_key, path, parse=True, meta='recordings releases releasegroups artists')
+        res = acoustid.match(
+            acoustid_key,
+            path,
+            parse=True,
+            meta="recordings releases releasegroups artists",
+        )
         # choose top candidate that has a recording MBID
         top = None
         for cand in res:
-            score, recording_id = cand.get('score', 0), None
-            for r in cand.get('recordings', []) or []:
-                rid = r.get('id')
+            score, recording_id = cand.get("score", 0), None
+            for r in cand.get("recordings", []) or []:
+                rid = r.get("id")
                 if rid:
                     recording_id = rid
                     break
@@ -169,23 +199,36 @@ def mb_lookup_by_acoustid(mb, acoustid_key: str, path: str) -> Tuple[Optional[di
             return None, None, None
 
         rid = top[1]
-        rec_full = mb.get_recording_by_id(rid, includes=["genres","tags","artists","releases","release-groups"]).get("recording", {})
+        rec_full = mb.get_recording_by_id(
+            rid, includes=["genres", "tags", "artists", "releases", "release-groups"]
+        ).get("recording", {})
 
         rgid, _ = _best_rg_from_recording(rec_full)
-        rg_full = mb.get_release_group_by_id(rgid, includes=["genres","tags"]).get("release-group", {}) if rgid else None
+        rg_full = (
+            mb.get_release_group_by_id(rgid, includes=["genres", "tags"]).get(
+                "release-group", {}
+            )
+            if rgid
+            else None
+        )
 
         art_full = None
         arts = rec_full.get("artist-credit", [])
         if arts:
             aid = arts[0].get("artist", {}).get("id")
             if aid:
-                art_full = mb.get_artist_by_id(aid, includes=["genres","tags"]).get("artist", {})
+                art_full = mb.get_artist_by_id(aid, includes=["genres", "tags"]).get(
+                    "artist", {}
+                )
 
         return rec_full, rg_full, art_full
     except Exception:
         return None, None, None
 
-def choose_genre(rec: Optional[dict], rg: Optional[dict], art: Optional[dict]) -> Tuple[str, List[str], str]:
+
+def choose_genre(
+    rec: dict | None, rg: dict | None, art: dict | None
+) -> tuple[str, list[str], str]:
     """
     Decide a single label plus supporting list and provenance.
     Priority:
@@ -200,14 +243,16 @@ def choose_genre(rec: Optional[dict], rg: Optional[dict], art: Optional[dict]) -
             return primary, glist, src
     return "", [], ""  # unknown
 
+
 # ---------------------- ID3 helpers ----------------------
 
-def read_id3_artist_title(path: str) -> Tuple[Optional[str], Optional[str]]:
+
+def read_id3_artist_title(path: str) -> tuple[str | None, str | None]:
     EasyID3, MP3 = _lazy_mutagen()
     try:
         audio = EasyID3(path)
         artist = (audio.get("artist") or [None])[0]
-        title  = (audio.get("title") or [None])[0]
+        title = (audio.get("title") or [None])[0]
         return artist, title
     except Exception:
         # try full MP3 for safety
@@ -224,6 +269,7 @@ def read_id3_artist_title(path: str) -> Tuple[Optional[str], Optional[str]]:
         except Exception:
             return None, None
 
+
 def write_id3_genre(path: str, genre: str) -> bool:
     EasyID3, _ = _lazy_mutagen()
     try:
@@ -236,18 +282,21 @@ def write_id3_genre(path: str, genre: str) -> bool:
     except Exception:
         return False
 
+
 # ---------------------- Cache ----------------------
 
-def load_cache(cache_path: str) -> Dict[str, dict]:
+
+def load_cache(cache_path: str) -> dict[str, dict]:
     if not cache_path or not os.path.exists(cache_path):
         return {}
     try:
-        with open(cache_path, "r", encoding="utf-8") as f:
+        with open(cache_path, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return {}
 
-def save_cache(cache_path: str, cache: Dict[str, dict]) -> None:
+
+def save_cache(cache_path: str, cache: dict[str, dict]) -> None:
     if not cache_path:
         return
     try:
@@ -256,18 +305,25 @@ def save_cache(cache_path: str, cache: Dict[str, dict]) -> None:
     except Exception:
         pass
 
-def cache_key_from_audio(artist: Optional[str], title: Optional[str], size_bytes: int) -> str:
-    h = hashlib.sha1(f"{artist or ''}|||{title or ''}|||{size_bytes}".encode("utf-8")).hexdigest()
+
+def cache_key_from_audio(artist: str | None, title: str | None, size_bytes: int) -> str:
+    h = hashlib.sha1(
+        f"{artist or ''}|||{title or ''}|||{size_bytes}".encode()
+    ).hexdigest()
     return h
+
 
 # ---------------------- Main pipeline ----------------------
 
-def process_file(path: str,
-                 mb,
-                 acoustid_key: Optional[str],
-                 write_id3: bool,
-                 pause_sec: float,
-                 cache: Dict[str, dict]) -> dict:
+
+def process_file(
+    path: str,
+    mb,
+    acoustid_key: str | None,
+    write_id3: bool,
+    pause_sec: float,
+    cache: dict[str, dict],
+) -> dict:
     p = Path(path)
     size = p.stat().st_size if p.exists() else 0
 
@@ -309,7 +365,8 @@ def process_file(path: str,
     cache[ck] = result
     return result
 
-def find_mp3s(inputs: List[str]) -> List[str]:
+
+def find_mp3s(inputs: list[str]) -> list[str]:
     out = []
     for inp in inputs:
         p = Path(inp)
@@ -319,17 +376,34 @@ def find_mp3s(inputs: List[str]) -> List[str]:
             out.append(str(p))
     return sorted(set(out))
 
+
 def main():
     ap = argparse.ArgumentParser(
         description="Classify MP3 genre via MusicBrainz (with optional AcoustID fallback) and optionally write it to ID3."
     )
     ap.add_argument("inputs", nargs="+", help="MP3 files and/or folders")
-    ap.add_argument("--csv", default="genres.csv", help="Output CSV path")
-    ap.add_argument("--write-id3", action="store_true", help="Write chosen genre back to the MP3 ID3 tag")
-    ap.add_argument("--mb-contact", help="Email for MusicBrainz user-agent (recommended)")
-    ap.add_argument("--pause", type=float, default=1.0, help="Sleep seconds between lookups (be nice to MB)")
-    ap.add_argument("--cache", default=".mb_genre_cache.json", help="Path to JSON cache")
-    ap.add_argument("--acoustid-key", help="AcoustID API key for audio fingerprint fallback (optional)")
+    ap.add_argument("--csv", default="../csv/genres.csv", help="Output CSV path")
+    ap.add_argument(
+        "--write-id3",
+        action="store_true",
+        help="Write chosen genre back to the MP3 ID3 tag",
+    )
+    ap.add_argument(
+        "--mb-contact", help="Email for MusicBrainz user-agent (recommended)"
+    )
+    ap.add_argument(
+        "--pause",
+        type=float,
+        default=1.0,
+        help="Sleep seconds between lookups (be nice to MB)",
+    )
+    ap.add_argument(
+        "--cache", default=".mb_genre_cache.json", help="Path to JSON cache"
+    )
+    ap.add_argument(
+        "--acoustid-key",
+        help="AcoustID API key for audio fingerprint fallback (optional)",
+    )
     args = ap.parse_args()
 
     files = find_mp3s(args.inputs)
@@ -344,22 +418,30 @@ def main():
     for f in tqdm(files, desc="Classifying", unit="file"):
         try:
             res = process_file(
-                f, mb,
+                f,
+                mb,
                 acoustid_key=args.acoustid_key,
                 write_id3=args.write_id3,
                 pause_sec=args.pause,
-                cache=cache
+                cache=cache,
             )
             rows.append(res)
         except KeyboardInterrupt:
             print("\nInterrupted.")
             break
         except Exception as e:
-            rows.append({
-                "file": f, "artist_id3": "", "title_id3": "",
-                "genre_primary": "", "genres_all": "", "genre_source": "",
-                "wrote_id3": False, "error": str(e)
-            })
+            rows.append(
+                {
+                    "file": f,
+                    "artist_id3": "",
+                    "title_id3": "",
+                    "genre_primary": "",
+                    "genres_all": "",
+                    "genre_source": "",
+                    "wrote_id3": False,
+                    "error": str(e),
+                }
+            )
 
     # Save cache
     save_cache(args.cache, cache)
@@ -368,6 +450,7 @@ def main():
     df = pd.DataFrame(rows)
     df.to_csv(args.csv, index=False)
     print(f"[OK] Wrote {len(df)} rows → {args.csv}")
+
 
 if __name__ == "__main__":
     main()
