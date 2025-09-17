@@ -1,0 +1,23 @@
+# Core
+requests
+pandas
+numpy
+
+# Audio Processing
+librosa
+pydub
+
+# Web
+fastapi
+uvicorn
+jinja2
+
+# Visualization
+plotly
+umap-learn
+
+# CLI Helpers
+click
+
+# Testing
+pytest

@@ -1,0 +1,39 @@
+/* SuperMusic basic dark theme styles */
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 2rem;
+  background-color: #121212;
+  color: #eeeeee;
+}
+
+header {
+  margin-bottom: 2rem;
+}
+
+h1, h2, h3 {
+  color: #ffffff;
+}
+
+a {
+  color: #1db954;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.button {
+  background-color: #1db954;
+  border: none;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.button:hover {
+  background-color: #17a147;
+}
