@@ -6,11 +6,17 @@ numpy
 # Audio Processing
 librosa
 pydub
+demucs
+
+# MIDI
+basic-pitch
+pretty_midi
 
 # Web
 fastapi
 uvicorn
 jinja2
+python-multipart
 
 # Visualization
 plotly
