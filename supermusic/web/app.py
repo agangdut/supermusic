@@ -1,87 +1,15 @@
 # supermusic/web/app.py
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
-from pathlib import Path
-import shutil
-import tempfile
-import pandas as pd
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-import uuid
-from fastapi import BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from pathlib import Path
+import tempfile, uuid, json, traceback
 
-RESULTS_DIR = TMP_ROOT / "results"; RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/results", StaticFiles(directory=RESULTS_DIR), name="results")
-
-# --- helper to sanitize names ---
-def safe_name(s: str) -> str:
-    return "".join(c for c in s if c.isalnum() or c in ("-", "_", ".", " ")).strip() or "track"
-
-# ---- Per-track YouTube download (audio only) ----
-class YTReq(BaseModel):
-    url: str
-    api_key: str | None = None  # not used by yt-dlp; keep for your testing/logging
-
-@app.post("/download-youtube")
-async def download_youtube(req: YTReq, background: BackgroundTasks):
-    """
-    Downloads a single YouTube URL's audio using yt-dlp and exposes a direct file URL.
-    Returns {job_id, url} when done (simple background task).
-    """
-    job_id = str(uuid.uuid4())
-    outdir = RESULTS_DIR / "yt" / job_id
-    outdir.mkdir(parents=True, exist_ok=True)
-
-    def job():
-        from yt_dlp import YoutubeDL
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": str(outdir / "%(title)s.%(ext)s"),
-            "quiet": True,
-            "noplaylist": True,
-            "postprocessors": [
-                {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}
-            ],
-        }
-        with YoutubeDL(ydl_opts) as ydl:
-            ydl.download([req.url])
-
-    background.add_task(job)
-    return {"ok": True, "job_id": job_id, "results_prefix": f"/results/yt/{job_id}/"}
-
-# ---- Optional: quick list results for a job ----
-@app.get("/jobs/{kind}/{job_id}")
-async def job_results(kind: str, job_id: str):
-    d = RESULTS_DIR / kind / job_id
-    if not d.exists():
-        return JSONResponse({"ok": False, "files": []}, status_code=404)
-    files = [{"name": p.name, "url": f"/results/{kind}/{job_id}/{p.name}", "size": p.stat().st_size}
-             for p in d.iterdir() if p.is_file()]
-    return {"ok": True, "files": files}
-
-RESULTS_DIR = TMP_ROOT / "results"; RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/results", StaticFiles(directory=RESULTS_DIR), name="results")
-
-
-from fastapi import BackgroundTasks
-
-@app.post("/convert-midi")
-async def convert_midi(background: BackgroundTasks, audio: List[UploadFile] = File(...)):
-    paths = [_save_upload(f, TMP_ROOT/"convert_midi") for f in audio]
-    outdir = RESULTS_DIR / "midi"; outdir.mkdir(exist_ok=True, parents=True)
-    def job():
-        # TODO replace with your real pipeline
-        for p in paths: (outdir / (p.stem + ".mid")).write_bytes(b"MThd\x00\x00\x00\x06\x00\x01\x00\x01\x01\xE0")  # tiny placeholder
-    background.add_task(job)
-    return {"ok": True, "download_prefix": "/results/midi/"}
-
+from yt_dlp import YoutubeDL
 
 app = FastAPI(title="SuperMusic API")
-
-# Allow your Next.js dev server
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -91,64 +19,95 @@ app.add_middleware(
 )
 
 TMP_ROOT = Path(tempfile.gettempdir()) / "supermusic_uploads"
+RESULTS_DIR = TMP_ROOT / "results"
 TMP_ROOT.mkdir(parents=True, exist_ok=True)
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/results", StaticFiles(directory=RESULTS_DIR), name="results")
 
-def _save_upload(f: UploadFile, dest_dir: Path) -> Path:
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    out = dest_dir / f.filename
-    with out.open("wb") as w:
-        shutil.copyfileobj(f.file, w)
-    return out
+def write_status(dirpath: Path, **data):
+    dirpath.mkdir(parents=True, exist_ok=True)
+    status_path = dirpath / "status.json"
+    with status_path.open("w", encoding="utf-8") as f:
+        json.dump(data, f)
 
-@app.post("/convert-midi")
-async def convert_midi(audio: List[UploadFile] = File(...)):
-    """
-    Stub: receive audio files and (later) call your transcription pipeline.
-    """
-    save_dir = TMP_ROOT / "convert_midi"
-    paths = [ _save_upload(f, save_dir) for f in audio ]
-    # TODO: call your real converter here
-    # e.g., supermusic.core.transcription.convert_to_midi(paths)
-    return {"ok": True, "received": [p.name for p in paths]}
-
-@app.post("/separate-stems")
-async def separate_stems(audio: List[UploadFile] = File(...)):
-    """
-    Stub: receive audio and (later) call Spleeter/Demucs.
-    """
-    save_dir = TMP_ROOT / "separate_stems"
-    paths = [ _save_upload(f, save_dir) for f in audio ]
-    # TODO: run demucs/spleeter here
-    return {"ok": True, "received": [p.name for p in paths]}
-
-@app.post("/enrich-csv")
-async def enrich_csv(csv: UploadFile = File(...)):
-    """
-    Example: parse a YouTube Takeout-like CSV and return simple stats
-    you already visualize on the frontend. Replace with your real enrichment.
-    """
-    save_dir = TMP_ROOT / "csv"
-    path = _save_upload(csv, save_dir)
-
+def load_status(dirpath: Path):
+    p = dirpath / "status.json"
+    if not p.exists():
+        return {"status": "unknown"}
     try:
-        df = pd.read_csv(path)
+        return json.loads(p.read_text(encoding="utf-8"))
     except Exception:
-        # Fallback if encoding or delimiter is unusual
-        df = pd.read_csv(path, encoding="utf-8", sep=None, engine="python")
+        return {"status": "unknown"}
 
-    # Heuristic: pick an artist/channel column if present
-    for key in ["Artist", "artist", "Channel", "channel", "Creator", "creator"]:
-        if key in df.columns:
-            top = (
-                df[key]
-                .fillna("Unknown")
-                .astype(str)
-                .value_counts()
-                .head(20)
-                .reset_index()
-            )
-            top.columns = ["label", "count"]
-            return {"ok": True, "stats": top.to_dict(orient="records")}
+class YTReq(BaseModel):
+    url: str
+    api_key: str | None = None  # optional, not used by yt-dlp
 
-    # If no obvious key, just return column names
-    return {"ok": True, "stats": [], "columns": df.columns.tolist()}
+@app.post("/download-youtube")
+async def download_youtube(req: YTReq, background: BackgroundTasks):
+    job_id = str(uuid.uuid4())
+    outdir = RESULTS_DIR / "yt" / job_id
+    write_status(outdir, status="pending", msg="queued")
+
+    def job():
+        try:
+            write_status(outdir, status="downloading", msg="starting")
+            # NOTE: Requires ffmpeg in PATH for MP3 postprocessing.
+            # Install from https://www.gyan.dev/ffmpeg/builds/ and add to PATH on Windows.
+            def progress_hook(d):
+                # d['status'] in {'downloading','finished','error'}
+                st = d.get("status")
+                info = {
+                    "status": "downloading" if st == "downloading" else ("postprocessing" if st == "finished" else st),
+                    "downloaded_bytes": d.get("downloaded_bytes"),
+                    "total_bytes": d.get("total_bytes") or d.get("total_bytes_estimate"),
+                    "speed": d.get("speed"),
+                    "eta": d.get("eta"),
+                    "filename": d.get("filename"),
+                    "msg": d.get("_default_template") or "",
+                }
+                write_status(outdir, **{k: v for k, v in info.items() if v is not None})
+
+            ydl_opts = {
+                "progress_hooks": [progress_hook],
+                "format": "bestaudio/best",
+                "outtmpl": str(outdir / "%(title)s.%(ext)s"),
+                "noplaylist": True,
+                "quiet": True,
+                "nopart": False,  # leave .part files (so you see disk activity)
+                "postprocessors": [
+                    {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}
+                ],
+                # YouTube throttling workarounds (optional):
+                # "concurrent_fragment_downloads": 5,
+                # "throttled_rate": 1024 * 1024,  # 1 MiB/s cap handling
+                "http_headers": {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                },
+                # If login/cookies needed, add:
+                # "cookiefile": "cookies.txt",
+            }
+
+            with YoutubeDL(ydl_opts) as ydl:
+                ydl.download([req.url])
+
+            # success
+            write_status(outdir, status="done", msg="completed")
+        except Exception as e:
+            err = "".join(traceback.format_exception_only(type(e), e)).strip()
+            write_status(outdir, status="error", msg=err)
+
+    background.add_task(job)
+    return {"ok": True, "job_id": job_id, "results_prefix": f"/results/yt/{job_id}/"}
+
+@app.get("/jobs/{kind}/{job_id}")
+async def job_results(kind: str, job_id: str):
+    d = RESULTS_DIR / kind / job_id
+    if not d.exists():
+        return JSONResponse({"ok": False, "files": [], "status": "unknown"}, status_code=404)
+    files = [
+        {"name": p.name, "url": f"/results/{kind}/{job_id}/{p.name}", "size": p.stat().st_size}
+        for p in d.iterdir() if p.is_file() and p.name != "status.json"
+    ]
+    st = load_status(d)
+    return {"ok": True, "files": files, "status": st.get("status"), "progress": st}

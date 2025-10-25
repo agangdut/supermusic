@@ -1,69 +1,115 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual environment
-.env
+# ------------------------
+# 🧠 Core System & Envs
+# ------------------------
 .venv/
 venv/
-env/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
 
-# Distribution / packaging
-build/
-dist/
+# ------------------------
+# 🧩 Python Project
+# ------------------------
+*.egg
 *.egg-info/
+dist/
+build/
 .eggs/
-
-# Logs
+*.manifest
+*.spec
+pip-wheel-metadata/
 *.log
 
-# IDEs / Editors
-.vscode/
-.idea/
-*.swp
-
-# Test / coverage
+# ------------------------
+# 🧰 Tools & Automation
+# ------------------------
+.just/
+.tox/
+coverage/
+.cache/
+pytest_cache/
+.mypy_cache/
+.dmypy.json
+.pyre/
 .pytest_cache/
-.coverage
-coverage.xml
-htmlcov/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
-# Local configs
-.env.local
-.env.*.local
+# ------------------------
+# ⚙️ Node / Frontend
+# ------------------------
+frontend/node_modules/
+frontend/.next/
+frontend/.turbo/
+frontend/.vercel/
+frontend/out/
+frontend/build/
+frontend/.env.local
+frontend/.env.production
+frontend/.env.development
 
-# FastAPI/UVicorn reload artifacts
-*.sqlite3
-*.db
+# ------------------------
+# 📦 Package Managers
+# ------------------------
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
-# Node modules (if you add front-end build)
-node_modules/
+# ------------------------
+# 🗃️ Project Artifacts
+# ------------------------
+data/**/*.csv
+data/**/*.json
+data/**/*.tsv
+data/**/*.parquet
+data/**/*.h5
+data/**/*.pkl
+data/**/*.zip
+data/**/*.tar
+data/**/*.gz
+!data/README.md
 
-# Cache from tools
-.mypy_cache/
-.ruff_cache/
-black.log
-
-# Generated docs
-docs/_build/
-site/
-
-# Temporary files
-tmp/
+# ------------------------
+# 📊 Static / Build Artifacts
+# ------------------------
+static/generated/
+static/cache/
 *.tmp
+*.bak
+*.swp
 
-# Just / Pre-commit artifacts
-.pre-commit-config.yaml~
-justfile~
+# ------------------------
+# 🧪 Docs / Reports
+# ------------------------
+docs/_build/
+docs/.cache/
+*.pdf
+*.docx
+*.pptx
 
-# Data
-supermusic/data/raw
-supermusic/data/external
+# ------------------------
+# 🧑‍💻 IDE / System
+# ------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.iml
+
+# ------------------------
+# 🚀 Deployment
+# ------------------------
+.env.production
+*.pem
+*.crt
+*.key
+.vercel/
+.netlify/

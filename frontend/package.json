@@ -1,0 +1,28 @@
+{
+  "name": "supermusic-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "formidable": "^3.5.4",
+    "next": "^14.2.32",
+    "papaparse": "^5.5.3",
+    "plotly.js": "^3.1.0",
+    "plotly.js-dist-min": "^3.1.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-plotly.js": "^2.6.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "eslint": "^8.54.0",
+    "eslint-config-next": "^14.2.5",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.13"
+  }
+}

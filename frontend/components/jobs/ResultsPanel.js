@@ -1,0 +1,29 @@
+"use client";
+import React from "react";
+import JobCard from "./JobCard";
+
+/**
+ * ResultsPanel renders a list of jobs (newest first recommended).
+ */
+export default function ResultsPanel({
+  jobs = [],
+  onUseArtifact,   // optional: passed down to JobCard
+  className = "",
+  emptyState = "No jobs yet. Kick off a task to see results here.",
+}) {
+  if (!jobs.length) {
+    return (
+      <div className={`rounded-xl border bg-white p-6 text-center text-sm text-gray-500 ${className}`}>
+        {emptyState}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`grid gap-3 ${className}`}>
+      {jobs.map((j) => (
+        <JobCard key={j.id} job={j} onUseArtifact={onUseArtifact} />
+      ))}
+    </div>
+  );
+}

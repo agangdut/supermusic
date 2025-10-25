@@ -17,6 +17,9 @@ fastapi
 uvicorn
 jinja2
 python-multipart
+pydantic
+python-dotenv
+httpx
 
 # Visualization
 plotly

@@ -1,0 +1,69 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.env
+.venv/
+venv/
+env/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+
+# IDEs / Editors
+.vscode/
+.idea/
+*.swp
+
+# Test / coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Local configs
+.env.local
+.env.*.local
+
+# FastAPI/UVicorn reload artifacts
+*.sqlite3
+*.db
+
+# Node modules (if you add front-end build)
+node_modules/
+
+# Cache from tools
+.mypy_cache/
+.ruff_cache/
+black.log
+
+# Generated docs
+docs/_build/
+site/
+
+# Temporary files
+tmp/
+*.tmp
+
+# Just / Pre-commit artifacts
+.pre-commit-config.yaml~
+justfile~
+
+# Data
+supermusic/data/raw
+supermusic/data/external

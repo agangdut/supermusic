@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "supermusic"
+version = "0.1.0"
+description = "A Python pipeline and web app for downloading, processing, and visualizing music data."
+readme = "README.md"
+authors = [
+    { name = "Agang Dut" }
+]
+license = { file = "LICENSE" }
+keywords = ["music", "audio", "visualization", "web"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+]
+requires-python = ">=3.9"
+dependencies = [
+    "requests",
+    "pandas",
+    "numpy",
+    "librosa",
+    "pydub",
+    "fastapi",
+    "uvicorn",
+    "jinja2",
+    "plotly",
+    "umap-learn",
+    "click"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4.0",
+  "httpx>=0.24.1",
+  "ruff>=0.5.0",
+  "black>=23.7.0",
+  "mypy>=1.5.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "I", "UP"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_configs = true
+ignore_missing_imports = true
+strict_optional = true
+
+[project.urls]
+Homepage = "https://github.com/agangdut/supermusic"
+Documentation = "https://github.com/agangdut/supermusic/docs"
+Issues = "https://github.com/agangdut/supermusic/issues"
+
+[tool.setuptools.packages.find]
+where = ["supermusic"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests"
+]
+
+[project.scripts]
+supermusic = "supermusic.cli.main:cli"
