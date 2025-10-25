@@ -1,6 +1,12 @@
 // frontend/pages/_app.js
-import "@/styles/globals.css"; // <-- this pulls in Tailwind (or your CSS)
+import "@/styles/globals.css";
+import PageTransitionOverlay from "@/components/layout/PageTransitionOverlay";
 
-export default function App({ Component, pageProps }) {
-  return <Component {...pageProps} />;
+export default function MyApp({ Component, pageProps }) {
+  return (
+    <>
+      <PageTransitionOverlay />
+      <Component {...pageProps} />
+    </>
+  );
 }

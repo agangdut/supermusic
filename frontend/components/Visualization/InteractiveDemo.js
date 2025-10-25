@@ -30,7 +30,15 @@ function makeSpiral(n = 3500, a = 0.1, b = 0.22) {
   return { x, y, z, name: "Spiral" };
 }
 
-function makeLissajous(n = 4800, Ax = 1, Ay = 1.4, Az = 0.8, a = 3, b = 4, c = 5) {
+function makeLissajous(
+  n = 4800,
+  Ax = 1,
+  Ay = 1.4,
+  Az = 0.8,
+  a = 3,
+  b = 4,
+  c = 5
+) {
   const x = [], y = [], z = [];
   for (let i = 0; i < n; i++) {
     const t = (i / n) * Math.PI * 12;
@@ -44,7 +52,9 @@ function makeLissajous(n = 4800, Ax = 1, Ay = 1.4, Az = 0.8, a = 3, b = 4, c = 5
 function makeBlob(n = 6000, seed = 42) {
   let s = seed >>> 0;
   const rnd = () => {
-    s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
+    s ^= s << 13;
+    s ^= s >>> 17;
+    s ^= s << 5;
     return ((s >>> 0) % 10000) / 10000;
   };
   const gauss = () => {
@@ -82,7 +92,9 @@ function parseCSV3D(text) {
     const fy = parseFloat(cols[yi]);
     const fz = parseFloat(cols[zi]);
     if ([fx, fy, fz].every(Number.isFinite)) {
-      x.push(fx); y.push(fy); z.push(fz);
+      x.push(fx);
+      y.push(fy);
+      z.push(fz);
     }
   }
   if (!x.length) return { error: "No valid numeric rows found." };
@@ -139,23 +151,30 @@ export default function InteractiveDemo() {
   // Animation state
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState(1.0); // 0.2 - 3.0
-  const tRef = useRef(0);        // current angle
-  const rafRef = useRef(null);   // requestAnimationFrame id
-  const plotRef = useRef(null);  // to control camera & export
+  const tRef = useRef(0); // current angle
+  const rafRef = useRef(null); // requestAnimationFrame id
+  const plotRef = useRef(null); // to control camera & export
 
   // Build the selected dataset
   const raw3d = useMemo(() => {
     if (dataset === "CSV" && csvData) return csvData;
     switch (dataset) {
-      case "Spiral": return makeSpiral();
-      case "Lissajous": return makeLissajous();
-      case "Blob": return makeBlob();
-      default: return makeSpiral();
+      case "Spiral":
+        return makeSpiral();
+      case "Lissajous":
+        return makeLissajous();
+      case "Blob":
+        return makeBlob();
+      default:
+        return makeSpiral();
     }
   }, [dataset, csvData]);
 
   // Apply decimation (performance)
-  const d3d = useMemo(() => decimate(raw3d, Math.max(1, Math.floor(decimation))), [raw3d, decimation]);
+  const d3d = useMemo(
+    () => decimate(raw3d, Math.max(1, Math.floor(decimation))),
+    [raw3d, decimation]
+  );
 
   const colorArray = useMemo(() => {
     if (!d3d) return null;
@@ -176,8 +195,7 @@ export default function InteractiveDemo() {
         size: pointSize,
         opacity,
         color: colorArray ?? undefined,
-        colorscale: colorArray ? colorScale : undefined, // let Plotly pick if undefined
-        // Don’t set explicit color values; let Plotly handle it.
+        colorscale: colorArray ? colorScale : undefined,
       },
       line: {
         width: 2,
@@ -188,52 +206,95 @@ export default function InteractiveDemo() {
     };
   }, [d3d, mode, pointSize, opacity, colorArray, colorScale]);
 
+  // THEME: dark scene / axes / grid
   const baseScene = useMemo(() => {
-    const gridStyle = { showgrid: showGrid, zeroline: false };
+    const axisStyle = {
+      showgrid: showGrid,
+      gridcolor: "rgba(148,163,184,0.2)", // subtle slate grid
+      gridwidth: 1,
+      zeroline: false,
+      showspikes: false,
+      tickcolor: "rgba(226,232,240,0.8)", // light ticks
+      tickfont: { color: "rgba(226,232,240,0.8)", size: 10 },
+      titlefont: { color: "rgba(226,232,240,0.9)", size: 12 },
+      color: "rgba(226,232,240,0.9)", // axis line color
+    };
+
     return {
-      xaxis: { title: "X", ...gridStyle },
-      yaxis: { title: "Y", ...gridStyle },
-      zaxis: { title: "Z", ...gridStyle },
+      xaxis: { title: "x", ...axisStyle },
+      yaxis: { title: "y", ...axisStyle },
+      zaxis: { title: "z", ...axisStyle },
+
       aspectmode: "cube",
       dragmode: "turntable",
+
       camera: { projection: { type: projection } },
+
+      // background for the 3D scene itself
+      bgcolor: "rgba(15,23,42,1)", // #0f172a style
     };
   }, [showGrid, projection]);
 
   const layout = useMemo(() => {
     return {
       margin: { l: 0, r: 0, t: 36, b: 0 },
+
       scene: baseScene,
       showlegend: false,
-      paper_bgcolor: "rgba(0,0,0,0)",
-      plot_bgcolor: "rgba(0,0,0,0)",
+
+      // match page theme
+      paper_bgcolor: "rgba(15,23,42,0)",
+      plot_bgcolor: "rgba(15,23,42,0)",
+
       title: {
         text: `Interactive 3D • ${d3d?.name ?? ""}`,
-        x: 0.02, y: 0.98, xanchor: "left", yanchor: "top",
+        x: 0.02,
+        y: 0.98,
+        xanchor: "left",
+        yanchor: "top",
+        font: {
+          family:
+            "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont",
+          size: 14,
+          color: "rgba(226,232,240,0.9)",
+          weight: 500,
+        },
       },
-      // Smoother transitions when changing datasets/settings
+
+      font: {
+        color: "rgba(226,232,240,0.8)", // hover labels etc
+      },
+
       transition: { duration: 350, easing: "cubic-in-out" },
     };
   }, [baseScene, d3d?.name]);
 
   // Camera animation loop (smooth orbit)
-  const animate = useCallback((ts) => {
-    // Advance angle based on speed (scaled)
-    tRef.current += 0.015 * speed;
-    const cam = cameraOnOrbit(tRef.current, 2.4, 0.7);
+  const animate = useCallback(
+    (ts) => {
+      // Advance angle based on speed (scaled)
+      tRef.current += 0.015 * speed;
+      const cam = cameraOnOrbit(tRef.current, 2.4, 0.7);
 
-    // Update camera without full re-render
-    try {
-      const gd = plotRef.current?.el; // underlying plot div
-      if (gd) {
-        window.Plotly.relayout(gd, { "scene.camera": { ...cam, projection: { type: projection } } });
+      // Update camera without full re-render
+      try {
+        const gd = plotRef.current?.el; // underlying plot div
+        if (gd) {
+          window.Plotly.relayout(gd, {
+            "scene.camera": {
+              ...cam,
+              projection: { type: projection },
+            },
+          });
+        }
+      } catch {
+        /* no-op */
       }
-    } catch {
-      /* no-op */
-    }
 
-    rafRef.current = requestAnimationFrame(animate);
-  }, [speed, projection]);
+      rafRef.current = requestAnimationFrame(animate);
+    },
+    [speed, projection]
+  );
 
   // Start/stop the animation
   useEffect(() => {
@@ -302,15 +363,16 @@ export default function InteractiveDemo() {
   }, []);
 
   return (
-    <div className="w-full">
+    <div className="w-full rounded-xl border border-white/10 bg-[#0f172a] p-4 text-gray-200">
       {/* Controls */}
-      <div className="flex flex-wrap items-center gap-3 mb-3">
+      <div className="flex flex-wrap items-center gap-3 mb-4 text-gray-200 text-sm">
+        {/* Dataset */}
         <div className="flex items-center gap-2">
-          <label className="font-medium">Dataset:</label>
+          <label className="font-medium text-gray-300">Dataset:</label>
           <select
             value={dataset}
             onChange={(e) => setDataset(e.target.value)}
-            className="border rounded px-2 py-1"
+            className="bg-[#1e253d] text-gray-100 border border-white/10 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/40"
           >
             <option>Spiral</option>
             <option>Lissajous</option>
@@ -319,12 +381,13 @@ export default function InteractiveDemo() {
           </select>
         </div>
 
+        {/* Mode */}
         <div className="flex items-center gap-2">
-          <label className="font-medium">Mode:</label>
+          <label className="font-medium text-gray-300">Mode:</label>
           <select
             value={mode}
             onChange={(e) => setMode(e.target.value)}
-            className="border rounded px-2 py-1"
+            className="bg-[#1e253d] text-gray-100 border border-white/10 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/40"
           >
             <option value="markers">markers</option>
             <option value="lines">lines</option>
@@ -332,20 +395,23 @@ export default function InteractiveDemo() {
           </select>
         </div>
 
+        {/* Point size */}
         <div className="flex items-center gap-2">
-          <label className="font-medium">Point size:</label>
+          <label className="font-medium text-gray-300">Point size:</label>
           <input
             type="range"
             min={1}
             max={10}
             value={pointSize}
             onChange={(e) => setPointSize(Number(e.target.value))}
+            className="accent-purple-500"
           />
-          <span className="tabular-nums">{pointSize}</span>
+          <span className="tabular-nums text-gray-400">{pointSize}</span>
         </div>
 
+        {/* Opacity */}
         <div className="flex items-center gap-2">
-          <label className="font-medium">Opacity:</label>
+          <label className="font-medium text-gray-300">Opacity:</label>
           <input
             type="range"
             min={0.1}
@@ -353,16 +419,20 @@ export default function InteractiveDemo() {
             step={0.05}
             value={opacity}
             onChange={(e) => setOpacity(Number(e.target.value))}
+            className="accent-purple-500"
           />
-          <span className="tabular-nums">{opacity.toFixed(2)}</span>
+          <span className="tabular-nums text-gray-400">
+            {opacity.toFixed(2)}
+          </span>
         </div>
 
+        {/* Color by */}
         <div className="flex items-center gap-2">
-          <label className="font-medium">Color by:</label>
+          <label className="font-medium text-gray-300">Color by:</label>
           <select
             value={colorBy}
             onChange={(e) => setColorBy(e.target.value)}
-            className="border rounded px-2 py-1"
+            className="bg-[#1e253d] text-gray-100 border border-white/10 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/40"
           >
             <option value="none">none</option>
             <option value="x">x</option>
@@ -371,12 +441,13 @@ export default function InteractiveDemo() {
           </select>
         </div>
 
+        {/* Colorscale */}
         <div className="flex items-center gap-2">
-          <label className="font-medium">Colorscale:</label>
+          <label className="font-medium text-gray-300">Colorscale:</label>
           <select
             value={colorScale}
             onChange={(e) => setColorScale(e.target.value)}
-            className="border rounded px-2 py-1"
+            className="bg-[#1e253d] text-gray-100 border border-white/10 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/40"
           >
             <option>Viridis</option>
             <option>Plasma</option>
@@ -389,47 +460,53 @@ export default function InteractiveDemo() {
           </select>
         </div>
 
+        {/* Projection */}
         <div className="flex items-center gap-2">
-          <label className="font-medium">Projection:</label>
+          <label className="font-medium text-gray-300">Projection:</label>
           <select
             value={projection}
             onChange={(e) => setProjection(e.target.value)}
-            className="border rounded px-2 py-1"
+            className="bg-[#1e253d] text-gray-100 border border-white/10 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/40"
           >
             <option value="perspective">perspective</option>
             <option value="orthographic">orthographic</option>
           </select>
         </div>
 
-        <label className="inline-flex items-center gap-2 cursor-pointer">
+        {/* Grid toggle */}
+        <label className="inline-flex items-center gap-2 cursor-pointer text-gray-300">
           <input
             type="checkbox"
             checked={showGrid}
             onChange={(e) => setShowGrid(e.target.checked)}
+            className="accent-purple-500"
           />
           <span>Grid</span>
         </label>
 
+        {/* Decimate */}
         <div className="flex items-center gap-2">
-          <label className="font-medium">Decimate:</label>
+          <label className="font-medium text-gray-300">Decimate:</label>
           <input
             type="range"
             min={1}
             max={8}
             value={decimation}
             onChange={(e) => setDecimation(Number(e.target.value))}
+            className="accent-purple-500"
           />
-          <span className="tabular-nums">×{decimation}</span>
+          <span className="tabular-nums text-gray-400">×{decimation}</span>
         </div>
 
+        {/* Play / speed */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => setPlaying((p) => !p)}
-            className="px-3 py-1 rounded border"
+            className="px-3 py-1 rounded-md border border-white/10 bg-[#1e253d] text-gray-100 text-sm hover:border-purple-500/40 hover:text-white transition-colors"
           >
             {playing ? "Pause" : "Play"}
           </button>
-          <label className="font-medium">Speed:</label>
+          <label className="font-medium text-gray-300">Speed:</label>
           <input
             type="range"
             min={0.2}
@@ -437,30 +514,32 @@ export default function InteractiveDemo() {
             step={0.1}
             value={speed}
             onChange={(e) => setSpeed(Number(e.target.value))}
+            className="accent-purple-500"
           />
-          <span className="tabular-nums">{speed.toFixed(1)}x</span>
+          <span className="tabular-nums text-gray-400">
+            {speed.toFixed(1)}x
+          </span>
         </div>
 
+        {/* CSV upload */}
         <div className="flex items-center gap-2">
-          <label className="font-medium">Upload CSV:</label>
+          <label className="font-medium text-gray-300">Upload CSV:</label>
           <input
             type="file"
             accept=".csv,text/csv"
             onChange={(e) => onUpload(e.target.files?.[0])}
+            className="text-gray-300 text-xs file:mr-2 file:rounded-md file:border file:border-white/10 file:bg-[#1e253d] file:px-2 file:py-1 file:text-gray-100 hover:file:border-purple-500/40 hover:file:text-white file:text-xs file:transition-colors"
           />
         </div>
 
-        <button onClick={onExport} className="px-3 py-1 rounded border">
+        {/* Export */}
+        <button
+          onClick={onExport}
+          className="px-3 py-1 rounded-md border border-white/10 bg-[#1e253d] text-gray-100 text-sm hover:border-purple-500/40 hover:text-white transition-colors"
+        >
           Export PNG
         </button>
       </div>
-
-      {dataset === "CSV" && !csvData && (
-        <p className="text-sm text-gray-600 mb-2">
-          CSV should include headers <code>x,y,z</code>. Extra columns are ignored.
-        </p>
-      )}
-      {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
 
       {/* Plot */}
       <div className="w-full" style={{ height: 560 }}>
@@ -482,9 +561,22 @@ export default function InteractiveDemo() {
         />
       </div>
 
-      <div className="mt-3 text-sm text-gray-600">
-        Tip: drag to rotate • scroll to zoom • right-drag to pan • hold Shift for box/lasso select.
+      <div className="mt-3 text-xs text-gray-500">
+        Tip: drag to rotate • scroll to zoom • right-drag to pan • hold Shift
+        for box/lasso select.
       </div>
+
+      {dataset === "CSV" && !csvData && (
+        <p className="text-xs text-gray-400 mt-3">
+          CSV should include headers <code>x,y,z</code>. Extra columns are
+          ignored.
+        </p>
+      )}
+      {error && (
+        <p className="text-xs text-red-500 mt-2">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
