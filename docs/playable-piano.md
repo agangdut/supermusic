@@ -72,6 +72,16 @@ It prints how playable each method's raw output is, how busy it is, how much the
 
 Both are mostly playable before any rewrite, but they differ in kind. On rap, General transcription hears little pitched material (1 to 3 notes a second), so there is barely a piano part. On busy mixes, it makes a hand leap more than an octave in under 0.15 s up to 33 times a minute. Pop2Piano writes a full, steady part every time and never asks for those leaps. For a pianist, **Piano cover + Playable by two hands** is the better choice for full songs. Transcription stays the better choice when you want the notes that were actually played (solo piano, a single instrument).
 
+## Building a training set
+
+To train or fine-tune a cover model you need songs paired with what a real pianist played for them. `scripts/build_cover_dataset.py` rebuilds Pop2Piano's training pairs (5,989 YouTube piano covers with their original songs; the authors published only the IDs). For each pair it downloads both, transcribes the cover with the Piano model, transposes it to the song's key, lines it up with the song in time, and scores the match:
+
+```bash
+docker compose exec backend python scripts/build_cover_dataset.py --limit 20
+```
+
+Results go to `data/datasets/covers/`, one folder per pair, with a `manifest.csv`. Run it again to add more; finished pairs are skipped. Pass `--pairs your_pairs.csv` (columns `piano_ids,pop_ids`) to add your own covers. Plan for about 8 MB per pair and roughly a minute each on CPU.
+
 ## Run the check yourself
 
 ```bash
