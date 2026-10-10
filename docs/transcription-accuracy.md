@@ -39,6 +39,22 @@ Most songs aren't solo piano, so a second test (`scripts/eval_mix.py`) mixes a b
 - **Auto** chose Stems for 9 of the 10 clips and General for the one with very quiet piano (10% of the sound). It picks **Piano** for solo piano recordings (checked on three MAESTRO pieces, which measured 98–100% piano).
 - This only scores the piano. The bass, guitar and other tracks that Stems also produces have no reference to score against.
 
+## Real ensembles (MusicNet)
+
+[MusicNet](https://zenodo.org/records/5120004)'s 10 held-out test recordings are real performances by string quartets, wind groups, solo violin and cello, piano, and violin with piano. Neither Basic Pitch nor YourMT3+ trained on them, so this is the fairest multi-instrument test. It scores every note, from any instrument, over the first 60 seconds (`scripts/eval_musicnet.py`).
+
+| Mode | Precision | Recall | Note F1 | Avg time |
+|---|---|---|---|---|
+| General (tuned) | 0.561 | 0.502 | 0.524 | 3.0s |
+| Stems | 0.475 | 0.573 | 0.506 | 34.6s |
+| Full band (YourMT3+) | 0.691 | 0.682 | 0.686 | 8.4s |
+| **Auto** | **0.698** | **0.695** | **0.696** | 25.7s |
+
+- YourMT3+ beats General on 9 of the 10 recordings. The biggest gains are on solo cello (0.49 → 0.86), solo violin (0.41 → 0.71) and string quartets (0.37 → 0.65, 0.24 → 0.52). The one exception, a wind sextet, is a tie (0.59 vs 0.59).
+- Auto edges out YourMT3+ because it sent the two solo piano sonatas to the Piano model.
+- Stems doesn't help on classical ensembles: Demucs is trained on pop stems, so strings and winds get split badly.
+- MusicNet's labels were aligned automatically and contain some timing errors, which caps every score. Compare the modes against each other, not against the MAESTRO numbers.
+
 ## How Auto decides
 
 Auto separates a 30-second excerpt from the middle of the song into 6 parts and measures each part's share of the sound:
