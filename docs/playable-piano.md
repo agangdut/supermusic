@@ -63,8 +63,8 @@ It prints how playable each method's raw output is, how busy it is, how much the
 
 | | Pop2Piano | General + rewrite |
 |---|---|---|
-| Raw playable (median) | 98.7% | 97.5% |
-| Notes per second | 4.2 to 7.9, steady | 1.0 to 10.6, swings with the genre |
+| Raw playable (median) | 98.7% | 97.6% |
+| Notes per second | 4 to 8 on every song but the quiet Satie piece (1.9) | 1.0 to 10.6, swings with the genre |
 | Fast leaps per minute | 0 on every song | up to 33 |
 | Time per song (CPU) | 11 to 31 s | 8 to 20 s |
 
