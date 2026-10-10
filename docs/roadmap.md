@@ -10,6 +10,7 @@ Verified against the running Docker stack with real audio (October 2026):
 - [x] 🥁 Stem separation into 4 stems (Demucs)
 - [x] 🧾 CSV enrichment with BPM, key and duration
 - [x] ⬇️ Download audio from a YouTube link (yt-dlp)
+- [x] 🌌 Music Map: taste clusters, hidden connections and recommendations from a CSV
 - [x] 🔐 Register, log in, and fetch your profile
 - [x] Results saved to `./data` and downloadable from the UI
 - [x] API test suite and CI on `master`
@@ -38,7 +39,7 @@ Jobs run inside the web server process. A few long Demucs jobs can tie it up, an
 ### 4. Screens for the features the API already has
 The UI covers MIDI, stems and CSV. These work in the API but have no screen:
 - [ ] Paste a YouTube link to download
-- [ ] Build a 3D similarity map from your own tracks (`/visualization/umap`)
+- [ ] Build a similarity map from the audio itself (`/visualization/umap`), not just CSV columns
 - [ ] Batch processing (`/batch/process`)
 - [ ] "Download all" as a zip (`/export/*`)
 - [ ] Play stems and MIDI in the browser
@@ -59,6 +60,15 @@ The UI covers MIDI, stems and CSV. These work in the API but have no screen:
 - [ ] Tests for UMAP, batch, export and the WebSocket (not yet verified end to end)
 - [ ] Frontend tests
 - [ ] Lint and format checks in CI (ruff, ESLint)
+
+## 🌌 Music Map, next steps
+
+- [ ] Recommend songs **outside** your library (e.g. MusicBrainz, Spotify or Last.fm "similar tracks", placed on your map)
+- [ ] Import listening history straight from Spotify, Last.fm or Apple Music instead of a CSV
+- [ ] Fill in missing key/BPM/mood by analysing the audio (librosa is already in the backend)
+- [ ] Save maps and watch your taste drift over time
+- [ ] Turn a hidden connection or a cluster into a playlist with one click
+- [ ] Play a 30-second preview when you click a star
 
 ## 💡 Ideas from the first prototype
 

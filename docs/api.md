@@ -52,6 +52,14 @@ Long tasks don't block the request. You **start** a job and get back a job objec
 
 Paths like `source_path` are **server** paths, the ones `/upload/*` returns.
 
+## Music Map
+
+| Method | Path | JSON body (* = one of) | Returns |
+|---|---|---|---|
+| `POST` | `/map/build` | `csv_path`* or `sample: true`*, `neighbors` (4), `clusters` (auto), `weights` | the whole map, right away (no job) |
+
+`weights` scales how much each aspect shapes the map, from 0 to 2: `key`, `tempo`, `genre`, `mood`, `artist`, `era`. The response holds `tracks` (with `x`, `y`, `z` and `cluster`), `edges`, `clusters` (with `label` and `signal`), `hidden_connections`, `insights`, `recommendations` and `meta`. Limited to 5,000 tracks. See the [Music Map guide](music-map.md).
+
 ## Export
 
 | Method | Path | Body | Returns |
@@ -80,4 +88,4 @@ Paths like `source_path` are **server** paths, the ones `/upload/*` returns.
 | `GET` | `/healthz` | `{ "ok": true, "status": "healthy" }` |
 | `GET` | `/` | welcome message with links |
 
-**Tested end to end:** upload, MIDI, stems, CSV, download, accounts. **Not yet tested end to end:** UMAP, batch, export, WebSocket.
+**Tested end to end:** upload, MIDI, stems, CSV, download, accounts, Music Map. **Not yet tested end to end:** UMAP, batch, export, WebSocket.

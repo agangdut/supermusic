@@ -143,3 +143,19 @@ export async function runAndWait(makeJobFn, { onUpdate, ...pollOpts } = {}) {
 //
 // • If/when you add real file uploads, plug your upload step in before
 //   calling midiConvert/csvEnrich/stemsSeparate to obtain a server-side path.
+
+// --- Music map ---------------------------------------------------------------
+
+/** POST /map/build — returns { tracks, edges, clusters, hidden_connections, insights, recommendations, meta } */
+export async function buildMap({ csv_path, sample = false, neighbors = 4, clusters = null, weights = {} }) {
+  return postJSON("/map/build", { csv_path, sample, neighbors, clusters, weights });
+}
+
+/** Upload a CSV and return its server path. */
+export async function uploadCsv(file) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await apiFetch("/upload/csv", { method: "POST", body: form });
+  if (!res?.path) throw new Error(res?.detail || "Upload failed");
+  return res.path;
+}

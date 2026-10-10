@@ -1,0 +1,157 @@
+title,artist,genre,key,bpm,energy,valence,acousticness,danceability,year,play_count,liked
+Faded Cities,Coastline Theory,Liquid DnB,Am,173,0.832,0.518,0,0.588,2024,0,0
+Glass Shadows,Coastline Theory,Liquid DnB,Em,173,0.559,0.476,0.152,0.639,2024,0,0
+Slow Letters,June Hollis,Neo-Soul,C,90,0.542,0.617,0.437,0.713,2015,68,0
+Midnight Waves,Orchestra Lumen,Classical,Eb,109,0.224,0.381,0.889,0.192,2025,0,0
+Hollow Mornings,Elise Varga,Classical,D,69,0.095,0.309,0.799,0.273,2018,3,0
+Low Lanterns,Orchestra Lumen,Classical,Eb,106,0.071,0.313,0.943,0.019,2017,0,0
+Midnight Gardens,Moss & Static,Lo-Fi,Dm,87,0.384,0.326,0.87,0.528,2017,83,1
+Soft Rooftops,June Hollis,Neo-Soul,Em,84,0.369,0.521,0.458,0.856,2013,20,0
+Wild Waves,Tape Garden,Lo-Fi,Em,87,0.273,0.381,0.797,0.415,2019,0,0
+Soft Signals,Northbound,Indie Rock,G,130,0.688,0.631,0.237,0.652,2024,17,0
+Slow Lanterns,Tape Garden,Lo-Fi,Am,92,0.312,0.288,0.708,0.681,2022,0,0
+Amber Mornings,Paper Kites Club,Indie Rock,G,128,0.76,0.69,0.195,0.574,2016,13,0
+Hollow Lanterns,DJ Prism,Big Room EDM,G,129,0.938,0.5,0.076,0.706,2017,3,0
+Neon Satellites,Kumo Rooms,Lo-Fi,Am,85,0.314,0.412,0.61,0.526,2013,29,0
+Lucid Rivers,Orchestra Lumen,Classical,Bm,96,0.123,0.273,1,0.25,2021,7,0
+Static Rivers,Paper Kites Club,Indie Rock,D,132,0.852,0.58,0.318,0.526,2014,11,0
+Hollow Windows,DJ Prism,Big Room EDM,F,130,0.954,0.594,0.101,0.738,2020,2,0
+Silver Rooftops,Northbound,Indie Rock,D,147,0.847,0.612,0.261,0.509,2023,0,0
+Rain Clouds,The Albright Trio,Jazz,Dm,117,0.406,0.484,0.956,0.356,2018,33,0
+Hollow Cities,Harbor Unit,Deep House,Dm,122,0.68,0.449,0.081,0.714,2024,46,0
+Soft Hearts,Kumo Rooms,Lo-Fi,Am,81,0.228,0.273,0.748,0.66,2012,0,0
+Warm Waves,Elise Varga,Classical,D,80,0.048,0.343,1,0.074,2024,0,0
+Warm Rooftops,Harbor Unit,Deep House,Gm,120,0.83,0.515,0.18,0.804,2013,0,0
+Rain Lanterns,Lune Collective,Deep House,Dm,122,0.554,0.476,0.047,0.821,2014,27,0
+Soft Tides,June Hollis,Neo-Soul,Em,88,0.411,0.675,0.511,0.691,2022,0,0
+Rain Cities,Kumo Rooms,Lo-Fi,Am,78,0.512,0.369,0.592,0.541,2014,0,0
+Slow Gardens,Lune Collective,Deep House,Am,124,0.568,0.481,0.114,0.902,2022,45,1
+Warm Hearts,Nadia Ruelle,Jazz,Am,104,0.261,0.562,0.849,0.425,2023,15,0
+Static Tides,Velour Avenue,Neo-Soul,Em,84,0.484,0.628,0.619,0.632,2015,69,1
+Lucid Engines,Kumo Rooms,Lo-Fi,Em,85,0.341,0.373,0.608,0.814,2020,48,1
+Wild Signals,Tape Garden,Lo-Fi,Am,90,0.198,0.506,0.47,0.717,2013,0,0
+Faded Gardens,DJ Prism,Big Room EDM,G,128,0.87,0.536,0.018,0.523,2022,0,0
+Warm Letters,Volt Kingdom,Big Room EDM,G,130,0.961,0.573,0,0.812,2025,2,0
+Wild Tides,June Hollis,Neo-Soul,C,95,0.491,0.567,0.409,0.606,2025,75,0
+Paper Waves,Coastline Theory,Liquid DnB,Am,172,0.704,0.391,0.044,0.609,2021,5,0
+Silver Echoes,Moss & Static,Lo-Fi,Em,87,0.213,0.334,0.549,0.576,2020,0,0
+Quiet Shadows,Harbor Unit,Deep House,Am,122,0.683,0.432,0.048,0.753,2016,10,0
+Midnight Cities,Elise Varga,Classical,Eb,71,0.118,0.288,0.983,0.096,2012,6,0
+Distant Cities,Northbound,Indie Rock,D,145,0.666,0.611,0.246,0.415,2018,0,0
+Midnight Mornings,Velour Avenue,Neo-Soul,Em,90,0.479,0.556,0.293,0.695,2022,39,0
+Silver Satellites,Harbor Unit,Deep House,Am,121,0.5,0.463,0.219,0.774,2022,14,0
+Paper Echoes,Harbor Unit,Deep House,Gm,124,0.62,0.46,0.06,0.753,2017,14,0
+Slow Mornings,Harbor Unit,Deep House,Am,121,0.633,0.334,0.099,0.736,2017,0,0
+Amber Tides,June Hollis,Neo-Soul,Am,86,0.562,0.56,0.512,0.642,2012,53,1
+Warm Windows,Moss & Static,Lo-Fi,Em,90,0.278,0.324,0.771,0.578,2019,13,0
+Amber Rooftops,Northbound,Indie Rock,D,143,0.711,0.508,0.242,0.575,2024,6,0
+Golden Gardens,The Albright Trio,Jazz,Bb,102,0.263,0.552,0.801,0.462,2022,0,0
+Hollow Tides,Moss & Static,Lo-Fi,Em,87,0.315,0.439,0.684,0.703,2013,47,1
+Low Lines,Lune Collective,Deep House,Am,124,0.506,0.461,0.172,0.873,2012,0,0
+Golden Letters,Tape Garden,Lo-Fi,Am,91,0.208,0.393,0.587,0.394,2022,80,0
+Silver Shadows,The Albright Trio,Jazz,Dm,130,0.474,0.632,0.8,0.568,2013,22,0
+Midnight Tides,Lune Collective,Deep House,Gm,123,0.645,0.56,0.1,0.954,2025,44,1
+Hollow Letters,Lune Collective,Deep House,Dm,120,0.625,0.355,0.049,0.72,2016,25,0
+Silver Tides,Nadia Ruelle,Jazz,Am,110,0.556,0.463,0.888,0.356,2016,15,0
+Electric Shadows,Velour Avenue,Neo-Soul,C,95,0.473,0.445,0.461,0.573,2019,66,1
+Electric Rooftops,DJ Prism,Big Room EDM,C#,126,0.943,0.643,0,0.655,2022,0,0
+Velvet Tapes,Lune Collective,Deep House,Am,122,0.632,0.563,0.036,0.888,2023,0,0
+Neon Hearts,Northbound,Indie Rock,D,131,0.834,0.545,0.357,0.519,2020,12,0
+Wild Echoes,The Albright Trio,Jazz,Bb,130,0.51,0.55,0.876,0.326,2012,15,0
+Quiet Tapes,The Albright Trio,Jazz,Dm,130,0.327,0.573,0.943,0.432,2012,0,0
+Golden Cities,DJ Prism,Big Room EDM,F,130,0.905,0.466,0.033,0.774,2018,2,0
+Golden Satellites,Coastline Theory,Liquid DnB,Em,173,0.719,0.491,0.123,0.562,2017,12,0
+Blue Tides,June Hollis,Neo-Soul,Em,92,0.395,0.676,0.469,0.618,2012,45,0
+Velvet Shadows,The Albright Trio,Jazz,Dm,129,0.279,0.483,0.704,0.528,2019,25,0
+Silver Windows,Paper Kites Club,Indie Rock,E,118,0.777,0.619,0.278,0.529,2018,14,0
+Rain Shadows,June Hollis,Neo-Soul,Em,96,0.506,0.578,0.443,0.646,2023,0,0
+Electric Cities,Coastline Theory,Liquid DnB,Em,173,0.677,0.552,0.16,0.55,2014,9,0
+Rain Signals,DJ Prism,Big Room EDM,C#,127,0.961,0.63,0.154,0.772,2022,0,0
+Faded Windows,Tape Garden,Lo-Fi,Dm,81,0.251,0.356,0.579,0.474,2012,62,0
+Rain Mornings,Kumo Rooms,Lo-Fi,Dm,88,0.133,0.309,0.696,0.678,2023,0,0
+Hollow Signals,Tape Garden,Lo-Fi,Dm,78,0.284,0.278,0.714,0.563,2013,53,0
+Neon Tides,Coastline Theory,Liquid DnB,Am,174,0.869,0.58,0.153,0.473,2016,9,0
+Faded Letters,Volt Kingdom,Big Room EDM,G,128,0.932,0.543,0,0.623,2018,4,0
+Static Rooftops,Nadia Ruelle,Jazz,Bb,108,0.22,0.339,0.884,0.611,2012,12,0
+Rain Lines,The Albright Trio,Jazz,Bb,97,0.353,0.475,0.981,0.288,2019,22,0
+Warm Clouds,Coastline Theory,Liquid DnB,Em,175,0.822,0.618,0.071,0.557,2023,12,0
+Blue Letters,Harbor Unit,Deep House,Dm,124,0.689,0.486,0.16,0.941,2016,23,0
+Lucid Waves,Orchestra Lumen,Classical,Eb,98,0.277,0.425,0.978,0.153,2021,6,0
+Neon Waves,Moss & Static,Lo-Fi,Dm,91,0.321,0.474,0.731,0.617,2018,77,1
+Velvet Cities,Northbound,Indie Rock,E,116,0.707,0.625,0.18,0.464,2019,18,0
+Low Satellites,Velour Avenue,Neo-Soul,Am,90,0.45,0.482,0.408,0.665,2013,37,0
+Blue Lanterns,The Albright Trio,Jazz,F,127,0.336,0.541,0.75,0.562,2014,14,0
+Golden Lines,DJ Prism,Big Room EDM,C#,128,0.962,0.535,0,0.839,2013,1,0
+Soft Tapes,Tape Garden,Lo-Fi,Dm,91,0.43,0.434,0.476,0.6,2017,63,0
+Static Lanterns,June Hollis,Neo-Soul,Em,84,0.394,0.656,0.615,0.666,2023,35,0
+Paper Cities,Coastline Theory,Liquid DnB,Em,176,0.731,0.638,0.116,0.567,2021,4,0
+Slow Hearts,Lune Collective,Deep House,Am,123,0.628,0.657,0,0.817,2013,28,0
+Glass Tapes,Tape Garden,Lo-Fi,Am,81,0.273,0.355,0.608,0.621,2025,77,1
+Lucid Echoes,Northbound,Indie Rock,D,133,0.758,0.695,0.027,0.506,2022,17,0
+Electric Windows,Lune Collective,Deep House,Gm,124,0.533,0.496,0.162,0.821,2021,41,0
+Blue Rivers,June Hollis,Neo-Soul,Am,91,0.436,0.669,0.407,0.588,2016,0,0
+Faded Signals,Lune Collective,Deep House,Am,122,0.536,0.458,0.042,0.937,2019,0,0
+Midnight Rooftops,Nadia Ruelle,Jazz,Bb,93,0.415,0.539,0.892,0.44,2012,17,0
+Soft Rivers,Tape Garden,Lo-Fi,Dm,85,0.157,0.273,0.608,0.723,2019,66,0
+Low Cities,Kumo Rooms,Lo-Fi,Am,87,0.351,0.37,0.614,0.543,2017,0,0
+Slow Tides,Moss & Static,Lo-Fi,Em,91,0.323,0.297,0.617,0.703,2017,67,0
+Blue Mornings,Orchestra Lumen,Classical,Bm,98,0.221,0.378,0.873,0.161,2022,2,0
+Lucid Hearts,Orchestra Lumen,Classical,D,87,0.14,0.471,0.954,0.35,2013,4,0
+Lucid Lanterns,Moss & Static,Lo-Fi,Am,81,0.277,0.486,0.547,0.615,2024,82,0
+Midnight Rivers,Velour Avenue,Neo-Soul,Am,84,0.56,0.58,0.525,0.68,2019,36,0
+Slow Lines,Northbound,Indie Rock,D,130,0.756,0.666,0.328,0.48,2013,8,0
+Static Waves,Kumo Rooms,Lo-Fi,Em,79,0.445,0.324,0.791,0.689,2016,89,0
+Soft Clouds,Moss & Static,Lo-Fi,Am,91,0.23,0.233,0.734,0.649,2023,58,1
+Warm Tapes,Northbound,Indie Rock,D,129,0.606,0.571,0.096,0.434,2022,10,0
+Slow Echoes,The Albright Trio,Jazz,Am,116,0.4,0.534,0.954,0.336,2025,0,0
+Paper Rivers,Paper Kites Club,Indie Rock,A,115,0.715,0.61,0.2,0.473,2017,10,0
+Soft Shadows,Nadia Ruelle,Jazz,Bb,106,0.27,0.445,0.904,0.494,2013,0,0
+Silver Hearts,Harbor Unit,Deep House,Am,120,0.666,0.571,0.068,0.89,2024,0,0
+Velvet Mornings,Orchestra Lumen,Classical,Eb,95,0.079,0.188,0.931,0.228,2020,2,0
+Quiet Signals,Elise Varga,Classical,D,105,0.248,0.378,0.956,0.291,2021,4,0
+Soft Lanterns,DJ Prism,Big Room EDM,C#,126,0.978,0.427,0.037,0.722,2014,0,0
+Golden Rooftops,Nadia Ruelle,Jazz,Bb,130,0.508,0.466,1,0.376,2023,21,0
+Amber Signals,Moss & Static,Lo-Fi,Dm,91,0.311,0.412,0.659,0.628,2020,106,1
+Electric Tides,Volt Kingdom,Big Room EDM,F,129,0.879,0.613,0,0.825,2024,3,0
+Paper Engines,Paper Kites Club,Indie Rock,E,137,0.932,0.723,0.303,0.417,2018,14,0
+Wild Satellites,Lune Collective,Deep House,Dm,122,0.643,0.375,0.02,0.814,2014,36,0
+Silver Signals,Harbor Unit,Deep House,Gm,120,0.613,0.438,0.046,0.862,2022,21,0
+Midnight Hearts,Lune Collective,Deep House,Am,123,0.732,0.646,0.169,0.814,2021,25,0
+Wild Rivers,Paper Kites Club,Indie Rock,G,121,0.863,0.586,0.167,0.623,2012,0,0
+Velvet Tides,Paper Kites Club,Indie Rock,G,117,0.878,0.663,0.104,0.612,2025,9,0
+Paper Letters,Moss & Static,Lo-Fi,Dm,82,0.492,0.256,0.679,0.431,2023,20,0
+Silver Rivers,Moss & Static,Lo-Fi,Dm,90,0.265,0.354,0.754,0.459,2023,76,1
+Low Letters,Moss & Static,Lo-Fi,Dm,80,0.362,0.16,0.605,0.597,2015,0,0
+Slow Rooftops,Kumo Rooms,Lo-Fi,Am,87,0.285,0.297,0.787,0.665,2022,40,0
+Faded Engines,Lune Collective,Deep House,Am,121,0.68,0.546,0.145,0.783,2020,30,0
+Hollow Hearts,Lune Collective,Deep House,Gm,124,0.681,0.565,0.138,0.862,2015,0,0
+Distant Echoes,Velour Avenue,Neo-Soul,Em,84,0.579,0.563,0.401,0.684,2019,21,0
+Low Mornings,Coastline Theory,Liquid DnB,Em,172,0.877,0.411,0.009,0.688,2023,16,0
+Paper Rooftops,Tape Garden,Lo-Fi,Dm,87,0.448,0.344,0.633,0.697,2022,0,0
+Neon Tapes,Coastline Theory,Liquid DnB,Am,174,0.763,0.503,0.106,0.459,2015,0,0
+Soft Lines,June Hollis,Neo-Soul,Am,89,0.48,0.616,0.506,0.733,2022,40,0
+Warm Signals,Moss & Static,Lo-Fi,Dm,92,0.252,0.236,0.675,0.538,2019,0,0
+Amber Tapes,Paper Kites Club,Indie Rock,A,129,0.829,0.659,0.186,0.398,2021,7,0
+Paper Clouds,DJ Prism,Big Room EDM,F,129,0.885,0.508,0.016,0.654,2013,1,0
+Distant Gardens,Moss & Static,Lo-Fi,Em,80,0.231,0.39,0.602,0.729,2018,62,1
+Blue Echoes,The Albright Trio,Jazz,Dm,112,0.303,0.461,0.801,0.549,2025,37,0
+Rain Echoes,Northbound,Indie Rock,G,117,0.736,0.62,0.256,0.459,2015,0,0
+Distant Rooftops,Kumo Rooms,Lo-Fi,Dm,84,0.236,0.398,0.57,0.629,2015,54,1
+Faded Lanterns,Lune Collective,Deep House,Gm,124,0.642,0.538,0.101,0.816,2020,0,0
+Warm Shadows,June Hollis,Neo-Soul,Am,91,0.393,0.575,0.508,0.776,2017,31,0
+Lucid Tapes,DJ Prism,Big Room EDM,G,129,0.785,0.489,0.031,0.887,2014,3,0
+Velvet Clouds,Nadia Ruelle,Jazz,F,105,0.351,0.502,0.867,0.457,2014,30,0
+Amber Hearts,Coastline Theory,Liquid DnB,Em,175,0.693,0.427,0.064,0.587,2021,7,0
+Lucid Letters,Nadia Ruelle,Jazz,Am,120,0.485,0.476,0.867,0.402,2024,17,0
+Paper Tapes,Lune Collective,Deep House,Dm,122,0.586,0.606,0.024,0.883,2012,27,0
+Amber Letters,June Hollis,Neo-Soul,Am,93,0.453,0.514,0.411,0.642,2022,20,0
+Glass Letters,Kumo Rooms,Lo-Fi,Em,91,0.382,0.303,0.555,0.601,2012,39,0
+Low Windows,Velour Avenue,Neo-Soul,Am,95,0.255,0.52,0.55,0.81,2020,0,0
+Amber Waves,Velour Avenue,Neo-Soul,Am,95,0.352,0.456,0.509,0.804,2019,79,1
+Distant Mornings,Velour Avenue,Neo-Soul,Em,85,0.47,0.564,0.444,0.557,2019,0,0
+Quiet Hearts,June Hollis,Neo-Soul,Am,89,0.583,0.551,0.471,0.666,2015,21,0
+Golden Tides,Orchestra Lumen,Classical,Bm,90,0.142,0.244,1,0.332,2021,6,0
+Amber Cities,Paper Kites Club,Indie Rock,D,134,0.77,0.431,0.145,0.49,2024,11,0
+Golden Lanterns,Northbound,Indie Rock,E,142,0.823,0.614,0.238,0.555,2018,0,0
+Wild Cities,Coastline Theory,Liquid DnB,Em,172,0.815,0.406,0.012,0.583,2017,0,0
+Blue Waves,DJ Prism,Big Room EDM,F,130,0.975,0.501,0.032,0.741,2013,0,0

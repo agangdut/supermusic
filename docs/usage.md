@@ -39,7 +39,11 @@ Me at the zoo,jawed,https://www.youtube.com/watch?v=jNQXAC9IVRw,
 My demo,Me,,/app/data/raw/uploads/audio/demo.mp3
 ```
 
-### 🌌 Try the 3D demo
+### 🌌 Explore the Music Map
+
+Open **http://localhost:3000/map**. It starts with a sample library; click **Map my CSV** to use your own. The [Music Map guide](music-map.md) explains what you're looking at.
+
+### 🌐 Try the 3D demo
 
 The home page has an interactive 3D plot. Use **Upload CSV** there to plot your own data; the bundled sample (`frontend/public/data/sample_dataset.csv`) shows the expected `x`, `y`, `z` columns.
 

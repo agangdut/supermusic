@@ -1,0 +1,217 @@
+// Client-only 3D "brain map" of a music library.
+// Loaded with next/dynamic (ssr: false) because three.js needs the browser.
+import { useEffect, useMemo, useRef, useState } from "react";
+import ForceGraph3D from "react-force-graph-3d";
+import * as THREE from "three";
+import { colorFor } from "./colors";
+
+const HIDDEN_COLOR = "#f0abfc";
+const PICK_COLOR = "#fde68a";
+
+// One soft glowing dot texture, shared by every node
+let glowTexture = null;
+function getGlowTexture() {
+  if (glowTexture) return glowTexture;
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.18, "rgba(255,255,255,0.85)");
+  g.addColorStop(0.45, "rgba(255,255,255,0.25)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  glowTexture = new THREE.CanvasTexture(canvas);
+  return glowTexture;
+}
+
+let ringTexture = null;
+function getRingTexture() {
+  if (ringTexture) return ringTexture;
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.lineWidth = 5;
+  ctx.shadowColor = "#ffffff";
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2 - 12, 0, Math.PI * 2);
+  ctx.stroke();
+  ringTexture = new THREE.CanvasTexture(canvas);
+  return ringTexture;
+}
+
+function textSprite(text, color) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  const font = "600 44px Inter, system-ui, sans-serif";
+  ctx.font = font;
+  const w = Math.ceil(ctx.measureText(text).width) + 40;
+  canvas.width = w;
+  canvas.height = 72;
+  ctx.font = font;
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 16;
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 20, 36);
+  const mat = new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(canvas), transparent: true, depthWrite: false, depthTest: false,
+    opacity: 0.9, sizeAttenuation: false,
+  });
+  const sprite = new THREE.Sprite(mat);
+  // Fixed on-screen size, whatever the zoom
+  const h = 0.032;
+  sprite.scale.set((h * w) / 72, h, 1);
+  return sprite;
+}
+
+export default function Graph3D({ data, selectedId, focusIds, picks, mode, onSelect }) {
+  const fgRef = useRef();
+  const wrapRef = useRef();
+  const [size, setSize] = useState({ width: 800, height: 600 });
+
+  // Fit the canvas to its container
+  useEffect(() => {
+    if (!wrapRef.current) return;
+    const ro = new ResizeObserver(([e]) => setSize({ width: e.contentRect.width, height: e.contentRect.height }));
+    ro.observe(wrapRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const graph = useMemo(() => {
+    if (!data) return { nodes: [], links: [] };
+    const maxEng = Math.max(0.0001, ...data.tracks.map((t) => t.engagement ?? 0));
+    return {
+      nodes: data.tracks.map((t) => ({
+        ...t,
+        // Pin each track where the embedding put it, so position means similarity
+        fx: t.x, fy: t.y, fz: t.z,
+        size: 2.5 + 5.5 * ((t.engagement ?? 0.4) / maxEng),
+      })),
+      links: data.edges.map((e) => ({ ...e })),
+    };
+  }, [data]);
+
+  const pickSet = useMemo(() => new Set(picks || []), [picks]);
+  const focus = focusIds && focusIds.size ? focusIds : null;
+
+  const isLit = (id) => !focus || focus.has(id);
+
+  // Glowing sprite per node; rebuilt when highlighting changes
+  const nodeObject = (node) => {
+    const group = new THREE.Group();
+    const lit = isLit(node.id);
+    const isPick = mode === "picks" && pickSet.has(node.id);
+    const color = isPick ? PICK_COLOR : colorFor(node.cluster);
+    const mat = new THREE.SpriteMaterial({
+      map: getGlowTexture(),
+      color,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      opacity: lit ? 0.9 : 0.1,
+    });
+    const glow = new THREE.Sprite(mat);
+    const s = node.id === selectedId ? node.size * 2.6 : isPick ? Math.max(node.size, 5) * 2 : node.size * 1.6;
+    glow.scale.set(s, s, 1);
+    group.add(glow);
+    if (node.id === selectedId) {
+      // A sprite always faces the camera, so the ring stays round from any angle
+      const ring = new THREE.Sprite(new THREE.SpriteMaterial({ map: getRingTexture(), transparent: true, depthWrite: false }));
+      ring.scale.set(s * 1.1, s * 1.1, 1);
+      group.add(ring);
+    }
+    return group;
+  };
+
+  const linkVisible = (l) => {
+    const s = typeof l.source === "object" ? l.source.id : l.source;
+    const t = typeof l.target === "object" ? l.target.id : l.target;
+    if (selectedId != null) return s === selectedId || t === selectedId;
+    if (mode === "hidden") return l.kind === "hidden";
+    if (focus) return focus.has(s) && focus.has(t);
+    return true;
+  };
+
+  // Cluster names floating above each group
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg || !data) return;
+    const scene = fg.scene();
+    const labels = new THREE.Group();
+    labels.name = "cluster-labels";
+    for (const c of data.clusters) {
+      const members = data.tracks.filter((t) => t.cluster === c.id);
+      if (!members.length) continue;
+      const cx = members.reduce((a, t) => a + t.x, 0) / members.length;
+      const cy = Math.max(...members.map((t) => t.y)) + 6;
+      const cz = members.reduce((a, t) => a + t.z, 0) / members.length;
+      const name = c.label.split(" · ").slice(0, 2).join(" · ");
+      const sprite = textSprite(name, colorFor(c.id));
+      sprite.position.set(cx, cy, cz);
+      labels.add(sprite);
+    }
+    scene.add(labels);
+    return () => {
+      scene.remove(labels);
+    };
+  }, [data]);
+
+  // Frame the whole map once it loads
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg || !data) return;
+    const t = setTimeout(() => fg.cameraPosition({ x: 0, y: 30, z: 175 }, { x: 0, y: 0, z: 0 }, 1200), 50);
+    return () => clearTimeout(t);
+  }, [data]);
+
+  // Fly to the selected track
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg || selectedId == null || !data) return;
+    const n = data.tracks.find((t) => t.id === selectedId);
+    if (!n) return;
+    const dist = 70;
+    const r = Math.hypot(n.x, n.y, n.z) || 1;
+    const k = 1 + dist / r;
+    fg.cameraPosition({ x: n.x * k, y: n.y * k, z: n.z * k }, { x: n.x, y: n.y, z: n.z }, 1000);
+  }, [selectedId, data]);
+
+  return (
+    <div ref={wrapRef} className="absolute inset-0">
+      <ForceGraph3D
+        ref={fgRef}
+        width={size.width}
+        height={size.height}
+        graphData={graph}
+        backgroundColor="rgba(0,0,0,0)"
+        showNavInfo={false}
+        cooldownTicks={0}
+        warmupTicks={0}
+        enableNodeDrag={false}
+        nodeThreeObject={nodeObject}
+        nodeLabel={(n) =>
+          `<div style="font:12px Inter,system-ui;padding:6px 8px;background:#0b1121ee;border:1px solid #ffffff22;border-radius:8px;color:#e5e7eb">
+             <b>${n.title}</b>${n.artist ? ` · ${n.artist}` : ""}<br/>
+             <span style="color:#9ca3af">${[n.genre, n.key && `${n.key} (${n.camelot})`, n.bpm && `${Math.round(n.bpm)} BPM`, n.plays != null && `${n.plays} plays`].filter(Boolean).join(" · ")}</span>
+           </div>`
+        }
+        onNodeClick={(n) => onSelect?.(n.id)}
+        onBackgroundClick={() => onSelect?.(null)}
+        linkVisibility={linkVisible}
+        linkColor={(l) => (l.kind === "hidden" ? HIDDEN_COLOR : colorFor(typeof l.source === "object" ? l.source.cluster : 0))}
+        linkOpacity={0.22}
+        linkWidth={(l) => (l.kind === "hidden" ? 1.2 : 0.25)}
+        linkDirectionalParticles={(l) => (l.kind === "hidden" ? 3 : focus ? 1 : 0)}
+        linkDirectionalParticleWidth={(l) => (l.kind === "hidden" ? 1.8 : 1)}
+        linkDirectionalParticleSpeed={(l) => 0.004 + 0.006 * (l.strength ?? 0.5)}
+        linkDirectionalParticleColor={(l) => (l.kind === "hidden" ? HIDDEN_COLOR : "#ffffff")}
+      />
+    </div>
+  );
+}

@@ -27,10 +27,22 @@
 | 🥁 **Stem separation** | Splits a mix into vocals, drums, bass and other | [Demucs](https://github.com/facebookresearch/demucs) |
 | 🧾 **CSV enrichment** | Adds BPM, key and duration to a track list, plus YouTube and MusicBrainz info | librosa |
 | ⬇️ **Track download** | Grabs the audio from a YouTube (or similar) link | [yt-dlp](https://github.com/yt-dlp/yt-dlp) |
-| 🌌 **3D similarity map** | Places tracks in 3D by how alike they sound | UMAP + Plotly |
+| 🌌 **Music Map** | Turns your library into a 3D constellation: taste clusters, hidden connections between genres, and picks you've been missing | UMAP, scikit-learn, three.js |
 | 📦 **Batch and export** | Runs many files at once and zips up the results | FastAPI |
 
 Every task runs as a **job**. You start it, the page checks on it every two seconds, and the finished files appear as downloads.
+
+### 🌌 Music Map
+
+Drop in a CSV of your library and see it as a galaxy. Tracks that sound alike cluster together, the clusters you play most glow brightest, and pink threads link songs from different scenes that would mix well (same key, half-time tempo, similar mood). Add a `play_count`, `rating` or `liked` column and it learns your taste and suggests tracks you've been overlooking.
+
+<div align="center">
+<img src="docs/img/music-map.png" alt="Music Map showing taste clusters and recommendations" width="88%" />
+</div>
+
+More in the [Music Map guide](docs/music-map.md).
+
+### 🎛️ Workspace
 
 <div align="center">
 <img src="docs/img/upload.png" alt="Upload and process page" width="88%" />
@@ -52,6 +64,7 @@ docker compose up --build
 |---|---|
 | http://localhost:3000 | see the app |
 | http://localhost:3000/upload | upload a song or CSV and run a job |
+| http://localhost:3000/map | explore the Music Map (opens with a sample library) |
 | http://localhost:8000/docs | try the API in your browser |
 
 > ⏱️ The first build takes several minutes because it installs the machine-learning libraries (the backend image is about 3.4 GB). Later builds are much faster.
@@ -144,7 +157,7 @@ On every push to `master`, CI runs the backend tests and builds the frontend.
 
 ## 🛣️ Roadmap
 
-The four core pipelines (MIDI, stems, CSV, download) work end to end. To become a finished product, SuperMusic still needs jobs and accounts that survive a restart, a proper job queue, sign-in in the UI, and screens for downloads, the 3D map, batch and export. The full list is in **[docs/roadmap.md](docs/roadmap.md)**.
+The core pipelines (MIDI, stems, CSV, download) and the Music Map work end to end. To become a finished product, SuperMusic still needs jobs and accounts that survive a restart, a proper job queue, sign-in in the UI, and screens for downloads, batch and export. The full list is in **[docs/roadmap.md](docs/roadmap.md)**.
 
 ---
 

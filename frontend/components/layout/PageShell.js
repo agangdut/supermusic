@@ -37,10 +37,20 @@ export default function PageShell({ children }) {
           </span>
         </Link>
 
-        {/* Right side placeholder (account menu / nav actions later) */}
-        <div className="text-[11px] text-gray-500">
-          {/* e.g. <Navbar /> / profile menu / etc later */}
-        </div>
+        <nav className="flex items-center gap-1 text-xs">
+          {[
+            { href: "/upload", label: "Workspace" },
+            { href: "/map", label: "Music Map" },
+          ].map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className="rounded-lg px-3 py-1.5 text-gray-400 transition hover:bg-white/5 hover:text-white"
+            >
+              {l.label}
+            </Link>
+          ))}
+        </nav>
       </header>
 
       {/* Main page area */}

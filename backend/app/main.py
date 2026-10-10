@@ -17,6 +17,7 @@ from app.routes import auth as auth_routes
 from app.routes import websocket as websocket_routes
 from app.routes import batch as batch_routes
 from app.routes import export as export_routes
+from app.routes import map as map_routes
 from app.middleware.rate_limit import limiter, RATE_LIMITS
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -104,6 +105,16 @@ app.include_router(batch_routes.router, tags=["batch"])
 
 # Export endpoints
 app.include_router(export_routes.router, tags=["export"])
+
+# Taste map endpoints
+app.include_router(map_routes.router)
+
+
+@app.on_event("startup")
+def _warm_map() -> None:
+    import threading
+
+    threading.Thread(target=map_routes.warm_up, daemon=True).start()
 
 # ------------------------------------------------------------------------------
 # Static file serving for artifacts

@@ -61,6 +61,13 @@ export default function Home() {
                 Get started
               </a>
               <a
+                href="/map"
+                className="inline-flex items-center rounded-xl border border-fuchsia-400/40 bg-fuchsia-500/10 px-5 py-3 font-semibold
+                           text-fuchsia-700 backdrop-blur-md transition hover:bg-fuchsia-500/20 dark:text-fuchsia-200"
+              >
+                Explore your Music Map
+              </a>
+              <a
                 href="#architecture"
                 className="inline-flex items-center rounded-xl border border-slate-300/70 bg-white/60 px-5 py-3 font-semibold
                            text-slate-700 backdrop-blur-md transition hover:bg-white dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200"
