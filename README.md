@@ -23,7 +23,7 @@
 
 | | What it does | Powered by |
 |---|---|---|
-| 🎹 **Audio → MIDI** | Transcribes a song into a playable `.mid` file | [Basic Pitch](https://github.com/spotify/basic-pitch) |
+| 🎹 **Audio → MIDI** | Transcribes a song into a playable `.mid` file, with a dedicated **Piano** mode for solo piano | [Basic Pitch](https://github.com/spotify/basic-pitch), [ByteDance piano model](https://github.com/bytedance/piano_transcription) (MAESTRO) |
 | 🥁 **Stem separation** | Splits a mix into vocals, drums, bass and other | [Demucs](https://github.com/facebookresearch/demucs) |
 | 🧾 **CSV enrichment** | Adds BPM, key and duration to a track list, plus YouTube and MusicBrainz info | librosa |
 | ⬇️ **Track download** | Grabs the audio from a YouTube (or similar) link | [yt-dlp](https://github.com/yt-dlp/yt-dlp) |

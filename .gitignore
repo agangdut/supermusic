@@ -82,6 +82,7 @@ data/interim/
 data/processed/
 data/samples/
 data/artifacts/
+data/models/
 
 # ------------------------
 # 📊 Static / Build Artifacts

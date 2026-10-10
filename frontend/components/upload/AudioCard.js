@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import PrimaryButton from "./PrimaryButton";
 import ThemedCard from "./ThemedCard";
 
@@ -10,6 +11,7 @@ export default function AudioCard({
   separateStems,
   busy,
 }) {
+  const [model, setModel] = useState("basic");
   return (
     <ThemedCard
       title="Audio"
@@ -21,7 +23,7 @@ export default function AudioCard({
           </div>
           <div className="flex gap-2 flex-wrap">
             <PrimaryButton
-              onClick={transcribeMidi}
+              onClick={() => transcribeMidi(model)}
               disabled={!audioFile || busy}
             >
               Transcribe → MIDI
@@ -46,6 +48,30 @@ export default function AudioCard({
                    hover:file:border-purple-500/40
                    file:text-xs file:transition-colors"
       />
+
+      <div className="mt-4">
+        <span className="text-sm font-medium text-gray-300">MIDI model</span>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {[
+            { id: "basic", name: "General", note: "Any instrument or full mix" },
+            { id: "piano", name: "Piano", note: "Solo piano, trained on MAESTRO" },
+          ].map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setModel(m.id)}
+              className={`rounded-lg border px-3 py-2 text-left transition ${
+                model === m.id
+                  ? "border-purple-400/60 bg-purple-500/10 text-white"
+                  : "border-white/10 text-gray-400 hover:border-white/20"
+              }`}
+            >
+              <span className="block text-xs font-semibold">{m.name}</span>
+              <span className="block text-[11px] text-gray-500">{m.note}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </ThemedCard>
   );
 }

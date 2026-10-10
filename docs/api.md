@@ -37,7 +37,7 @@ Long tasks don't block the request. You **start** a job and get back a job objec
 
 | Method | Path | JSON body (* = required) |
 |---|---|---|
-| `POST` | `/midi/convert` | `source_path`*, `onset_sensitivity` (0.6), `model` ("basic") |
+| `POST` | `/midi/convert` | `source_path`*, `onset_sensitivity` (0.6), `model` ("basic" for any instrument, "piano" for solo piano) |
 | `GET` | `/midi/jobs/{id}` | |
 | `POST` | `/stems/separate` | `audio_path`*, `model` ("htdemucs"), `stems` |
 | `GET` | `/stems/jobs/{id}` | |

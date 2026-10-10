@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from ..models.job import Job, JobType
 from ..utils.storage import job_store, save_artifact
+from app.core.piano_transcription import transcribe_piano
 from app.core.transcription import transcribe_to_midi
 
 try:
@@ -30,7 +31,11 @@ router = APIRouter(prefix="/midi", tags=["midi"])
 class MIDIConvertRequest(BaseModel):
     source_path: str = Field(..., description="Input audio file (wav/mp3).")
     onset_sensitivity: float = Field(0.6, ge=0.0, le=1.0)
-    model: str = Field("basic", description="Transcription model name.")
+    model: str = Field(
+        "basic",
+        description='"basic" (Basic Pitch, any instrument) or "piano" (MAESTRO-trained, solo piano).',
+        pattern="^(basic|piano)$",
+    )
 
 
 @router.post("/convert", response_model=Job)
@@ -50,12 +55,12 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
             
             j.progress = 30
-            j.message = "Transcribing to MIDI…"
+            j.message = "Transcribing piano to MIDI…" if req.model == "piano" else "Transcribing to MIDI…"
             
             # Run transcription in executor to avoid blocking
             loop = asyncio.get_event_loop()
             midi_path = await loop.run_in_executor(
-                None, transcribe_to_midi, str(audio_path)
+                None, transcribe_piano if req.model == "piano" else transcribe_to_midi, str(audio_path)
             )
             
             j.progress = 80

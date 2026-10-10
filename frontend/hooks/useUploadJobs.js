@@ -184,7 +184,7 @@ export default function useUploadJobs() {
   );
 
   // public actions
-  const transcribeMidi = useCallback(async () => {
+  const transcribeMidi = useCallback(async (model = "basic") => {
     if (!audioFile) {
       notify("Please select an audio file first.", "warn");
       return;
@@ -199,7 +199,7 @@ export default function useUploadJobs() {
       // Step 2: Create MIDI conversion job
       await createJob(
         "midi_conversion",
-        () => midiConvert({ source_path: audioPath }),
+        () => midiConvert({ source_path: audioPath, model }),
         "Transcription complete 🎹",
         "Transcription failed ❌",
         (result) => {

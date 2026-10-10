@@ -13,6 +13,8 @@ yt-dlp
 # MIDI
 basic-pitch[onnx]
 pretty_midi
+piano-transcription-inference==0.0.6
+mir_eval
 
 # Web
 fastapi
