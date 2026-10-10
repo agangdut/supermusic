@@ -29,7 +29,7 @@ Without Docker:
 
 ```bash
 pip install -r requirements.txt
-uvicorn backend.app.main:app --reload
+uvicorn app.main:app --app-dir backend --reload
 ```
 
 ```bash

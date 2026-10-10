@@ -1,6 +1,6 @@
 // pages/api/csv/enrich.js
-import { parseForm, config as base } from "../_uploadUtil";
-export const config = base;
+import { parseForm } from "../_uploadUtil";
+export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();

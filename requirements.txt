@@ -6,6 +6,7 @@ numpy
 # Audio Processing
 librosa
 pydub
+soundfile
 demucs
 
 # MIDI
@@ -24,6 +25,7 @@ httpx
 # Visualization
 plotly
 umap-learn
+matplotlib
 
 # CLI Helpers
 click
