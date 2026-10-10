@@ -10,8 +10,8 @@ For each audio file, makes a two-hand piano part both ways and reports:
 
     docker compose exec backend python scripts/compare_piano_cover.py data/raw/songs
 
-Results go to stdout as a Markdown table, and the MIDI files are kept in
-data/processed/cover_compare/ so you can listen to them.
+Results go to stdout as a Markdown table. The MIDI files, and an MP3 of each
+played on a real piano sound, are kept in data/processed/cover_compare/.
 """
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 import pretty_midi  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
+from app.core.humanize import render_audio  # noqa: E402
 from app.core.piano_cover import piano_cover  # noqa: E402
 from app.core.playability import _chords, _load_notes, make_playable  # noqa: E402
 
@@ -102,6 +103,7 @@ def main() -> None:
             secs = time.time() - t
             label = "Pop2Piano" if method == "cover" else f"{method} + rewrite"
             final, s = make_playable(raw, out_dir / f"{audio.stem}_{method}_playable.mid", hand_span=args.hand_span)
+            render_audio(final)  # an .mp3 next to the .mid, with a real piano sound
             changed = s["notes_folded"] + s["notes_dropped"] + s["notes_released_early"]
             length = max(pretty_midi.PrettyMIDI(str(final)).get_end_time(), 1.0)
             print(f"| {audio.stem} | {label} | {s['playable_before_pct']:.1f}% | {s['notes_after'] / length:.1f} "

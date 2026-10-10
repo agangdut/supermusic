@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from ..models.job import Job, JobType
 from ..utils.storage import job_store, save_artifact
+from app.core.humanize import render_audio
 from app.core.piano_cover import piano_cover
 from app.core.piano_transcription import transcribe_piano
 from app.core.smart_transcription import transcribe_auto, transcribe_stems
@@ -105,6 +106,12 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                 )
                 artifacts["midi_original"] = save_artifact(j, f"{audio_path.stem}.mid", midi_path.read_bytes())
                 midi_path = playable_path
+
+            # A listenable piano rendering, when FluidSynth is installed
+            j.message = "Rendering a piano preview…"
+            preview = await loop.run_in_executor(None, render_audio, midi_path)
+            if preview:
+                artifacts["preview"] = save_artifact(j, preview.name, preview.read_bytes())
 
             # Read MIDI file and save as artifact
             midi_bytes = midi_path.read_bytes()

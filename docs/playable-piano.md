@@ -51,6 +51,8 @@ The rewrite kept 99.99% of their notes, so it leaves already-playable music alon
 
 Pick **Piano cover** as the MIDI model to have the song arranged for piano by [Pop2Piano](https://huggingface.co/sweetcocoa/pop2piano), instead of transcribed note for note. The weights (about 1 GB) download on first use into `data/models/hf`. The API also takes `composer` (`composer1` to `composer21`), one of the 21 cover arrangers it learned from, each with its own style. Tick **Playable by two hands** as well to split the cover into left and right hand.
 
+Pop2Piano writes every note at the same loudness with no pedal, which sounds mechanical. So each cover is then given dynamics that follow the original song (melody above the accompaniment, bass slightly forward) and sustain pedal that changes with the bass (`backend/app/core/humanize.py`). Every MIDI job also returns a `preview` MP3 played on a real piano sound (FluidSynth), because Windows' built-in MIDI player makes any MIDI sound cheap.
+
 To compare it with transcribe-then-rewrite on your own songs:
 
 ```bash

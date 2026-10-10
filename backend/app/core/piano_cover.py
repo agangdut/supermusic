@@ -19,6 +19,7 @@ import uuid
 from pathlib import Path
 
 from app.core.config import settings
+from app.core.humanize import humanize
 
 MODEL_ID = os.getenv("SM_POP2PIANO_MODEL", "sweetcocoa/pop2piano")
 COMPOSERS = [f"composer{i}" for i in range(1, 22)]
@@ -82,4 +83,5 @@ def piano_cover(audio_path: str | Path, out_dir: Path | None = None, composer: s
     for inst in pm.instruments:
         inst.program, inst.is_drum = 0, False  # acoustic grand piano
     pm.write(str(midi_path))
-    return midi_path
+    # Pop2Piano plays every note at one loudness with no pedal; give it dynamics from the song
+    return humanize(midi_path, audio_path)
