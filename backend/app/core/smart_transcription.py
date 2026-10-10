@@ -180,11 +180,16 @@ def detect_instruments(audio_path: str | Path) -> Dict[str, float]:
     return stem_shares(stems)
 
 
-def choose_model(shares: Dict[str, float]) -> Tuple[str, str]:
+def choose_model(shares: Dict[str, float], multi_available: bool = False) -> Tuple[str, str]:
     piano = shares.get("piano", 0)
     busy = shares.get("drums", 0) + shares.get("vocals", 0)
     if piano >= PIANO_DOMINANT:
         return "piano", f"mostly piano ({round(piano * 100)}% of the sound)"
+    if multi_available:
+        # YourMT3+ beats Stems and General on everything but solo piano
+        # (piano in a band: 0.92 vs 0.87 vs 0.47 note F1; see docs/transcription-accuracy.md)
+        top = max(shares, key=shares.get) if shares else "unknown"
+        return "multi", f"a mix led by {top} ({round(shares.get(top, 0) * 100)}%)"
     if piano >= PIANO_PRESENT:
         return "stems", f"piano in a band ({round(piano * 100)}% piano)"
     if busy >= BUSY_MIX:
@@ -194,10 +199,14 @@ def choose_model(shares: Dict[str, float]) -> Tuple[str, str]:
 
 
 def transcribe_auto(audio_path: str | Path) -> Tuple[Path, Dict]:
+    from app.core.yourmt3_client import available, transcribe_multi
+
     shares = detect_instruments(audio_path)
-    model, why = choose_model(shares)
+    model, why = choose_model(shares, multi_available=available())
     if model == "piano":
         midi, info = transcribe_piano(audio_path), {}
+    elif model == "multi":
+        midi, info = transcribe_multi(audio_path), {}
     elif model == "stems":
         midi, info = transcribe_stems(audio_path)
     else:

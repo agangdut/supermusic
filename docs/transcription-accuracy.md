@@ -7,6 +7,7 @@ How well each MIDI model does on the [MAESTRO v3](https://magenta.tensorflow.org
 |---|---|---|---|---|---|---|
 | basic (defaults) | wav | 0.703 | 0.726 | 0.715 | 0.143 | 2.9s |
 | basic (tuned) | wav | 0.749 | 0.740 | 0.787 | 0.182 | 2.7s |
+| multi (YourMT3+, GPU) | wav | 0.964 | 0.982 | 0.947 | 0.377 | 8.2s |
 | basic | mp3 | 0.703 | 0.727 | 0.715 | 0.142 | 2.3s |
 | piano | wav | 0.974 | 0.985 | 0.964 | 0.360 | 27.2s |
 | piano | mp3 | 0.974 | 0.985 | 0.964 | 0.360 | 26.9s |
@@ -27,11 +28,12 @@ Most songs aren't solo piano, so a second test (`scripts/eval_mix.py`) mixes a b
 
 | Method | Precision | Recall | Note F1 |
 |---|---|---|---|
-| general | 0.393 | 0.489 | 0.396 |
+| general (tuned) | 0.423 | 0.613 | 0.465 |
 | piano | 0.836 | 0.904 | 0.867 |
 | stems | 0.836 | 0.904 | 0.867 |
-| auto | 0.793 | 0.844 | 0.812 |
+| **multi (YourMT3+)** | **0.939** | **0.901** | **0.919** |
 
+- **YourMT3+** ("Full band" mode) is the most accurate here. It's a multi-instrument model, so it also writes the bass, guitar and drums on their own tracks. These numbers count only its piano tracks.
 - **General** loses most of the piano under the band. Its precision also counts the band's notes as wrong, but recall (0.49) shows it misses half the piano.
 - **Stems** gives the piano track to the piano model listening to the whole mix. A first version transcribed Demucs' separated piano stem instead and scored only 0.66, because separation smears piano notes.
 - **Auto** chose Stems for 9 of the 10 clips and General for the one with very quiet piano (10% of the sound). It picks **Piano** for solo piano recordings (checked on three MAESTRO pieces, which measured 98–100% piano).
@@ -44,8 +46,9 @@ Auto separates a 30-second excerpt from the middle of the song into 6 parts and 
 | Detected | Auto uses |
 |---|---|
 | Piano is 60% or more | **Piano** |
-| Piano is 15% or more, or drums + vocals are 25% or more | **Stems** |
-| Anything else | **General** |
+| Anything else, when the YourMT3+ service is running | **Full band** (YourMT3+) |
+| Without YourMT3+: piano is 15% or more, or drums + vocals are 25% or more | **Stems** |
+| Without YourMT3+: anything else | **General** |
 
 ## Run it yourself
 

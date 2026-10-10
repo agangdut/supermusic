@@ -125,3 +125,6 @@ Thumbs.db
 # Local upload scratch
 # ------------------------
 frontend/tmp_uploads/
+
+# Local Docker Compose tweaks (e.g. GPU on this machine)
+docker-compose.override.yml

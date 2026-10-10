@@ -42,3 +42,10 @@ def test_drums_to_notes_finds_kicks_and_hats(tmp_path):
 def test_choose_model_stems_for_piano_in_a_band():
     model, why = choose_model({"piano": 0.3, "bass": 0.4, "guitar": 0.2, "drums": 0.1})
     assert model == "stems" and "piano" in why
+
+
+def test_choose_model_prefers_yourmt3_when_running():
+    assert choose_model({"guitar": 0.5, "bass": 0.3, "drums": 0.2}, multi_available=True)[0] == "multi"
+    assert choose_model({"piano": 0.3, "bass": 0.7}, multi_available=True)[0] == "multi"
+    # solo piano still goes to the dedicated piano model
+    assert choose_model({"piano": 0.95, "other": 0.05}, multi_available=True)[0] == "piano"

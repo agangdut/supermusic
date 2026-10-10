@@ -60,6 +60,8 @@ cd supermusic
 docker compose up --build
 ```
 
+Have an NVIDIA GPU? Run `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build` instead, so the Full band (YourMT3+) transcriber runs on it.
+
 | Open | To |
 |---|---|
 | http://localhost:3000 | see the app |

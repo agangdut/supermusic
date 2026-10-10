@@ -14,6 +14,7 @@ from app.core.piano_transcription import transcribe_piano
 from app.core.smart_transcription import transcribe_auto, transcribe_stems
 from app.core.playability import DEFAULT_SPAN, make_playable, playability_report
 from app.core.transcription import transcribe_to_midi
+from app.core.yourmt3_client import transcribe_multi
 
 try:
     from app.utils.storage import job_store, save_artifact  # type: ignore
@@ -41,9 +42,10 @@ class MIDIConvertRequest(BaseModel):
             '"basic" (Basic Pitch, any instrument, fastest), '
             '"piano" (MAESTRO-trained, solo piano), '
             '"stems" (split into 6 stems, transcribe each, multi-track MIDI), '
-            '"cover" (Pop2Piano: arrange the song for solo piano).'
+            '"cover" (Pop2Piano: arrange the song for solo piano), '
+            '"multi" (YourMT3+: every instrument in a full mix, best on bands; needs the yourmt3 service).'
         ),
-        pattern="^(auto|basic|piano|stems|cover)$",
+        pattern="^(auto|basic|piano|stems|cover|multi)$",
     )
     composer: str = Field("composer1", description="Piano cover style, composer1 to composer21.", pattern="^composer([1-9]|1[0-9]|2[01])$")
     playable: bool = Field(False, description="Rewrite the MIDI so two hands (10 fingers) can play it.")
@@ -72,6 +74,7 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                 "piano": "Transcribing piano to MIDI…",
                 "stems": "Splitting into stems, then transcribing each…",
                 "cover": "Arranging a piano cover…",
+                "multi": "Transcribing every instrument with YourMT3+…",
             }.get(req.model, "Transcribing to MIDI…")
 
             def run():
@@ -79,6 +82,8 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                     return transcribe_auto(audio_path)
                 if req.model == "stems":
                     return transcribe_stems(audio_path)
+                if req.model == "multi":
+                    return transcribe_multi(audio_path), {}
                 if req.model == "cover":
                     return piano_cover(audio_path, composer=req.composer), {}
                 fn = transcribe_piano if req.model == "piano" else transcribe_to_midi

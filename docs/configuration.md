@@ -22,6 +22,14 @@ With Docker, put settings in a `.env` file next to `docker-compose.yml` (start f
 | `SM_FIG_DPI` | `140` | Resolution of generated images |
 | `DATABASE_URL` | `sqlite:///./data/supermusic.db` | Reserved for the database (not used yet) |
 
+## YourMT3+ service
+
+| Variable | Default | What it does |
+|---|---|---|
+| `YOURMT3_URL` | `http://yourmt3:8100` | Where the backend finds the Full band transcriber |
+
+The `yourmt3` container runs on CPU unless you add `docker-compose.gpu.yml` (NVIDIA only). Its 562 MB model downloads once into `data/models/yourmt3`. To make the GPU the default on your machine, copy `docker-compose.gpu.yml` to `docker-compose.override.yml`; Compose loads that automatically, and git ignores it.
+
 ## Frontend
 
 These are fixed when the frontend is **built**, so rebuild after changing them (`docker compose build frontend`).
@@ -38,5 +46,6 @@ These are fixed when the frontend is **built**, so rebuild after changing them (
 | Frontend | 3000 |
 | Backend | 8000 |
 | Redis | 6379 |
+| YourMT3+ | 8100 (inside Docker only) |
 
 Change the left-hand number in `docker-compose.yml` (for example `"8080:8000"`) if a port is taken.

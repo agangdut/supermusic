@@ -56,7 +56,8 @@ export default function AudioCard({
         <div className="mt-2 grid grid-cols-2 gap-2">
           {[
             { id: "auto", name: "Auto", note: "Detects the instruments and picks for you" },
-            { id: "stems", name: "Stems", note: "Full band: one MIDI track per instrument" },
+            { id: "multi", name: "Full band", note: "Most accurate on mixes (YourMT3+, uses your GPU)" },
+            { id: "stems", name: "Stems", note: "Split first, then one track per instrument" },
             { id: "piano", name: "Piano", note: "Solo piano, trained on MAESTRO" },
             { id: "basic", name: "General", note: "Fastest, any single instrument" },
             { id: "cover", name: "Piano cover", note: "Arranges the song for piano (Pop2Piano)" },

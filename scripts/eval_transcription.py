@@ -64,6 +64,10 @@ def clip(src: Path, dst: Path, seconds: float, mp3: bool) -> None:
 
 
 def transcribe(model: str, audio: Path) -> Path:
+    if model == "multi":
+        from app.core.yourmt3_client import transcribe_multi
+
+        return transcribe_multi(audio)
     if model == "piano":
         from app.core.piano_transcription import transcribe_piano
 
@@ -95,7 +99,9 @@ def main() -> None:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     results = []
-    with tempfile.TemporaryDirectory() as tmp:
+    # Under data/ so the YourMT3+ container (which shares that volume) can read the clips
+    (ROOT / "data" / "interim").mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=ROOT / "data" / "interim") as tmp:
         tmp = Path(tmp)
         for i, row in enumerate(rows, 1):
             title = f'{row["canonical_composer"]}: {row["canonical_title"]}'

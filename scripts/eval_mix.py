@@ -43,7 +43,7 @@ SR = 44100
 
 def piano_only(midi_path: Path, out: Path) -> Path:
     pm = pretty_midi.PrettyMIDI(str(midi_path))
-    keep = [i for i in pm.instruments if i.name.lower() == "piano"]
+    keep = [i for i in pm.instruments if "piano" in i.name.lower() and not i.is_drum]
     pm.instruments = keep
     pm.write(str(out))
     return out
@@ -57,6 +57,7 @@ def main() -> None:
     ap.add_argument("--seconds", type=float, default=30)
     ap.add_argument("--backing-db", type=float, default=0.0, help="backing loudness relative to the piano")
     ap.add_argument("--out", default=str(ROOT / "data/processed/eval"))
+    ap.add_argument("--multi", action="store_true", help="also score YourMT3+ (needs the yourmt3 service)")
     args = ap.parse_args()
 
     from app.core.piano_transcription import transcribe_piano
@@ -76,7 +77,9 @@ def main() -> None:
     rows = rows[: args.limit]
 
     results = []
-    with tempfile.TemporaryDirectory() as tmp:
+    # Under data/ so the YourMT3+ container (which shares that volume) can read the clips
+    (ROOT / "data" / "interim").mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=ROOT / "data" / "interim") as tmp:
         tmp = Path(tmp)
         for i, row in enumerate(rows, 1):
             ref = tmp / "ref.midi"
@@ -97,6 +100,10 @@ def main() -> None:
                 "piano": transcribe_piano(audio),
                 "stems": piano_only(stems_midi, tmp / "stems_piano.mid"),
             }
+            if args.multi:
+                from app.core.yourmt3_client import transcribe_multi
+
+                outputs["multi"] = piano_only(transcribe_multi(audio), tmp / "multi_piano.mid")
             outputs["auto"] = outputs["stems"] if auto_choice == "stems" else outputs["piano" if auto_choice == "piano" else "general"]
             for method, midi in outputs.items():
                 s = score(ref, midi, args.seconds)
@@ -112,8 +119,10 @@ def main() -> None:
         "| Method | Precision | Recall | Note F1 |",
         "|---|---|---|---|",
     ]
-    for m in ["general", "piano", "stems", "auto"]:
+    for m in ["general", "piano", "stems", "auto", "multi"]:
         rs = [r for r in results if r["method"] == m]
+        if not rs:
+            continue
         lines.append(f"| {m} | {np.mean([r['note_p'] for r in rs]):.3f} | {np.mean([r['note_r'] for r in rs]):.3f} "
                      f"| {np.mean([r['note_f1'] for r in rs]):.3f} |")
     out = Path(args.out)

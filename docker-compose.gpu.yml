@@ -1,0 +1,12 @@
+# Run YourMT3+ on an NVIDIA GPU:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# (Needs Docker Desktop with WSL2, or the NVIDIA Container Toolkit on Linux.)
+services:
+  yourmt3:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

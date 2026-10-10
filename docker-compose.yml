@@ -10,9 +10,21 @@ services:
       - SUPERMUSIC_ARTIFACT_DIR=/app/data/artifacts
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
       - TORCH_HOME=/app/data/models/torch
+      - YOURMT3_URL=http://yourmt3:8100
     volumes:
       - ./data:/app/data
       - ./static:/app/static
+    restart: unless-stopped
+
+  # Multi-instrument transcription (YourMT3+). Runs on CPU by default;
+  # docker-compose.gpu.yml puts it on an NVIDIA GPU, which is much faster.
+  yourmt3:
+    build: ./services/yourmt3
+    environment:
+      - WANDB_MODE=disabled
+      - HF_HOME=/app/data/models/hf
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped
 
   frontend:

@@ -17,6 +17,7 @@ Then open **http://localhost:3000/upload**.
 1. Under **Audio**, choose an `.mp3`, `.wav` or `.flac` file.
 2. Pick a **MIDI model**:
    - **Auto** (the default) listens to the song and picks one of the modes below. The finished job says what it detected and what it chose.
+   - **Full band** uses YourMT3+, the most accurate mode for anything with more than one instrument. It writes a track per instrument (piano, guitar, bass, strings, drums and more). It runs in its own container and uses your NVIDIA GPU if you have one: a 70-second song takes about 15 seconds on an RTX 2060.
    - **Stems** is for full songs. It splits the song into parts and gives you one MIDI file with a track per instrument: piano, bass, guitar, vocals, other, and drums. Expect it to take a bit longer than the song itself on a CPU.
    - **Piano** is for solo piano. It was trained on MAESTRO and also captures how hard each note is played and the sustain pedal.
    - **General** is the fastest, and fine for a single non-piano instrument.
