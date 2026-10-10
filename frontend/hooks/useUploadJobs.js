@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, API_BASE } from "@/utils/fetcher";
-import { midiConvert, stemsSeparate, csvEnrich, getJob, areaForJobType } from "@/lib/api";
+import { midiConvert, stemsSeparate, csvEnrich, getJob, areaForJobType, normalizeJobArtifacts } from "@/lib/api";
 
 // Map backend status to frontend status
 const mapStatus = (status) => {
@@ -87,9 +87,9 @@ export default function useUploadJobs() {
               if ((mappedData.status === "success" || data.status === "done") && data.result?.artifacts) {
                 const artifacts = data.result.artifacts;
                 if (j.job_type === "midi_conversion" && artifacts.midi) {
-                  setLatestMidi(artifacts.midi);
+                  setLatestMidi(normalizeJobArtifacts({ result: { artifacts } }).result.artifacts);
                 } else if (j.job_type === "stem_separation" && artifacts) {
-                  setLatestStems(artifacts);
+                  setLatestStems(normalizeJobArtifacts({ result: { artifacts } }).result.artifacts);
                 } else if (j.job_type === "csv_enrichment" && artifacts.csv) {
                   setLatestCsv(artifacts.csv);
                 }
@@ -204,7 +204,7 @@ export default function useUploadJobs() {
         "Transcription failed ❌",
         (result) => {
           if (result?.artifacts?.midi) {
-            setLatestMidi(result.artifacts.midi);
+            setLatestMidi(normalizeJobArtifacts({ result }).result.artifacts);
           }
         }
       );
@@ -235,7 +235,7 @@ export default function useUploadJobs() {
         "Stem separation failed ❌",
         (result) => {
           if (result?.artifacts) {
-            setLatestStems(result.artifacts);
+            setLatestStems(normalizeJobArtifacts({ result }).result.artifacts);
           }
         }
       );

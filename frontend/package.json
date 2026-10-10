@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tonejs/midi": "2.0.28",
     "formidable": "^3.5.4",
     "next": "^14.2.32",
     "papaparse": "^5.5.3",
@@ -18,6 +19,7 @@
     "react-dom": "18.2.0",
     "react-force-graph-3d": "1.29.1",
     "react-plotly.js": "^2.6.0",
+    "smplr": "0.16.3",
     "three": "0.186.0"
   },
   "devDependencies": {

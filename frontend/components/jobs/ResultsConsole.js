@@ -1,81 +1,75 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+
+// Players use the Web Audio API, so they only load in the browser
+const MidiPlayer = dynamic(() => import("@/components/player/MidiPlayer"), { ssr: false });
+const StemMixer = dynamic(() => import("@/components/player/StemMixer"), { ssr: false });
+
+const fileName = (url) => decodeURIComponent(String(url).split("/").pop() || "").replace(/^[0-9a-f-]{36}_/, "");
 
 export default function ResultsConsole({ latestMidi, latestStems, latestCsv }) {
   const [tab, setTab] = useState("midi");
 
+  // Jump to whichever result arrived most recently
+  useEffect(() => { if (latestMidi) setTab("midi"); }, [latestMidi]);
+  useEffect(() => { if (latestStems) setTab("stems"); }, [latestStems]);
+
+  const midi = typeof latestMidi === "string" ? { midi: latestMidi } : latestMidi;
   const tabs = [
-    { key: "midi", label: "MIDI" },
-    { key: "stems", label: "Stems" },
-    { key: "csv", label: "CSV" },
+    { key: "midi", label: "MIDI", ready: !!midi?.midi },
+    { key: "stems", label: "Stems", ready: !!latestStems },
+    { key: "csv", label: "CSV", ready: !!latestCsv },
   ];
 
-  const activeData =
-    tab === "midi" ? latestMidi : tab === "stems" ? latestStems : latestCsv;
-
   return (
-    <div className="flex flex-col bg-[#0f172a] border border-white/10 rounded-lg">
-      {/* Tab headers */}
+    <div className="flex flex-col rounded-lg border border-white/10 bg-[#0f172a]">
       <div className="flex border-b border-white/10">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex-1 text-sm font-medium py-2 transition-colors ${
-              tab === t.key
-                ? "text-white bg-[#1e293b]"
-                : "text-gray-400 hover:text-gray-200"
+            className={`flex-1 py-2 text-sm font-medium transition-colors ${
+              tab === t.key ? "bg-[#1e293b] text-white" : "text-gray-400 hover:text-gray-200"
             }`}
           >
             {t.label}
+            {t.ready && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 align-middle" />}
           </button>
         ))}
       </div>
 
-      {/* Content */}
-      <div className="p-4 min-h-[200px]">
-        {!activeData ? (
-          <div className="text-gray-400 text-sm py-8 text-center">
-            No {tab.toUpperCase()} results yet.
-          </div>
-        ) : typeof activeData === "object" && !activeData.startsWith("http") ? (
-          // If it's an object (like stems dict), show as JSON
-          <pre className="text-xs bg-[#0f172a]/80 text-gray-200 rounded-lg border border-white/10 p-3 overflow-x-auto whitespace-pre-wrap">
-            {JSON.stringify(activeData, null, 2)}
-          </pre>
-        ) : (
-          // If it's a URL string or object with URL-like value
-          <div className="p-4 space-y-2">
-            {typeof activeData === "object" ? (
-              // Handle object with multiple artifacts (like stems)
-              Object.entries(activeData).map(([key, url]) => (
-                <div key={key} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-300 capitalize">{key}</span>
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-indigo-400 hover:text-indigo-300 underline"
-                  >
-                    Download
-                  </a>
-                </div>
-              ))
-            ) : (
-              // Single URL string
-              <a
-                href={activeData}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-indigo-400 hover:text-indigo-300 underline"
-              >
-                Download {tab.toUpperCase()} file
+      <div className="min-h-[200px] p-4">
+        {tab === "midi" && (midi?.midi ? (
+          <div className="space-y-4">
+            <MidiPlayer url={midi.midi} title={fileName(midi.midi)} />
+            {midi.preview && (
+              <div>
+                <div className="mb-1 text-[11px] uppercase tracking-wider text-gray-500">Rendered piano preview</div>
+                <audio controls src={midi.preview} className="w-full" />
+              </div>
+            )}
+            {midi.midi_original && (
+              <a href={midi.midi_original} download className="text-xs text-indigo-300 hover:underline">
+                Download the original transcription (before two-hand arranging)
               </a>
             )}
           </div>
-        )}
+        ) : <Empty what="MIDI" />)}
+
+        {tab === "stems" && (latestStems ? <StemMixer stems={latestStems} /> : <Empty what="stem" />)}
+
+        {tab === "csv" && (latestCsv ? (
+          <a href={latestCsv} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-400 underline hover:text-indigo-300">
+            Download the enriched CSV
+          </a>
+        ) : <Empty what="CSV" />)}
       </div>
     </div>
   );
+}
+
+function Empty({ what }) {
+  return <div className="py-8 text-center text-sm text-gray-400">No {what} results yet.</div>;
 }
