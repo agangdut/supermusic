@@ -59,6 +59,17 @@ docker compose exec backend python scripts/compare_piano_cover.py data/raw/songs
 
 It prints how playable each method's raw output is, how busy it is, how much the rewrite had to change, and how often a hand has to leap more than an octave in under 0.15 s.
 
+**Results on 12 songs** (7 from a Spotify likes playlist, mostly hip-hop and R&B, plus the 5 samples; October 2026, `--rules-model basic`):
+
+| | Pop2Piano | General + rewrite |
+|---|---|---|
+| Raw playable (median) | 98.7% | 97.5% |
+| Notes per second | 4.2 to 7.9, steady | 1.0 to 10.6, swings with the genre |
+| Fast leaps per minute | 0 on every song | up to 33 |
+| Time per song (CPU) | 11 to 31 s | 8 to 20 s |
+
+Both are mostly playable before any rewrite, but they differ in kind. On rap, General transcription hears little pitched material (1 to 3 notes a second), so there is barely a piano part. On busy mixes, it makes a hand leap more than an octave in under 0.15 s up to 33 times a minute. Pop2Piano writes a full, steady part every time and never asks for those leaps. For a pianist, **Piano cover + Playable by two hands** is the better choice for full songs. Transcription stays the better choice when you want the notes that were actually played (solo piano, a single instrument).
+
 ## Run the check yourself
 
 ```bash
