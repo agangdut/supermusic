@@ -11,7 +11,7 @@
 ![Docker](https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-a855f7)
 
-[Quickstart](#-quickstart) · [Features](#-features) · [Docs](docs/index.md) · [API](docs/api.md) · [Roadmap](docs/roadmap.md)
+[Quickstart](#-quickstart) · [Features](#-features) · [Docs](docs/index.md) · [How it works](docs/how-it-works.md) · [API](docs/api.md) · [Roadmap](docs/roadmap.md)
 
 <img src="docs/img/home.png" alt="SuperMusic home page" width="88%" />
 
