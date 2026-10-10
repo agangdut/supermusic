@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, AnyUrl
 
 from ..models.job import Job, JobType
 from ..utils.storage import job_store, save_artifact
-from core.downloader import download_track
+from app.core.downloader import download_audio
 
 try:
     from app.utils.storage import job_store, save_artifact  # type: ignore
@@ -41,15 +41,35 @@ async def download_track(req: TrackDownloadRequest, bg: BackgroundTasks) -> Job:
 
     async def _worker(j: Job) -> None:
         try:
-            for p in (20, 40, 65, 90, 100):
-                j.progress = p
-                j.message = f"Downloading… {p}%"
-                await asyncio.sleep(0.3)
-
-            name = f"{req.title_hint or 'track'}_download.wav"
-            file_path = save_artifact(j, name, b"\x00" * 44)
+            j.progress = 10
+            j.message = "Initializing download…"
+            await asyncio.sleep(0.1)
+            
+            j.progress = 30
+            j.message = f"Downloading from {str(req.url)[:50]}…"
+            
+            # Run download in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            audio_path = await loop.run_in_executor(
+                None, download_audio, str(req.url)
+            )
+            
+            j.progress = 80
+            j.message = "Saving audio file…"
+            
+            # Read audio file and save as artifact
+            audio_bytes = Path(audio_path).read_bytes()
+            artifact_name = f"{req.title_hint or Path(audio_path).stem}_download{Path(audio_path).suffix}"
+            artifact_path = save_artifact(j, artifact_name, audio_bytes)
+            
+            # Get file size for metrics
+            file_size = Path(audio_path).stat().st_size
+            
             j.mark_success(
-                {"artifacts": {"audio": file_path}, "metrics": {"source": str(req.url)}},
+                {
+                    "artifacts": {"audio": artifact_path},
+                    "metrics": {"source": str(req.url), "size_bytes": file_size},
+                },
                 message="Track downloaded",
             )
         except Exception as e:  # pragma: no cover

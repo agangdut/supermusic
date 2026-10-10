@@ -113,3 +113,8 @@ Thumbs.db
 *.key
 .vercel/
 .netlify/
+
+# ------------------------
+# Local upload scratch
+# ------------------------
+frontend/tmp_uploads/

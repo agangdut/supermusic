@@ -1,20 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiFetch, API_BASE } from "@/utils/fetcher";
+import { midiConvert, stemsSeparate, csvEnrich, getJob, areaForJobType } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
-const api = (path) => (API_BASE ? `${API_BASE}${path}` : `/api${path}`);
-const isTerminal = (s) => ["done", "error", "cancelled"].includes(s);
+// Map backend status to frontend status
+const mapStatus = (status) => {
+  const mapping = {
+    "queued": "queued",
+    "running": "running",
+    "done": "success",
+    "error": "failed",
+    "cancelled": "canceled",
+  };
+  return mapping[status] || status;
+};
 
-async function fetchJSON(input, init) {
-  const res = await fetch(input, init);
-  const isJSON = res.headers.get("content-type")?.includes("application/json");
-  if (!res.ok) {
-    const text = isJSON ? JSON.stringify(await res.json()) : await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
-  }
-  return isJSON ? res.json() : res.text();
-}
+const isTerminal = (s) => ["success", "failed", "canceled", "done", "error"].includes(s);
+
 
 export default function useUploadJobs() {
   const [audioFile, setAudioFile] = useState(null);
@@ -61,7 +64,7 @@ export default function useUploadJobs() {
     );
   }, []);
 
-  // polling unfinished jobs
+  // polling unfinished jobs and extracting artifacts when complete
   useEffect(() => {
     if (!jobs.some((j) => !isTerminal(j.status))) return;
 
@@ -69,10 +72,30 @@ export default function useUploadJobs() {
       try {
         const next = await Promise.all(
           jobs.map(async (j) => {
-            if (isTerminal(j.status) || !j.id) return j;
+            if (isTerminal(j.status) || !j.id || !j.job_type) return j;
             try {
-              const data = await fetchJSON(api(`/jobs/${j.id}`));
-              return { ...j, ...data };
+              const area = areaForJobType(j.job_type);
+              if (!area) return j;
+              const data = await getJob(area, j.id);
+              // Map backend status to frontend status
+              const mappedData = {
+                ...data,
+                status: mapStatus(data.status),
+              };
+              
+              // Extract artifacts when job completes
+              if ((mappedData.status === "success" || data.status === "done") && data.result?.artifacts) {
+                const artifacts = data.result.artifacts;
+                if (j.job_type === "midi_conversion" && artifacts.midi) {
+                  setLatestMidi(artifacts.midi);
+                } else if (j.job_type === "stem_separation" && artifacts) {
+                  setLatestStems(artifacts);
+                } else if (j.job_type === "csv_enrichment" && artifacts.csv) {
+                  setLatestCsv(artifacts.csv);
+                }
+              }
+              
+              return { ...j, ...mappedData };
             } catch {
               return j;
             }
@@ -87,38 +110,64 @@ export default function useUploadJobs() {
     return () => clearInterval(handle);
   }, [jobs]);
 
-  // generic uploader
-  const handleUpload = useCallback(
-    async (type, file, endpoint, successMsg, failMsg, onSuccessData) => {
-      if (!file) {
-        notify("Please select a file first.", "warn");
-        return;
-      }
+  // upload file and return server path
+  const uploadFile = useCallback(async (file, fileType = "audio") => {
+    const endpoint = fileType === "audio" ? "/upload/audio" : "/upload/csv";
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await apiFetch(endpoint, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.success || !response.path) {
+      throw new Error(response.detail || "Upload failed");
+    }
+
+    return response.path;
+  }, []);
+
+  // generic job creator
+  const createJob = useCallback(
+    async (type, jobCreatorFn, successMsg, failMsg, onSuccessData) => {
       if (runningRef.current) return;
 
       runningRef.current = true;
       setBusy(true);
 
-      const jobId = pushJob(type, `Uploading ${type}…`);
+      const jobId = pushJob(type, `Starting ${type}…`);
 
       try {
-        const fd = new FormData();
-        fd.append("file", file);
+        const job = await jobCreatorFn();
+        
+        // Map backend status to frontend status
+        const mappedJob = {
+          ...job,
+          status: mapStatus(job.status),
+        };
 
-        const data = await fetchJSON(api(endpoint), {
-          method: "POST",
-          body: fd,
-        });
-
+        // Update job with backend job data
         updateJob(jobId, {
-          status: "done",
-          message: successMsg,
-          result: data,
+          id: job.id,
+          job_type: job.job_type || job.type,
+          status: mappedJob.status,
+          message: job.message,
+          progress: job.progress,
+          result: job.result,
+          error_detail: job.error_detail,
         });
 
-        if (onSuccessData) onSuccessData(data);
+        // Replace the local job with the backend job
+        setJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, ...mappedJob, id: job.id } : j)));
 
-        notify(successMsg, "ok");
+        // If job is already done, handle success
+        if ((job.status === "done" || mappedJob.status === "success") && job.result) {
+          if (onSuccessData) onSuccessData(job.result);
+          notify(successMsg, "ok");
+        } else {
+          notify(`Job started: ${job.message || successMsg}`, "info");
+        }
       } catch (err) {
         updateJob(jobId, {
           status: "error",
@@ -135,38 +184,98 @@ export default function useUploadJobs() {
   );
 
   // public actions
-  const transcribeMidi = useCallback(() => {
-    handleUpload(
-      "transcription",
-      audioFile,
-      "/midi/transcribe",
-      "Transcription complete 🎹",
-      "Transcription failed ❌",
-      (data) => setLatestMidi(data)
-    );
-  }, [audioFile, handleUpload]);
+  const transcribeMidi = useCallback(async () => {
+    if (!audioFile) {
+      notify("Please select an audio file first.", "warn");
+      return;
+    }
 
-  const separateStems = useCallback(() => {
-    handleUpload(
-      "separation",
-      audioFile,
-      "/audio/separate",
-      "Stem separation complete 🎛️",
-      "Stem separation failed ❌",
-      (data) => setLatestStems(data)
-    );
-  }, [audioFile, handleUpload]);
+    try {
+      // Step 1: Upload the audio file
+      setBusy(true);
+      notify("Uploading audio file…", "info");
+      const audioPath = await uploadFile(audioFile, "audio");
 
-  const enrichCsv = useCallback(() => {
-    handleUpload(
-      "metadata",
-      csvFile,
-      "/csv/enrich",
-      "CSV enrichment complete ✅",
-      "CSV enrichment failed ❌",
-      (data) => setLatestCsv(data)
-    );
-  }, [csvFile, handleUpload]);
+      // Step 2: Create MIDI conversion job
+      await createJob(
+        "midi_conversion",
+        () => midiConvert({ source_path: audioPath }),
+        "Transcription complete 🎹",
+        "Transcription failed ❌",
+        (result) => {
+          if (result?.artifacts?.midi) {
+            setLatestMidi(result.artifacts.midi);
+          }
+        }
+      );
+    } catch (err) {
+      notify(`Transcription failed: ${err.message}`, "err");
+    } finally {
+      setBusy(false);
+    }
+  }, [audioFile, uploadFile, createJob, notify]);
+
+  const separateStems = useCallback(async () => {
+    if (!audioFile) {
+      notify("Please select an audio file first.", "warn");
+      return;
+    }
+
+    try {
+      // Step 1: Upload the audio file
+      setBusy(true);
+      notify("Uploading audio file…", "info");
+      const audioPath = await uploadFile(audioFile, "audio");
+
+      // Step 2: Create stem separation job
+      await createJob(
+        "stem_separation",
+        () => stemsSeparate({ audio_path: audioPath }),
+        "Stem separation complete 🎛️",
+        "Stem separation failed ❌",
+        (result) => {
+          if (result?.artifacts) {
+            setLatestStems(result.artifacts);
+          }
+        }
+      );
+    } catch (err) {
+      notify(`Stem separation failed: ${err.message}`, "err");
+    } finally {
+      setBusy(false);
+    }
+  }, [audioFile, uploadFile, createJob, notify]);
+
+  const enrichCsv = useCallback(async () => {
+    if (!csvFile) {
+      notify("Please select a CSV file first.", "warn");
+      return;
+    }
+
+    try {
+      // Step 1: Upload the CSV file
+      setBusy(true);
+      notify("Uploading CSV file…", "info");
+      const csvPath = await uploadFile(csvFile, "csv");
+
+      // Step 2: Create CSV enrichment job
+      await createJob(
+        "csv_enrichment",
+        () => csvEnrich({ csv_path: csvPath }),
+        "CSV enrichment complete ✅",
+        "CSV enrichment failed ❌",
+        (result) => {
+          if (result?.artifacts?.csv) {
+            setLatestCsv(result.artifacts.csv);
+          }
+        }
+      );
+    } catch (err) {
+      notify(`CSV enrichment failed: ${err.message}`, "err");
+    } finally {
+      setBusy(false);
+    }
+  }, [csvFile, uploadFile, createJob, notify]);
 
   const clearJobs = useCallback(() => {
     setJobs([]);

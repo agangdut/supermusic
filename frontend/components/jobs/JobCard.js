@@ -7,8 +7,11 @@ const STATUS_STYLES = {
   queued:   "bg-gray-100 text-gray-800",
   running:  "bg-blue-100 text-blue-800",
   success:  "bg-green-100 text-green-800",
+  done:     "bg-green-100 text-green-800", // Backend uses "done"
   failed:   "bg-red-100 text-red-800",
+  error:    "bg-red-100 text-red-800", // Backend uses "error"
   canceled: "bg-amber-100 text-amber-800",
+  cancelled: "bg-amber-100 text-amber-800", // Alternative spelling
 };
 
 const TYPE_LABELS = {
@@ -51,6 +54,7 @@ export default function JobCard({
     created_at,
     result,
     error,
+    error_detail,
   } = job || {};
 
   const typeLabel = TYPE_LABELS[job_type] || job_type || "Job";
@@ -79,9 +83,9 @@ export default function JobCard({
         </div>
       )}
 
-      {status === "failed" && error && (
+      {(status === "failed" || status === "error") && (error || error_detail) && (
         <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
+          {error || error_detail}
         </div>
       )}
 

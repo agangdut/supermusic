@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from ..models.job import Job, JobType
 from ..utils.storage import job_store, save_artifact
-from core.separator import separate_stems
+from app.core.separator import separate_stems
 
 try:
     from app.utils.storage import job_store, save_artifact  # type: ignore
@@ -41,20 +41,37 @@ async def separate_stems(req: StemSeparationRequest, bg: BackgroundTasks) -> Job
 
     async def _worker(j: Job) -> None:
         try:
-            for p in (15, 35, 55, 80, 100):
-                j.progress = p
-                j.message = f"Running {req.model}… {p}%"
-                await asyncio.sleep(0.35)
-
+            audio_path = Path(req.audio_path)
+            if not audio_path.exists():
+                raise FileNotFoundError(f"Audio file not found: {audio_path}")
+            
+            j.progress = 20
+            j.message = f"Loading audio and initializing {req.model} model…"
+            await asyncio.sleep(0.1)
+            
+            j.progress = 40
+            j.message = "Separating stems…"
+            
+            # Run separation in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            stems_dict = await loop.run_in_executor(
+                None, separate_stems, str(audio_path), None, req.model
+            )
+            
+            j.progress = 80
+            j.message = "Saving stem files…"
+            
+            # Copy stems to artifacts
             artifacts: Dict[str, str] = {}
-            for stem in req.stems:
-                path = save_artifact(
-                    j, f"{Path(req.audio_path).stem}_{stem}.wav", b"\x00" * 44
+            for stem_name, stem_path in stems_dict.items():
+                stem_bytes = Path(stem_path).read_bytes()
+                artifact_path = save_artifact(
+                    j, f"{audio_path.stem}_{stem_name}.wav", stem_bytes
                 )
-                artifacts[stem] = path
-
+                artifacts[stem_name] = artifact_path
+            
             j.mark_success(
-                {"artifacts": artifacts, "metrics": {"model": req.model, "stems": req.stems}},
+                {"artifacts": artifacts, "metrics": {"model": req.model, "stems": list(stems_dict.keys())}},
                 message="Stem separation complete",
             )
         except Exception as e:  # pragma: no cover

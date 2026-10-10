@@ -1,19 +1,145 @@
 // frontend/lib/api.js
-// lib/api.js
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+// Thin wrapper around your FastAPI endpoints + a few helpers.
+// Requires "@/utils/fetcher" (API_BASE, apiFetch) and (optionally) NEXT_PUBLIC_ARTIFACT_BASE.
+//
+// Env (frontend):
+//   NEXT_PUBLIC_API_BASE         -> e.g. http://localhost:8000
+//   NEXT_PUBLIC_ARTIFACT_BASE    -> e.g. http://localhost:8000/artifacts
+//
+import { API_BASE, apiFetch } from "@/utils/fetcher";
 
-export async function getJobFiles(kind, jobId) {
-  const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(kind)}/${encodeURIComponent(jobId)}`);
-  if (!res.ok) return { ok: false, files: [], status: "unknown" };
-  return res.json(); // { ok, files, status, progress }
-}
+const ARTIFACT_BASE =
+  process.env.NEXT_PUBLIC_ARTIFACT_BASE || `${API_BASE}/artifacts`;
 
-// Generic polling helper
-export async function pollJobFiles(kind, jobId, { tries = 30, intervalMs = 2000 } = {}) {
-  for (let i = 0; i < tries; i++) {
-    const data = await getJobFiles(kind, jobId);
-    if (data.ok && Array.isArray(data.files) && data.files.length) return data.files;
-    await new Promise(r => setTimeout(r, intervalMs));
+// --- Helpers ---------------------------------------------------------------
+
+/** Map backend job_type -> router area used for polling. */
+export function areaForJobType(job_type) {
+  switch (job_type) {
+    case "midi_conversion": return "midi";
+    case "csv_enrichment":  return "csv";
+    case "stem_separation": return "stems";
+    case "track_download":  return "tracks";
+    default: return null;
   }
-  throw new Error("Polling timed out.");
 }
+
+/** If artifacts are file paths (e.g., /tmp/supermusic/artifacts/uuid_file.ext),
+ *  rewrite them to URLs served by your static mount (/artifacts). */
+export function normalizeJobArtifacts(job) {
+  if (!job?.result?.artifacts) return job;
+  const out = { ...job, result: { ...job.result, artifacts: {} } };
+  for (const [k, v] of Object.entries(job.result.artifacts)) {
+    out.result.artifacts[k] = toArtifactUrl(v);
+  }
+  return out;
+}
+
+export function toArtifactUrl(pathOrUrl) {
+  if (!pathOrUrl) return pathOrUrl;
+  // Already a URL? leave it.
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  // Strip any local prefix and use the filename.
+  const file = String(pathOrUrl).split(/[\\/]/).pop();
+  return `${ARTIFACT_BASE}/${encodeURIComponent(file)}`;
+}
+
+async function postJSON(path, body) {
+  return apiFetch(path, {
+    method: "POST",
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+// --- Job creation endpoints -----------------------------------------------
+
+/** POST /midi/convert */
+export async function midiConvert({ source_path, onset_sensitivity = 0.6, model = "basic" }) {
+  const job = await postJSON("/midi/convert", { source_path, onset_sensitivity, model });
+  return normalizeJobArtifacts(job);
+}
+
+/** POST /csv/enrich */
+export async function csvEnrich({ csv_path, strategy = "youtube+acousticbrainz", options = {} }) {
+  const job = await postJSON("/csv/enrich", { csv_path, strategy, options });
+  return normalizeJobArtifacts(job);
+}
+
+/** POST /stems/separate */
+export async function stemsSeparate({ audio_path, model = "htdemucs", stems = ["vocals","drums","bass","other"] }) {
+  const job = await postJSON("/stems/separate", { audio_path, model, stems });
+  return normalizeJobArtifacts(job);
+}
+
+/** POST /tracks/download */
+export async function trackDownload({ url, format = "bestaudio", title_hint }) {
+  const job = await postJSON("/tracks/download", { url, format, title_hint });
+  return normalizeJobArtifacts(job);
+}
+
+// --- Job polling -----------------------------------------------------------
+
+/** GET /{area}/jobs/{id} */
+export async function getJob(area, id) {
+  const job = await apiFetch(`/${area}/jobs/${id}`);
+  return normalizeJobArtifacts(job);
+}
+
+/** Poll a job until it reaches a terminal state.
+ *  opts: { intervalMs=800, timeoutMs=180000, onUpdate?: (job)=>void }
+ */
+export async function pollJob(jobOrId, opts = {}) {
+  const { intervalMs = 800, timeoutMs = 180000, onUpdate } = opts;
+  let id, area;
+
+  if (typeof jobOrId === "string") {
+    id = jobOrId;
+  } else if (jobOrId?.id) {
+    id = jobOrId.id;
+    area = areaForJobType(jobOrId.job_type);
+  }
+  if (!area) area = jobOrId?.area || areaForJobType(jobOrId?.job_type);
+  if (!id || !area) throw new Error("pollJob requires a job object (with job_type) or {area,id}");
+
+  const terminal = new Set(["success", "failed", "canceled", "done", "error"]);
+  const start = Date.now();
+
+  // simple jittered polling
+  let delay = intervalMs;
+  while (true) {
+    const job = await getJob(area, id);
+    onUpdate?.(job);
+    if (terminal.has(job.status)) return job;
+
+    if (Date.now() - start > timeoutMs) {
+      const e = new Error("Polling timed out");
+      e.job = job;
+      throw e;
+    }
+    await new Promise((r) => setTimeout(r, delay));
+    // gentle backoff up to ~2s
+    delay = Math.min(2000, Math.round(delay * 1.2));
+  }
+}
+
+// --- Optional convenience: run + poll in one call -------------------------
+
+export async function runAndWait(makeJobFn, { onUpdate, ...pollOpts } = {}) {
+  const job = await makeJobFn();
+  const area = areaForJobType(job.job_type);
+  return pollJob({ ...job, area }, { onUpdate, ...pollOpts });
+}
+
+// --- Notes -----------------------------------------------------------------
+// • Make sure your backend serves artifacts publicly. In FastAPI:
+//
+//   from fastapi.staticfiles import StaticFiles
+//   import os
+//   ART_DIR = os.getenv("SUPERMUSIC_ARTIFACT_DIR", "/tmp/supermusic/artifacts")
+//   app.mount("/artifacts", StaticFiles(directory=ART_DIR), name="artifacts")
+//
+// • Then set NEXT_PUBLIC_ARTIFACT_BASE=http://localhost:8000/artifacts
+//   so normalizeJobArtifacts() can build browser-friendly URLs.
+//
+// • If/when you add real file uploads, plug your upload step in before
+//   calling midiConvert/csvEnrich/stemsSeparate to obtain a server-side path.

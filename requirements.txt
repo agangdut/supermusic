@@ -30,3 +30,20 @@ click
 
 # Testing
 pytest
+
+# Database
+sqlalchemy
+
+# Rate Limiting
+slowapi
+
+# Authentication
+python-jose[cryptography]
+passlib[bcrypt]
+
+# WebSocket
+websockets
+
+# Additional utilities
+python-multipart
+aiofiles

@@ -45,20 +45,43 @@ async def enrich_csv(req: CSVEnrichmentRequest, bg: BackgroundTasks) -> Job:
 
     async def _worker(j: Job) -> None:
         try:
-            # Simulate incremental progress
-            for p in (10, 35, 60, 85, 100):
-                j.progress = p
-                j.message = f"Enriching… {p}%"
-                await asyncio.sleep(0.25)
-            # Create a tiny “enriched” CSV artifact
-            artifact_path = save_artifact(
-                j, f"enriched_{Path(req.csv_path).stem}.csv",
-                b"title,artist,enriched\nexample,artist,true\n",
+            from app.core.csv_enrichment import enrich_csv_file
+            
+            j.progress = 10
+            j.message = "Reading CSV file…"
+            await asyncio.sleep(0.1)
+            
+            csv_path = Path(req.csv_path)
+            if not csv_path.exists():
+                raise FileNotFoundError(f"CSV file not found: {csv_path}")
+            
+            # Count rows for progress tracking
+            import pandas as pd
+            df = pd.read_csv(csv_path)
+            total_rows = len(df)
+            
+            j.progress = 20
+            j.message = f"Processing {total_rows} rows…"
+            
+            # Run enrichment in executor
+            loop = asyncio.get_event_loop()
+            enriched_path = await loop.run_in_executor(
+                None, enrich_csv_file, str(csv_path), None, req.strategy, req.options
             )
+            
+            j.progress = 90
+            j.message = "Saving enriched CSV…"
+            
+            # Read enriched CSV and save as artifact
+            enriched_bytes = Path(enriched_path).read_bytes()
+            artifact_path = save_artifact(
+                j, f"enriched_{csv_path.stem}.csv", enriched_bytes
+            )
+            
             j.mark_success(
                 {
                     "artifacts": {"csv": artifact_path},
-                    "metrics": {"rows_processed": 1, "strategy": req.strategy},
+                    "metrics": {"rows_processed": total_rows, "strategy": req.strategy},
                 },
                 message="CSV enrichment complete",
             )

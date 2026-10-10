@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ---------------------------
@@ -12,11 +13,16 @@ from pydantic import BaseModel, ConfigDict, Field
 # ---------------------------
 
 class JobType(str, Enum):
-    download = "download"
-    metadata = "metadata"
-    separation = "separation"
-    transcription = "transcription"
-    visualization = "visualization"
+    CSV_ENRICHMENT = "csv_enrichment"
+    MIDI_CONVERSION = "midi_conversion"
+    STEM_SEPARATION = "stem_separation"
+    TRACK_DOWNLOAD = "track_download"
+    VISUALIZATION = "visualization"
+    # Legacy aliases for backward compatibility
+    download = "track_download"
+    metadata = "csv_enrichment"
+    separation = "stem_separation"
+    transcription = "midi_conversion"
 
 
 class JobStatus(str, Enum):
@@ -83,11 +89,12 @@ class Job(ORMModel):
     API-facing job object.
     No leading-underscore fields (so it serializes cleanly).
     """
-    id: str
-    type: JobType
-    status: JobStatus
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    job_type: JobType = Field(description="Kind of job to run")
+    status: JobStatus = Field(default=JobStatus.queued)
     message: Optional[str] = None
     progress: Optional[int] = Field(default=None, ge=0, le=100)
+    payload: Optional[Dict[str, Any]] = Field(default=None, description="Job input parameters")
 
     # Outputs
     result: Optional[Dict[str, Any]] = Field(
@@ -104,6 +111,49 @@ class Job(ORMModel):
     # Optional runtime timing
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_type_alias(cls, data: Any) -> Any:
+        """Handle both 'type' and 'job_type' in input data."""
+        if isinstance(data, dict):
+            if "type" in data and "job_type" not in data:
+                data["job_type"] = data["type"]
+            elif "job_type" in data and "type" not in data:
+                data["type"] = data["job_type"]
+        return data
+
+    @property
+    def type(self) -> JobType:
+        """Alias for job_type for backward compatibility."""
+        return self.job_type
+
+    def mark_running(self, message: Optional[str] = None) -> None:
+        """Mark job as running."""
+        self.status = JobStatus.running
+        self.started_at = datetime.utcnow()
+        if message:
+            self.message = message
+        self.updated_at = datetime.utcnow()
+
+    def mark_success(self, result: Dict[str, Any], message: Optional[str] = None) -> None:
+        """Mark job as successfully completed."""
+        self.status = JobStatus.done
+        self.result = result
+        self.finished_at = datetime.utcnow()
+        if message:
+            self.message = message
+        self.progress = 100
+        self.updated_at = datetime.utcnow()
+
+    def mark_failed(self, error_detail: str, message: Optional[str] = None) -> None:
+        """Mark job as failed."""
+        self.status = JobStatus.error
+        self.error_detail = error_detail
+        self.finished_at = datetime.utcnow()
+        if message:
+            self.message = message
+        self.updated_at = datetime.utcnow()
 
 
 class JobInDB(Job):

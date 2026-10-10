@@ -4,7 +4,7 @@ Unit tests for the supermusic.web.app FastAPI application.
 
 import pytest
 from fastapi.testclient import TestClient
-from supermusic.web.app import app
+from web.app import app
 
 # Create a test client for the FastAPI app
 client = TestClient(app)

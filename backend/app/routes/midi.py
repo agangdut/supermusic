@@ -41,20 +41,43 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
 
     async def _worker(j: Job) -> None:
         try:
-            for p in (5, 25, 50, 75, 100):
-                j.progress = p
-                j.message = f"Transcribing… {p}%"
-                await asyncio.sleep(0.3)
-
-            # Fake MIDI bytes (valid enough header for testing)
-            midi_bytes = b"MThd\x00\x00\x00\x06\x00\x01\x00\x01\x01\xE0MTrk\x00\x00\x00\x04\x00\xFF\x2F\x00"
-            midi_path = save_artifact(
-                j, f"{Path(req.source_path).stem}.mid", midi_bytes
+            j.progress = 10
+            j.message = "Loading audio file…"
+            await asyncio.sleep(0.1)
+            
+            audio_path = Path(req.source_path)
+            if not audio_path.exists():
+                raise FileNotFoundError(f"Audio file not found: {audio_path}")
+            
+            j.progress = 30
+            j.message = "Transcribing to MIDI…"
+            
+            # Run transcription in executor to avoid blocking
+            import asyncio
+            loop = asyncio.get_event_loop()
+            midi_path = await loop.run_in_executor(
+                None, transcribe_to_midi, str(audio_path)
             )
+            
+            j.progress = 80
+            j.message = "Saving MIDI file…"
+            
+            # Read MIDI file and save as artifact
+            midi_bytes = midi_path.read_bytes()
+            artifact_path = save_artifact(j, f"{audio_path.stem}.mid", midi_bytes)
+            
+            # Get audio duration for metrics
+            try:
+                import librosa
+                y, sr = librosa.load(str(audio_path), sr=None)
+                duration_s = float(librosa.get_duration(y=y, sr=sr))
+            except Exception:
+                duration_s = None
+            
             j.mark_success(
                 {
-                    "artifacts": {"midi": midi_path},
-                    "metrics": {"duration_s": 1.2, "model": req.model},
+                    "artifacts": {"midi": artifact_path},
+                    "metrics": {"duration_s": duration_s, "model": req.model},
                 },
                 message="MIDI conversion complete",
             )
