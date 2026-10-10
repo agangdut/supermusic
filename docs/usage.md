@@ -15,7 +15,13 @@ Then open **http://localhost:3000/upload**.
 ### 🎹 Turn a song into MIDI
 
 1. Under **Audio**, choose an `.mp3`, `.wav` or `.flac` file.
-2. Pick a **MIDI model**: **General** for anything, or **Piano** for solo piano. Piano mode uses a model trained on the MAESTRO dataset and also captures note velocity and the sustain pedal. Its first run downloads about 170 MB of model files into `data/models`.
+2. Pick a **MIDI model**:
+   - **Auto** (the default) listens to the song and picks one of the modes below. The finished job says what it detected and what it chose.
+   - **Stems** is for full songs. It splits the song into parts and gives you one MIDI file with a track per instrument: piano, bass, guitar, vocals, other, and drums. Expect it to take a bit longer than the song itself on a CPU.
+   - **Piano** is for solo piano. It was trained on MAESTRO and also captures how hard each note is played and the sustain pedal.
+   - **General** is the fastest, and fine for a single non-piano instrument.
+
+   The first Piano, Stems or Auto run downloads the models (about 170 MB plus about 300 MB) into `data/models`.
 3. Click **Transcribe → MIDI**.
 4. The job appears under **Jobs**. When it finishes, download the `.mid` file.
 

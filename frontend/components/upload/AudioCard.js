@@ -11,7 +11,7 @@ export default function AudioCard({
   separateStems,
   busy,
 }) {
-  const [model, setModel] = useState("basic");
+  const [model, setModel] = useState("auto");
   return (
     <ThemedCard
       title="Audio"
@@ -53,8 +53,10 @@ export default function AudioCard({
         <span className="text-sm font-medium text-gray-300">MIDI model</span>
         <div className="mt-2 grid grid-cols-2 gap-2">
           {[
-            { id: "basic", name: "General", note: "Any instrument or full mix" },
+            { id: "auto", name: "Auto", note: "Detects the instruments and picks for you" },
+            { id: "stems", name: "Stems", note: "Full band: one MIDI track per instrument" },
             { id: "piano", name: "Piano", note: "Solo piano, trained on MAESTRO" },
+            { id: "basic", name: "General", note: "Fastest, any single instrument" },
           ].map((m) => (
             <button
               key={m.id}

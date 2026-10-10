@@ -184,7 +184,7 @@ export default function useUploadJobs() {
   );
 
   // public actions
-  const transcribeMidi = useCallback(async (model = "basic") => {
+  const transcribeMidi = useCallback(async (model = "auto") => {
     if (!audioFile) {
       notify("Please select an audio file first.", "warn");
       return;

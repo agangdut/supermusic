@@ -37,7 +37,7 @@ Long tasks don't block the request. You **start** a job and get back a job objec
 
 | Method | Path | JSON body (* = required) |
 |---|---|---|
-| `POST` | `/midi/convert` | `source_path`*, `onset_sensitivity` (0.6), `model` ("basic" for any instrument, "piano" for solo piano) |
+| `POST` | `/midi/convert` | `source_path`*, `onset_sensitivity` (0.6), `model`: "auto", "stems", "piano" or "basic" (default "basic"; see below) |
 | `GET` | `/midi/jobs/{id}` | |
 | `POST` | `/stems/separate` | `audio_path`*, `model` ("htdemucs"), `stems` |
 | `GET` | `/stems/jobs/{id}` | |
@@ -49,6 +49,8 @@ Long tasks don't block the request. You **start** a job and get back a job objec
 | `GET` | `/visualization/jobs/{id}` | |
 | `POST` | `/batch/process` | `audio_files`*, `operations` (["transcribe"]) |
 | `GET` | `/batch/jobs/{id}` | |
+
+MIDI models: **auto** detects the instruments and picks one of the others. **stems** splits the song into 6 parts and returns one multi-track MIDI (Piano, Bass, Guitar, Vocals, Other, plus a General MIDI drum track). **piano** is for solo piano. **basic** (General) is the fastest. Auto and Stems add `detected`, `chosen_model`, `reason` and `tracks` to `result.metrics`.
 
 Paths like `source_path` are **server** paths, the ones `/upload/*` returns.
 

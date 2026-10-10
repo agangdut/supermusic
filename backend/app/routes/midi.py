@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from ..models.job import Job, JobType
 from ..utils.storage import job_store, save_artifact
 from app.core.piano_transcription import transcribe_piano
+from app.core.smart_transcription import transcribe_auto, transcribe_stems
 from app.core.transcription import transcribe_to_midi
 
 try:
@@ -33,8 +34,13 @@ class MIDIConvertRequest(BaseModel):
     onset_sensitivity: float = Field(0.6, ge=0.0, le=1.0)
     model: str = Field(
         "basic",
-        description='"basic" (Basic Pitch, any instrument) or "piano" (MAESTRO-trained, solo piano).',
-        pattern="^(basic|piano)$",
+        description=(
+            '"auto" (detect the instruments and pick the best of the others), '
+            '"basic" (Basic Pitch, any instrument, fastest), '
+            '"piano" (MAESTRO-trained, solo piano), '
+            '"stems" (split into 6 stems, transcribe each, multi-track MIDI).'
+        ),
+        pattern="^(auto|basic|piano|stems)$",
     )
 
 
@@ -55,14 +61,24 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
             
             j.progress = 30
-            j.message = "Transcribing piano to MIDI…" if req.model == "piano" else "Transcribing to MIDI…"
-            
+            j.message = {
+                "auto": "Listening for instruments, then transcribing…",
+                "piano": "Transcribing piano to MIDI…",
+                "stems": "Splitting into stems, then transcribing each…",
+            }.get(req.model, "Transcribing to MIDI…")
+
+            def run():
+                if req.model == "auto":
+                    return transcribe_auto(audio_path)
+                if req.model == "stems":
+                    return transcribe_stems(audio_path)
+                fn = transcribe_piano if req.model == "piano" else transcribe_to_midi
+                return fn(str(audio_path)), {}
+
             # Run transcription in executor to avoid blocking
             loop = asyncio.get_event_loop()
-            midi_path = await loop.run_in_executor(
-                None, transcribe_piano if req.model == "piano" else transcribe_to_midi, str(audio_path)
-            )
-            
+            midi_path, info = await loop.run_in_executor(None, run)
+
             j.progress = 80
             j.message = "Saving MIDI file…"
             
@@ -81,9 +97,12 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
             j.mark_success(
                 {
                     "artifacts": {"midi": artifact_path},
-                    "metrics": {"duration_s": duration_s, "model": req.model},
+                    "metrics": {"duration_s": duration_s, "model": req.model, **info},
                 },
-                message="MIDI conversion complete",
+                message=(
+                    f"MIDI conversion complete (detected {info['reason']}, used {info['chosen_model']})"
+                    if "chosen_model" in info else "MIDI conversion complete"
+                ),
             )
         except Exception as e:  # pragma: no cover
             j.mark_failed(str(e), "MIDI conversion failed")
