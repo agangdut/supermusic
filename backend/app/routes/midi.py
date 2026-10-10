@@ -11,6 +11,7 @@ from ..models.job import Job, JobType
 from ..utils.storage import job_store, save_artifact
 from app.core.piano_transcription import transcribe_piano
 from app.core.smart_transcription import transcribe_auto, transcribe_stems
+from app.core.playability import DEFAULT_SPAN, make_playable, playability_report
 from app.core.transcription import transcribe_to_midi
 
 try:
@@ -42,6 +43,8 @@ class MIDIConvertRequest(BaseModel):
         ),
         pattern="^(auto|basic|piano|stems)$",
     )
+    playable: bool = Field(False, description="Rewrite the MIDI so two hands (10 fingers) can play it.")
+    hand_span: int = Field(DEFAULT_SPAN, ge=10, le=17, description="Widest stretch per hand, in semitones (12 = octave, 14 = ninth, 16 = tenth).")
 
 
 @router.post("/convert", response_model=Job)
@@ -82,9 +85,19 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
             j.progress = 80
             j.message = "Saving MIDI file…"
             
+            artifacts = {}
+            playability = None
+            if req.playable:
+                j.message = "Arranging for two hands…"
+                playable_path, playability = await loop.run_in_executor(
+                    None, lambda: make_playable(midi_path, hand_span=req.hand_span)
+                )
+                artifacts["midi_original"] = save_artifact(j, f"{audio_path.stem}.mid", midi_path.read_bytes())
+                midi_path = playable_path
+
             # Read MIDI file and save as artifact
             midi_bytes = midi_path.read_bytes()
-            artifact_path = save_artifact(j, f"{audio_path.stem}.mid", midi_bytes)
+            artifact_path = save_artifact(j, midi_path.name if req.playable else f"{audio_path.stem}.mid", midi_bytes)
             
             # Get audio duration for metrics
             try:
@@ -96,8 +109,11 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
             
             j.mark_success(
                 {
-                    "artifacts": {"midi": artifact_path},
-                    "metrics": {"duration_s": duration_s, "model": req.model, **info},
+                    "artifacts": {"midi": artifact_path, **artifacts},
+                    "metrics": {
+                        "duration_s": duration_s, "model": req.model, **info,
+                        **({"playability": playability} if playability else {}),
+                    },
                 },
                 message=(
                     f"MIDI conversion complete (detected {info['reason']}, used {info['chosen_model']})"
@@ -109,6 +125,20 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
 
     bg.add_task(_worker, job)
     return job
+
+
+class PlayabilityRequest(BaseModel):
+    midi_path: str = Field(..., description="MIDI file to score.")
+    hand_span: int = Field(DEFAULT_SPAN, ge=10, le=17)
+
+
+@router.post("/playability")
+async def score_playability(req: PlayabilityRequest) -> Dict[str, Any]:
+    """How much of a MIDI file two hands can play (100 = every moment)."""
+    path = Path(req.midi_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"MIDI file not found: {path}")
+    return playability_report(path, req.hand_span)
 
 
 @router.get("/jobs/{job_id}", response_model=Job)

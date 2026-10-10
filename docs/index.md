@@ -6,6 +6,7 @@ Start with the [README](../README.md) for the quickstart. These pages go deeper.
 |---|---|
 | 🛠️ [Usage guide](usage.md) | use the app, or drive it from the command line |
 | 🎹 [Transcription accuracy](transcription-accuracy.md) | see how the General and Piano MIDI models score |
+| 🖐️ [Playable by two hands](playable-piano.md) | turn a transcription into a left/right hand part a pianist can play, and score how playable any MIDI is |
 | 🌌 [Music Map](music-map.md) | explore your library in 3D and get recommendations |
 | 🔌 [API reference](api.md) | call the backend yourself |
 | 🧭 [Architecture](architecture.md) | understand how a job flows through the system |

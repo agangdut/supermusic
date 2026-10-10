@@ -12,6 +12,8 @@ export default function AudioCard({
   busy,
 }) {
   const [model, setModel] = useState("auto");
+  const [playable, setPlayable] = useState(false);
+  const [handSpan, setHandSpan] = useState(14);
   return (
     <ThemedCard
       title="Audio"
@@ -23,7 +25,7 @@ export default function AudioCard({
           </div>
           <div className="flex gap-2 flex-wrap">
             <PrimaryButton
-              onClick={() => transcribeMidi(model)}
+              onClick={() => transcribeMidi(model, { playable, handSpan })}
               disabled={!audioFile || busy}
             >
               Transcribe → MIDI
@@ -73,6 +75,46 @@ export default function AudioCard({
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="mt-4">
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={playable}
+            onChange={(e) => setPlayable(e.target.checked)}
+            className="mt-0.5 accent-purple-500"
+          />
+          <span>
+            <span className="block text-sm font-medium text-gray-300">Playable by two hands</span>
+            <span className="block text-[11px] text-gray-500">
+              Splits into left and right hand, at most 5 notes each, within one stretch
+            </span>
+          </span>
+        </label>
+        {playable && (
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {[
+              { span: 12, name: "Small", note: "Octave" },
+              { span: 14, name: "Medium", note: "Ninth" },
+              { span: 16, name: "Large", note: "Tenth" },
+            ].map((h) => (
+              <button
+                key={h.span}
+                type="button"
+                onClick={() => setHandSpan(h.span)}
+                className={`rounded-lg border px-3 py-2 text-left transition ${
+                  handSpan === h.span
+                    ? "border-purple-400/60 bg-purple-500/10 text-white"
+                    : "border-white/10 text-gray-400 hover:border-white/20"
+                }`}
+              >
+                <span className="block text-xs font-semibold">{h.name} hands</span>
+                <span className="block text-[11px] text-gray-500">{h.note}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </ThemedCard>
   );
