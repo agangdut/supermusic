@@ -40,7 +40,7 @@ ALIASES: Dict[str, Sequence[str]] = {
     "year": ("year", "release_year"),
     "duration": ("duration_sec", "duration", "duration_s", "length", "duration_ms"),
     # listening signal
-    "plays": ("play_count", "plays", "playcount", "listens", "listen_count", "streams", "scrobbles"),
+    "plays": ("play_count", "plays", "playcount", "listens", "listen_count", "streams", "scrobbles", "minutes_played"),
     "rating": ("rating", "stars", "score"),
     "liked": ("liked", "loved", "favorite", "favourite", "saved", "is_liked"),
     "skips": ("skip_count", "skips", "skipped"),
@@ -49,7 +49,7 @@ ALIASES: Dict[str, Sequence[str]] = {
 # Audio descriptors we use as-is when present (Spotify-style, 0..1 mostly)
 AUDIO_FEATURES = (
     "energy", "danceability", "valence", "acousticness", "instrumentalness",
-    "speechiness", "liveness", "loudness",
+    "speechiness", "liveness", "loudness", "brightness",
 )
 
 # Columns that never become features (identifiers, links, our own output)
@@ -730,7 +730,10 @@ def _recommend(p: _Prepared, eng: np.ndarray, labels: np.ndarray, clusters: List
         if len(out) >= 10:
             break
         # Explain it via the closest track you already love
-        anchor = int(min(loved, key=lambda j: np.linalg.norm(x[i] - x[j])))
+        others = [j for j in loved if j != i] or [j for j in np.argsort(-eng) if j != i][:1]
+        if not others:
+            continue
+        anchor = int(min(others, key=lambda j: np.linalg.norm(x[i] - x[j])))
         reasons = _pair_reasons(p, int(i), anchor)
         out.append({
             "id": int(i),

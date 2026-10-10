@@ -60,6 +60,9 @@ Paths like `source_path` are **server** paths, the ones `/upload/*` returns.
 |---|---|---|---|
 | `POST` | `/map/build` | `csv_path`* or `sample: true`*, `neighbors` (4), `clusters` (auto), `weights` | the whole map, right away (no job) |
 
+| `POST` | `/map/import` | form: `files` (one or more Spotify / Apple Music exports or CSVs), `enrich` (true), `limit` (1500) | an import job `{id, status, progress, message, detected}` |
+| `GET` | `/map/import/{id}` | | the job; when `status` is `done`, `result` holds the map |
+
 `weights` scales how much each aspect shapes the map, from 0 to 2: `key`, `tempo`, `genre`, `mood`, `artist`, `era`. The response holds `tracks` (with `x`, `y`, `z` and `cluster`), `edges`, `clusters` (with `label` and `signal`), `hidden_connections`, `insights`, `recommendations` and `meta`. Limited to 5,000 tracks. See the [Music Map guide](music-map.md).
 
 ## Export

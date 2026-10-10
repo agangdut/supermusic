@@ -44,9 +44,26 @@ The sliders change what "similar" means, from 0× (ignore) to 2× (dominant). Cl
 - **Mood:** energy, valence, danceability, acousticness…
 - **Artist:** pulls an artist's tracks together
 
+## Import from Spotify or Apple Music
+
+Click **Import Spotify / Apple Music** and pick one or more files. SuperMusic works out what each file is from its columns:
+
+| Service | File | Where to get it |
+|---|---|---|
+| Spotify | Playlist CSV | [Exportify](https://exportify.net). Tick the audio features and artist data options for the best map |
+| Spotify | `StreamingHistory_music_*.json` or `Streaming_History_Audio_*.json` | Spotify › Account › Privacy › Download your data (basic or extended history) |
+| Apple Music | `Apple Music Play Activity.csv`, `… Track Play History.csv`, `Apple Music Library Tracks.json` | [privacy.apple.com](https://privacy.apple.com) › Request a copy of your data › Apple Media Services |
+| Apple Music | Playlist export `.txt` | Music app › select a playlist › File › Library › Export Playlist… |
+
+Pick a library or playlist file **and** a listening-history file together. Songs are matched by artist and title (ignoring "feat." credits), plays and skips are added up, and features come from whichever file has them. A play shorter than 30 seconds counts as a skip.
+
+Listening histories don't include genre, tempo or key. With **Look up genre, tempo, key and energy online** ticked (the default), each song is looked up on Deezer's public API for its genre and release year. Its 30-second preview is then analysed on your computer for tempo, key (Krumhansl–Schmuckler), energy and brightness. Only song titles and artists leave your machine. Results are cached in `data/cache/deezer`, so re-importing is quick. The first import takes about 1–2 seconds per song, for up to 1,500 songs, most-played first.
+
+The merged library is saved to `data/processed/library/`, and the sliders and **Remap** work on it like any other map.
+
 ## Your own CSV
 
-Click **Map my CSV**. Column names are matched loosely (case doesn't matter), and every column is optional, but the more you include, the better the map gets. **CSV template** downloads the sample to copy from.
+Use the same **Import** button. Column names are matched loosely (case doesn't matter), and every column is optional, but the more you include, the better the map gets. **CSV template** downloads the sample to copy from.
 
 | What | Column names it recognises |
 |---|---|

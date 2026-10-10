@@ -47,6 +47,7 @@ def test_sample_map_has_clusters_links_and_picks():
     plays = {t["id"]: t["plays"] for t in m["tracks"]}
     loved = sorted(plays.values())[len(plays) // 2]
     assert all(plays[r["id"]] <= loved for r in m["recommendations"])
+    assert all(r["id"] != r["because_you_play"] for r in m["recommendations"])
 
 
 def test_map_without_listening_data():

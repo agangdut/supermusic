@@ -60,3 +60,77 @@ def warm_up() -> None:
         build_map(pd.read_csv(SAMPLE_CSV), MapOptions())
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Import from Spotify / Apple Music exports
+# ---------------------------------------------------------------------------
+
+import threading  # noqa: E402
+import uuid  # noqa: E402
+from typing import List  # noqa: E402
+
+from fastapi import File, Form, UploadFile  # noqa: E402
+
+from app.core import library_import  # noqa: E402
+from app.core.config import settings  # noqa: E402
+
+_imports: Dict[str, dict] = {}
+
+
+@router.post("/import")
+async def import_library(
+    files: List[UploadFile] = File(..., description="Spotify / Apple Music exports or CSVs; several at once is fine."),
+    enrich: bool = Form(True, description="Look songs up on Deezer and analyse 30 s previews for genre/tempo/key/energy."),
+    limit: int = Form(1500, ge=1, le=5000),
+) -> dict:
+    parsed, detected = [], []
+    for f in files:
+        data = await f.read()
+        try:
+            df, label = library_import.parse_file(f.filename or "upload", data)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Couldn't read {f.filename}: {e}")
+        parsed.append(df)
+        detected.append({"file": f.filename, "type": label, "songs": int(len(df))})
+
+    job_id = uuid.uuid4().hex
+    job = _imports[job_id] = {"id": job_id, "status": "running", "progress": 0, "detected": detected,
+                              "message": "Merging your files…", "result": None, "error": None}
+
+    def work() -> None:
+        try:
+            df = library_import.merge(parsed)
+            job["songs"] = int(len(df))
+            found = None
+            if enrich:
+                def tick(n, total):
+                    job["progress"] = round(90 * n / max(total, 1))
+                    job["message"] = f"Looking up songs online… {n} of {total}"
+                df, found = library_import.enrich(df, limit=limit, progress=tick)
+            out = settings.PROCESSED_DIR / "library"
+            out.mkdir(parents=True, exist_ok=True)
+            csv_path = out / f"library_{job_id[:8]}.csv"
+            df.to_csv(csv_path, index=False)
+            job["message"] = "Drawing your map…"
+            job["progress"] = 95
+            # Columns nobody filled in would otherwise look like (empty) data
+            result = build_map(df.dropna(axis=1, how="all"), MapOptions())
+            result["meta"]["source"] = ", ".join(d["type"] for d in detected)
+            result["meta"]["library_csv"] = str(csv_path)
+            if found is not None:
+                result["meta"]["matched_online"] = found
+            job.update(status="done", progress=100, message="Done", result=result)
+        except Exception as e:
+            job.update(status="error", error=str(e), message="Import failed")
+
+    threading.Thread(target=work, daemon=True).start()
+    return {k: v for k, v in job.items() if k != "result"}
+
+
+@router.get("/import/{job_id}")
+def import_status(job_id: str) -> dict:
+    job = _imports.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Unknown import")
+    return job

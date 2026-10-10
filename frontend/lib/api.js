@@ -159,3 +159,16 @@ export async function uploadCsv(file) {
   if (!res?.path) throw new Error(res?.detail || "Upload failed");
   return res.path;
 }
+
+/** POST /map/import — Spotify / Apple Music exports (several files at once). Returns an import job. */
+export async function importLibrary(files, { enrich = true } = {}) {
+  const form = new FormData();
+  for (const f of files) form.append("files", f);
+  form.append("enrich", enrich ? "true" : "false");
+  return apiFetch("/map/import", { method: "POST", body: form });
+}
+
+/** GET /map/import/{id} */
+export async function getImport(id) {
+  return apiFetch(`/map/import/${id}`);
+}

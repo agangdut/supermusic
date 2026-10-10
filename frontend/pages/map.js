@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import Head from "next/head";
 
 import PageShell from "@/components/layout/PageShell";
-import { buildMap, uploadCsv } from "@/lib/api";
+import { buildMap, getImport, importLibrary } from "@/lib/api";
 import { colorFor } from "@/components/map/colors";
 
 const Graph3D = dynamic(() => import("@/components/map/Graph3D"), {
@@ -97,21 +97,44 @@ export default function MapPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const onFile = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLoading(true);
+  const [pending, setPending] = useState(null); // files picked, waiting for "Build my map"
+  const [enrichOnline, setEnrichOnline] = useState(true);
+  const [importJob, setImportJob] = useState(null);
+
+  const onFile = (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (files.length) {
+      setPending(files);
+      setError(null);
+    }
+  };
+
+  const runImport = async () => {
+    const files = pending;
+    setPending(null);
     setError(null);
+    setLoading(true);
     try {
-      const path = await uploadCsv(file);
-      const src = { csv_path: path };
-      setSource(src);
-      await load(src, weights);
+      let job = await importLibrary(files, { enrich: enrichOnline });
+      setImportJob(job);
+      while (job.status === "running") {
+        await new Promise((r) => setTimeout(r, 1000));
+        job = await getImport(job.id);
+        setImportJob(job);
+      }
+      if (job.status !== "done") throw new Error(job.error || "Import failed");
+      requestRef.current += 1; // anything still loading is now stale
+      setData(job.result);
+      setSelectedId(null);
+      setClusterFocus(null);
+      setTab(job.result.recommendations?.length ? "picks" : "clusters");
+      setSource({ csv_path: job.result.meta.library_csv }); // so Remap works on the imported library
     } catch (err) {
       setError(err.message || String(err));
-      setLoading(false);
     } finally {
-      e.target.value = "";
+      setImportJob(null);
+      setLoading(false);
     }
   };
 
@@ -170,12 +193,12 @@ export default function MapPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <input ref={fileRef} type="file" accept=".csv" onChange={onFile} className="hidden" />
+          <input ref={fileRef} type="file" multiple accept=".csv,.json,.txt" onChange={onFile} className="hidden" />
           <button
             onClick={() => fileRef.current?.click()}
             className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-fuchsia-600/20 hover:brightness-110"
           >
-            Map my CSV
+            Import Spotify / Apple Music
           </button>
           <button
             onClick={() => { setSource({ sample: true }); load({ sample: true }, weights); }}
@@ -188,6 +211,47 @@ export default function MapPage() {
           </a>
         </div>
       </div>
+
+      {pending && (
+        <div className="mb-4 rounded-xl border border-fuchsia-400/20 bg-fuchsia-400/[0.04] p-4">
+          <div className="text-sm font-medium text-white">Ready to import {pending.length} file{pending.length > 1 ? "s" : ""}</div>
+          <ul className="mt-1 text-xs text-gray-400">
+            {pending.map((f) => <li key={f.name}>• {f.name}</li>)}
+          </ul>
+          <p className="mt-2 text-[11px] leading-5 text-gray-500">
+            Works with Exportify playlist CSVs, Spotify&apos;s account data export (StreamingHistory / Streaming_History_Audio JSON),
+            Apple Music&apos;s privacy export (Play Activity, Track Play History, Library Tracks), the Music app&apos;s
+            File › Library › Export Playlist text file, or any CSV with title and artist columns. Pick several at once to combine
+            your library with your listening history.
+          </p>
+          <label className="mt-3 flex items-start gap-2 text-xs text-gray-300">
+            <input type="checkbox" checked={enrichOnline} onChange={(e) => setEnrichOnline(e.target.checked)} className="mt-0.5 accent-fuchsia-500" />
+            <span>
+              Look up genre, tempo, key and energy online. Song titles and artists are sent to Deezer, and each song&apos;s
+              30-second preview is analysed on this computer. Needed for listening histories, which don&apos;t include any of that.
+            </span>
+          </label>
+          <div className="mt-3 flex gap-2">
+            <button onClick={runImport} className="rounded-lg bg-gradient-to-r from-fuchsia-600 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white">Build my map</button>
+            <button onClick={() => setPending(null)} className="rounded-lg px-3 py-1.5 text-xs text-gray-400 hover:text-white">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {importJob && (
+        <div className="mb-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="flex justify-between text-xs text-gray-300">
+            <span>{importJob.message}</span>
+            <span className="tabular-nums text-gray-500">{importJob.progress}%</span>
+          </div>
+          <div className="mt-2 h-1.5 rounded-full bg-white/5">
+            <div className="h-1.5 rounded-full bg-gradient-to-r from-fuchsia-500 to-indigo-500 transition-all" style={{ width: `${importJob.progress}%` }} />
+          </div>
+          <div className="mt-2 text-[11px] text-gray-500">
+            {importJob.detected?.map((d) => `${d.file}: ${d.type}, ${d.songs} songs`).join(" · ")}
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>
