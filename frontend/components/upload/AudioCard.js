@@ -59,6 +59,7 @@ export default function AudioCard({
             { id: "stems", name: "Stems", note: "Full band: one MIDI track per instrument" },
             { id: "piano", name: "Piano", note: "Solo piano, trained on MAESTRO" },
             { id: "basic", name: "General", note: "Fastest, any single instrument" },
+            { id: "cover", name: "Piano cover", note: "Arranges the song for piano (Pop2Piano)" },
           ].map((m) => (
             <button
               key={m.id}

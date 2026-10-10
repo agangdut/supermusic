@@ -23,7 +23,7 @@
 
 | | What it does | Powered by |
 |---|---|---|
-| 🎹 **Audio → MIDI** | Transcribes a song into a playable `.mid` file. **Auto** detects the instruments; **Stems** gives one track per instrument; **Piano** is tuned for piano ([accuracy](docs/transcription-accuracy.md)). Tick **Playable by two hands** to get a left/right hand part a pianist can actually play ([how](docs/playable-piano.md)) | [Basic Pitch](https://github.com/spotify/basic-pitch), [ByteDance piano model](https://github.com/bytedance/piano_transcription) (MAESTRO) |
+| 🎹 **Audio → MIDI** | Transcribes a song into a playable `.mid` file. **Auto** detects the instruments; **Stems** gives one track per instrument; **Piano** is tuned for piano ([accuracy](docs/transcription-accuracy.md)). Tick **Playable by two hands** to get a left/right hand part a pianist can actually play ([how](docs/playable-piano.md)), or pick **Piano cover** to have the song arranged for piano | [Basic Pitch](https://github.com/spotify/basic-pitch), [ByteDance piano model](https://github.com/bytedance/piano_transcription) (MAESTRO) |
 | 🥁 **Stem separation** | Splits a mix into vocals, drums, bass and other | [Demucs](https://github.com/facebookresearch/demucs) |
 | 🧾 **CSV enrichment** | Adds BPM, key and duration to a track list, plus YouTube and MusicBrainz info | librosa |
 | ⬇️ **Track download** | Grabs the audio from a YouTube (or similar) link | [yt-dlp](https://github.com/yt-dlp/yt-dlp) |

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from ..models.job import Job, JobType
 from ..utils.storage import job_store, save_artifact
+from app.core.piano_cover import piano_cover
 from app.core.piano_transcription import transcribe_piano
 from app.core.smart_transcription import transcribe_auto, transcribe_stems
 from app.core.playability import DEFAULT_SPAN, make_playable, playability_report
@@ -39,10 +40,12 @@ class MIDIConvertRequest(BaseModel):
             '"auto" (detect the instruments and pick the best of the others), '
             '"basic" (Basic Pitch, any instrument, fastest), '
             '"piano" (MAESTRO-trained, solo piano), '
-            '"stems" (split into 6 stems, transcribe each, multi-track MIDI).'
+            '"stems" (split into 6 stems, transcribe each, multi-track MIDI), '
+            '"cover" (Pop2Piano: arrange the song for solo piano).'
         ),
-        pattern="^(auto|basic|piano|stems)$",
+        pattern="^(auto|basic|piano|stems|cover)$",
     )
+    composer: str = Field("composer1", description="Piano cover style, composer1 to composer21.", pattern="^composer([1-9]|1[0-9]|2[01])$")
     playable: bool = Field(False, description="Rewrite the MIDI so two hands (10 fingers) can play it.")
     hand_span: int = Field(DEFAULT_SPAN, ge=10, le=17, description="Widest stretch per hand, in semitones (12 = octave, 14 = ninth, 16 = tenth).")
 
@@ -68,6 +71,7 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                 "auto": "Listening for instruments, then transcribing…",
                 "piano": "Transcribing piano to MIDI…",
                 "stems": "Splitting into stems, then transcribing each…",
+                "cover": "Arranging a piano cover…",
             }.get(req.model, "Transcribing to MIDI…")
 
             def run():
@@ -75,6 +79,8 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                     return transcribe_auto(audio_path)
                 if req.model == "stems":
                     return transcribe_stems(audio_path)
+                if req.model == "cover":
+                    return piano_cover(audio_path, composer=req.composer), {}
                 fn = transcribe_piano if req.model == "piano" else transcribe_to_midi
                 return fn(str(audio_path)), {}
 
