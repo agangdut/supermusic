@@ -1,5 +1,4 @@
 import Head from "next/head";
-import InteractiveDemo from "@/components/Visualization/InteractiveDemo";
 
 const features = [
   {
@@ -16,6 +15,36 @@ const features = [
     name: "Stems",
     desc: "Split mixes into vocals, drums, bass, and more.",
     icon: "🎛️",
+  },
+  {
+    name: "Piano Mode",
+    desc: "Piano-tuned transcription that keeps note velocity and sustain pedal.",
+    icon: "🎼",
+  },
+  {
+    name: "YouTube Download",
+    desc: "Grab the audio from a YouTube link to feed into stems or MIDI.",
+    icon: "📥",
+  },
+  {
+    name: "Music Map",
+    desc: "See your library as a 3D map of clusters, hidden links and picks.",
+    icon: "🌌",
+  },
+];
+
+const mapInsights = [
+  {
+    label: "Taste",
+    text: "Lo-Fi is 34% of your listening but only 22% of your library.",
+  },
+  {
+    label: "Hidden link",
+    text: "87 BPM neo-soul meets 174 BPM liquid DnB: same key family, half time.",
+  },
+  {
+    label: "For you",
+    text: "Low Cities sits a Camelot step from Distant Rooftops at the same tempo.",
   },
 ];
 
@@ -67,13 +96,6 @@ export default function Home() {
               >
                 Explore your Music Map
               </a>
-              <a
-                href="#architecture"
-                className="inline-flex items-center rounded-xl border border-slate-300/70 bg-white/60 px-5 py-3 font-semibold
-                           text-slate-700 backdrop-blur-md transition hover:bg-white dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200"
-              >
-                View demo
-              </a>
             </div>
           </section>
 
@@ -96,16 +118,57 @@ export default function Home() {
               </div>
             ))}
           </section>
-            <section
-              id="architecture"
-              className="mt-8 rounded-2xl border border-slate-200/70 bg-white/60 p-6 md:p-8
-                        backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/40"
-            >
-              <div className="mb-3 text-sm font-medium text-slate-700 dark:text-slate-200">
-                Interactive demo (sample CSV)
+          {/* music map preview */}
+          <section
+            id="music-map"
+            className="mt-8 grid overflow-hidden rounded-2xl border border-slate-200/70 bg-white/60 backdrop-blur-md
+                       dark:border-slate-800 dark:bg-slate-900/40 lg:grid-cols-5"
+          >
+            <a href="/map" className="group relative block bg-slate-950 lg:col-span-3">
+              <img
+                src="/images/music-map-preview.jpg"
+                alt="Music Map: clusters of tracks shown as glowing stars in 3D"
+                width={790}
+                height={622}
+                className="h-full w-full object-cover object-left transition duration-500 group-hover:scale-[1.02]"
+              />
+            </a>
+
+            <div className="flex flex-col p-6 md:p-8 lg:col-span-2">
+              <div className="text-xs font-semibold uppercase tracking-wider text-fuchsia-600 dark:text-fuchsia-300">
+                Music Map
               </div>
-              <InteractiveDemo csvPath="D:\Code\newSuperMusic\frontend\public\data\sample_dataset.csv" height={520} />
-            </section>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                See the shape of your taste
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                Drop in a CSV of your library and every song becomes a star. Similar tracks cluster together,
+                and the map points out what you lean towards and what you&apos;ve been missing.
+              </p>
+
+              <ul className="mt-6 space-y-3">
+                {mapInsights.map((i) => (
+                  <li
+                    key={i.label}
+                    className="rounded-xl border border-slate-200/70 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/40"
+                  >
+                    <div className="text-xs font-semibold text-fuchsia-600 dark:text-fuchsia-300">{i.label}</div>
+                    <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{i.text}</div>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mt-6 lg:mt-auto lg:pt-6">
+                <a
+                  href="/map"
+                  className="inline-flex items-center rounded-xl bg-gradient-to-r from-fuchsia-600 to-blue-600 px-5 py-3
+                             font-semibold text-white shadow-lg shadow-fuchsia-600/20 transition hover:brightness-110"
+                >
+                  Open your Music Map →
+                </a>
+              </div>
+            </div>
+          </section>
         </main>
       </div>
     </>
