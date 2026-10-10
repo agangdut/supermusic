@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -31,11 +32,12 @@ def transcribe_to_midi(audio_path: str | Path, out_dir: Path | None = None) -> P
     if not audio_path.exists():
         raise FileNotFoundError(f"Audio not found: {audio_path}")
 
-    out_dir = out_dir or (settings.PROCESSED_DIR / "midi")
+    # basic-pitch refuses to overwrite an existing .mid, so each run gets its own folder
+    out_dir = (out_dir or (settings.PROCESSED_DIR / "midi")) / uuid.uuid4().hex
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # basic-pitch <input_audio> <output_dir>
-    cmd = [basic_pitch, str(audio_path), str(out_dir)]
+    # basic-pitch <output_dir> <input_audio>
+    cmd = [basic_pitch, "--model-serialization", settings.BASIC_PITCH_SERIALIZATION, str(out_dir), str(audio_path)]
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"basic-pitch failed ({proc.returncode}):\n{proc.stdout}")

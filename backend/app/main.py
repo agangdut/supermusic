@@ -76,16 +76,16 @@ def healthz():
 # ------------------------------------------------------------------------------
 
 # CSV / metadata endpoints
-app.include_router(csv_routes.router, prefix="/csv", tags=["csv"])
+app.include_router(csv_routes.router)
 
 # MIDI transcription endpoints
-app.include_router(midi_routes.router, prefix="/midi", tags=["midi"])
+app.include_router(midi_routes.router)
 
 # Stem separation endpoints
-app.include_router(stems_routes.router, prefix="/stems", tags=["stems"])
+app.include_router(stems_routes.router)
 
 # Track download endpoints
-app.include_router(tracks_routes.router, prefix="/tracks", tags=["tracks"])
+app.include_router(tracks_routes.router)
 
 # File upload endpoints
 app.include_router(upload_routes.router, tags=["upload"])

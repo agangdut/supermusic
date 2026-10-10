@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from ..models.job import Job, JobType
 from ..utils.storage import job_store, save_artifact
-from app.core.separator import separate_stems
+from app.core.separator import separate_stems as run_separation
 
 try:
     from app.utils.storage import job_store, save_artifact  # type: ignore
@@ -55,7 +55,7 @@ async def separate_stems(req: StemSeparationRequest, bg: BackgroundTasks) -> Job
             # Run separation in executor to avoid blocking
             loop = asyncio.get_event_loop()
             stems_dict = await loop.run_in_executor(
-                None, separate_stems, str(audio_path), None, req.model
+                None, run_separation, str(audio_path), None, req.model
             )
             
             j.progress = 80

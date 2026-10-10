@@ -8,9 +8,10 @@ librosa
 pydub
 soundfile
 demucs
+yt-dlp
 
 # MIDI
-basic-pitch
+basic-pitch[onnx]
 pretty_midi
 
 # Web
@@ -41,7 +42,7 @@ slowapi
 
 # Authentication
 python-jose[cryptography]
-passlib[bcrypt]
+bcrypt
 
 # WebSocket
 websockets

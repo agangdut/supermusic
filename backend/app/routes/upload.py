@@ -38,10 +38,10 @@ def _save_upload(file: UploadFile, allowed_extensions: set[str], subdir: str = "
         safe_name = f"upload{ext}"
     
     file_path = upload_path / safe_name
-    # Handle duplicates
+    # Handle duplicates: name.mp3, name_1.mp3, name_2.mp3, ...
+    stem = file_path.stem
     counter = 1
     while file_path.exists():
-        stem = file_path.stem
         file_path = upload_path / f"{stem}_{counter}{ext}"
         counter += 1
     

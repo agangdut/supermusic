@@ -53,7 +53,6 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
             j.message = "Transcribing to MIDI…"
             
             # Run transcription in executor to avoid blocking
-            import asyncio
             loop = asyncio.get_event_loop()
             midi_path = await loop.run_in_executor(
                 None, transcribe_to_midi, str(audio_path)

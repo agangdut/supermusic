@@ -76,6 +76,12 @@ data/**/*.zip
 data/**/*.tar
 data/**/*.gz
 !data/README.md
+# Runtime output from the app (uploads, stems, MIDI, downloads)
+data/raw/
+data/interim/
+data/processed/
+data/samples/
+data/artifacts/
 
 # ------------------------
 # 📊 Static / Build Artifacts

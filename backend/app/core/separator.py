@@ -43,12 +43,10 @@ def separate_stems(audio_path: str | Path, out_dir: Path | None = None, model: s
         raise RuntimeError(f"demucs failed ({proc.returncode}):\n{proc.stdout}")
 
     # demucs creates e.g. OUT/<model>/<file stem>/{drums,bass,other,vocals}.wav
-    produced_root = out_dir.glob(f"{model}/*")
-    produced_parent = None
-    for p in produced_root:
-        # First hit is fine; different demucs versions vary the depth
-        produced_parent = p
-        break
+    produced_parent = out_dir / model / audio_path.stem
+    if not produced_parent.exists():
+        # Different demucs versions vary the depth
+        produced_parent = next(out_dir.glob(f"{model}/*"), None)
 
     if produced_parent is None or not produced_parent.exists():
         # try alternate depth

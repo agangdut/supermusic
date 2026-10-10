@@ -28,6 +28,8 @@ class Settings:
     # Separation / Transcription tool switches (external CLIs)
     DEMUCS_BIN: str = os.getenv("SM_DEMUCS_BIN", "demucs")          # if installed
     BASIC_PITCH_BIN: str = os.getenv("SM_BASIC_PITCH_BIN", "basic-pitch")  # if installed
+    # tflite-runtime can't load the model under numpy 2, so default to ONNX
+    BASIC_PITCH_SERIALIZATION: str = os.getenv("SM_BASIC_PITCH_SERIALIZATION", "onnx")
 
     # Visualization
     FIG_DPI: int = int(os.getenv("SM_FIG_DPI", "140"))

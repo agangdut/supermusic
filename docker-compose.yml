@@ -7,6 +7,7 @@ services:
       - DATABASE_URL=sqlite:///./data/supermusic.db
       - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-production}
+      - SUPERMUSIC_ARTIFACT_DIR=/app/data/artifacts
     volumes:
       - ./data:/app/data
       - ./static:/app/static
