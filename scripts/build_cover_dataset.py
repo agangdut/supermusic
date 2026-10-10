@@ -14,8 +14,8 @@ song) pairs but not the data. This rebuilds it the way they did:
 Each pair lands in data/datasets/covers/<song id>__<cover id>/ with
 song.mp3, cover.mp3, cover.mid (raw transcription), aligned.mid (on the
 song's timeline, in its key) and meta.json. A manifest.csv sums it all up.
-Finished pairs are skipped (failed ones are retried), so you can stop it and
-run it again to grow the set.
+Finished pairs are skipped (failed ones are retried; videos that are gone
+from YouTube are not), so you can stop it and run it again to grow the set.
 
     docker compose exec backend python scripts/build_cover_dataset.py --limit 20
 
@@ -121,8 +121,10 @@ def align(song: Path, cover: Path, midi_in: Path, midi_out: Path) -> dict:
 
     # Steps of (1,1), (1,2), (2,1): tempo may drift between half and double speed,
     # but the path can't stall, which would pile many notes onto one instant
+    # Cosine distance; silent frames have all-zero chroma and get the neutral cost 1
+    cost = 1.0 - cover_c.T @ song_c
     _, path = librosa.sequence.dtw(
-        X=cover_c, Y=song_c, metric="cosine",
+        C=cost,
         step_sizes_sigma=np.array([[1, 1], [1, 2], [2, 1]]),
         weights_add=np.zeros(3), weights_mul=np.array([1.0, 1.5, 1.5]),
     )
@@ -169,7 +171,7 @@ def build_pair(piano_id: str, pop_id: str, out_root: Path) -> dict:
     meta_path = d / "meta.json"
     if meta_path.exists():
         meta = json.loads(meta_path.read_text())
-        if not meta["status"].startswith("failed"):  # failures (often a network hiccup) are retried
+        if not meta["status"].startswith("failed"):  # failures (often a network hiccup) are retried; "gone" ones aren't
             return meta
     d.mkdir(parents=True, exist_ok=True)
     meta = {"pop_id": pop_id, "piano_id": piano_id}
@@ -184,7 +186,9 @@ def build_pair(piano_id: str, pop_id: str, out_root: Path) -> dict:
         meta["playable_pct"] = playability_report(d / "aligned.mid")["playable_pct"]
         meta["status"] = "ok" if meta["match"] >= MIN_MATCH else "poor match"
     except Exception as e:  # keep going; the reason is recorded
-        meta["status"] = f"failed: {str(e).splitlines()[0][:200]}"
+        reason = re.sub(r"\x1b\[[0-9;]*m", "", str(e).splitlines()[0])[:200]
+        gone = re.search(r"unavailable|Private video|removed|terminated|too long", reason, re.I)
+        meta["status"] = ("gone: " if gone else "failed: ") + reason
     meta["seconds"] = round(time.time() - t, 1)
     meta_path.write_text(json.dumps(meta, indent=2))
     return meta
