@@ -8,7 +8,7 @@ For each audio file, makes a two-hand piano part both ways and reports:
   fast leaps/min   one hand jumping more than an octave in under 0.15 s,
                    per minute (the rewrite doesn't control this; lower is easier)
 
-    docker compose exec backend python scripts/compare_piano_cover.py data/raw/songs/*.mp3
+    docker compose exec backend python scripts/compare_piano_cover.py data/raw/songs
 
 Results go to stdout as a Markdown table, and the MIDI files are kept in
 data/processed/cover_compare/ so you can listen to them.
@@ -16,6 +16,7 @@ data/processed/cover_compare/ so you can listen to them.
 from __future__ import annotations
 
 import argparse
+import glob
 import sys
 import time
 from pathlib import Path
@@ -61,9 +62,29 @@ def run_rules(audio: Path, model: str) -> Path:
     return transcribe_to_midi(audio)
 
 
+AUDIO_EXTS = {".mp3", ".wav", ".flac", ".ogg", ".m4a"}
+
+
+def expand(items: list[str]) -> list[Path]:
+    """Files, folders and wildcards. Windows shells don't expand * themselves."""
+    out: list[Path] = []
+    for item in items:
+        p = Path(item)
+        if p.is_dir():
+            out += sorted(f for f in p.iterdir() if f.suffix.lower() in AUDIO_EXTS)
+        elif any(c in item for c in "*?["):
+            out += sorted(Path(f) for f in glob.glob(item))
+        else:
+            out.append(p)
+    missing = [str(p) for p in out if not p.exists()]
+    if missing or not out:
+        sys.exit(f"No audio found for: {', '.join(missing or items)}")
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("audio", nargs="+", type=Path)
+    ap.add_argument("audio", nargs="+", help="audio files, folders, or wildcards like data/raw/songs/*.mp3")
     ap.add_argument("--rules-model", default="auto", choices=["auto", "stems", "piano", "basic"])
     ap.add_argument("--composer", default="composer1")
     ap.add_argument("--hand-span", type=int, default=14)
@@ -74,7 +95,7 @@ def main() -> None:
 
     print(f"| Song | Method | Raw playable | Notes/s | Changed by rewrite | Fast leaps/min | Time |")
     print("|---|---|---|---|---|---|---|")
-    for audio in args.audio:
+    for audio in expand(args.audio):
         for method in ("cover", args.rules_model):
             t = time.time()
             raw = piano_cover(audio, composer=args.composer) if method == "cover" else run_rules(audio, method)

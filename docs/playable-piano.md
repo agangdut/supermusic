@@ -54,7 +54,7 @@ Pick **Piano cover** as the MIDI model to have the song arranged for piano by [P
 To compare it with transcribe-then-rewrite on your own songs:
 
 ```bash
-docker compose exec backend python scripts/compare_piano_cover.py data/raw/songs/*.mp3
+docker compose exec backend python scripts/compare_piano_cover.py data/raw/songs
 ```
 
 It prints how playable each method's raw output is, how busy it is, how much the rewrite had to change, and how often a hand has to leap more than an octave in under 0.15 s.
