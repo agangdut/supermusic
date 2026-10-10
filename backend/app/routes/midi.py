@@ -16,6 +16,7 @@ from app.core.smart_transcription import transcribe_auto, transcribe_stems
 from app.core.playability import DEFAULT_SPAN, make_playable, playability_report
 from app.core.transcription import transcribe_to_midi
 from app.core.yourmt3_client import transcribe_multi
+from app.core.vocals import lead_vocal_track, transcribe_vocal_aware
 
 try:
     from app.utils.storage import job_store, save_artifact  # type: ignore
@@ -50,6 +51,11 @@ class MIDIConvertRequest(BaseModel):
     )
     composer: str = Field("composer1", description="Piano cover style, composer1 to composer21.", pattern="^composer([1-9]|1[0-9]|2[01])$")
     playable: bool = Field(False, description="Rewrite the MIDI so two hands (10 fingers) can play it.")
+    vocal_track: bool = Field(
+        True,
+        description="Give the voice its own clean melody track. For General this first separates the voice "
+                    "(slower) so it can't turn into instrument notes.",
+    )
     hand_span: int = Field(DEFAULT_SPAN, ge=10, le=17, description="Widest stretch per hand, in semitones (12 = octave, 14 = ninth, 16 = tenth).")
 
 
@@ -84,7 +90,10 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                 if req.model == "stems":
                     return transcribe_stems(audio_path)
                 if req.model == "multi":
-                    return transcribe_multi(audio_path), {}
+                    midi = transcribe_multi(audio_path)
+                    return lead_vocal_track(midi) if req.vocal_track else (midi, {})
+                if req.model == "basic" and req.vocal_track:
+                    return transcribe_vocal_aware(audio_path, transcribe_to_midi)
                 if req.model == "cover":
                     return piano_cover(audio_path, composer=req.composer), {}
                 fn = transcribe_piano if req.model == "piano" else transcribe_to_midi

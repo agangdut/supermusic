@@ -55,6 +55,45 @@ Most songs aren't solo piano, so a second test (`scripts/eval_mix.py`) mixes a b
 - Stems doesn't help on classical ensembles: Demucs is trained on pop stems, so strings and winds get split badly.
 - MusicNet's labels were aligned automatically and contain some timing errors, which caps every score. Compare the modes against each other, not against the MAESTRO numbers.
 
+## Voices
+
+A transcriber hears a singer as just another instrument. Two tests show where that goes wrong.
+
+**1. Real songs: how many "instrument" notes are really the voice?** (`scripts/eval_vocal_leakage.py`, first 90 s.) Each song is transcribed twice: as is, and with the voice removed by Demucs. Instrument notes that only appear when the voice is there were caused by it. The last column counts the ones that land on the singer's own pitch.
+
+| Song | Engine | Instrument notes/min | Caused by the voice /min | On the voice's pitch /min |
+|---|---|---|---|---|
+| Alessia Cara – Here (sung) | General | 523 | 331 | 195 |
+| Alessia Cara – Here (sung) | Full band | 249 | 25 | 1 |
+| Allan Rayman – Tennessee | General | 338 | 109 | 56 |
+| Allan Rayman – Tennessee | Full band | 344 | 171 | 14 |
+| Gunna – the time (melodic rap) | General | 341 | 168 | 131 |
+| Gunna – the time (melodic rap) | Full band | 355 | 115 | 12 |
+| Wale – Poor Decisions (rap) | General | 70 | 44 | 20 |
+| Wale – Poor Decisions (rap) | Full band | 135 | 101 | 8 |
+
+**General turns the voice into instrument notes**: up to 195 a minute land right on the singer's pitch. **Full band (YourMT3+) mostly doesn't**, because it puts the voice on its own "Singing Voice" track. Its remaining differences are mostly not on the voice's pitch; they come from Demucs changing the backing.
+
+**2. Piano with a voice on top** (`scripts/eval_vocals.py`): 6 MAESTRO clips with a sung and a rapped vocal mixed in at equal loudness.
+
+| Voice | Method | Piano F1 | Stray instrument notes /min |
+|---|---|---|---|
+| sung | Full band directly | **0.908** | 0 |
+| sung | separate the voice first, then Full band | 0.855 | 11 |
+| rap | Full band directly | **0.876** | 0 |
+| rap | separate the voice first, then Full band | 0.826 | 6 |
+
+Separating the voice before Full band makes things *worse*, because Demucs leaves artefacts in the backing.
+
+**What the app does now** (the "Voice as its own melody" option, on by default):
+
+- **General:** separates the voice with Demucs first, transcribes the backing without it, and adds the voice as a clean "Lead vocal" track. That removes the voice-caused notes in the table above, at the cost of about a minute of separation on a CPU.
+- **Full band and Auto:** no separation. YourMT3+'s singing tracks are folded into one "Lead vocal".
+- **Stems:** the vocal stem becomes a "Lead vocal" track.
+- In every mode the Lead vocal is cleaned up: one note at a time (the strongest wins), blips under 80 ms dropped, tiny gaps merged, and notes more than 14 semitones from the melody's centre (bass bleed, octave errors) removed.
+
+We don't have reference melodies for these songs, so the Lead vocal itself isn't scored yet. Rap has no fixed pitch, so its "melody" follows the speaking voice's rise and fall rather than a tune.
+
 ## How Auto decides
 
 Auto separates a 30-second excerpt from the middle of the song into 6 parts and measures each part's share of the sound:

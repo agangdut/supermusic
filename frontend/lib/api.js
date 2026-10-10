@@ -54,8 +54,8 @@ async function postJSON(path, body) {
 // --- Job creation endpoints -----------------------------------------------
 
 /** POST /midi/convert */
-export async function midiConvert({ source_path, onset_sensitivity = 0.6, model = "basic", playable = false, hand_span = 14 }) {
-  const job = await postJSON("/midi/convert", { source_path, onset_sensitivity, model, playable, hand_span });
+export async function midiConvert({ source_path, onset_sensitivity = 0.6, model = "basic", playable = false, hand_span = 14, vocal_track = true }) {
+  const job = await postJSON("/midi/convert", { source_path, onset_sensitivity, model, playable, hand_span, vocal_track });
   return normalizeJobArtifacts(job);
 }
 

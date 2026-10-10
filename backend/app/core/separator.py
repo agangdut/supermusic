@@ -12,7 +12,8 @@ def _which(bin_name: str) -> Optional[str]:
     return shutil.which(bin_name)
 
 
-def separate_stems(audio_path: str | Path, out_dir: Path | None = None, model: str = "htdemucs") -> Dict[str, str]:
+def separate_stems(audio_path: str | Path, out_dir: Path | None = None, model: str = "htdemucs",
+                   two_stems: Optional[str] = None) -> Dict[str, str]:
     """
     Separate stems using demucs CLI if available.
     Returns a mapping {stem_name: path}. If demucs is not installed, raises a clear error.
@@ -38,6 +39,8 @@ def separate_stems(audio_path: str | Path, out_dir: Path | None = None, model: s
 
     # demucs -n htdemucs -o OUT input.wav
     cmd = [demucs, "-n", model, "-o", str(out_dir), str(audio_path)]
+    if two_stems:  # e.g. "vocals" → vocals.wav + no_vocals.wav, about twice as fast
+        cmd[1:1] = ["--two-stems", two_stems]
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"demucs failed ({proc.returncode}):\n{proc.stdout}")

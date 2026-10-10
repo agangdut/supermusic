@@ -22,6 +22,8 @@ Then open **http://localhost:3000/upload**.
    - **Piano** is for solo piano. It was trained on MAESTRO and also captures how hard each note is played and the sustain pedal.
    - **General** is the fastest, and fine for a single non-piano instrument.
 
+   Leave **Voice as its own melody** on to get the singer as a clean "Lead vocal" track instead of stray notes on other instruments. See [Voices](transcription-accuracy.md#voices).
+
    The first Piano, Stems or Auto run downloads the models (about 170 MB plus about 300 MB) into `data/models`.
 3. Click **Transcribe → MIDI**.
 4. The job appears under **Jobs**. When it finishes, download the `.mid` file.

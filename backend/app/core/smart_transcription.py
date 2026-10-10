@@ -138,6 +138,12 @@ def transcribe_stems(audio_path: str | Path, out_dir: Optional[Path] = None) -> 
                 inst.notes.extend(src.notes)
                 if name == "piano":
                     inst.control_changes.extend(src.control_changes)  # sustain pedal
+            if name == "vocals":
+                from app.core.vocals import VOCAL_PROGRAM, clean_melody
+
+                # A voice sings one note at a time; Basic Pitch hears chords in it
+                inst.notes = clean_melody(inst.notes)
+                inst.program, inst.name = VOCAL_PROGRAM, "Lead vocal"
         if inst.notes:
             merged.instruments.append(inst)
             tracks[name] = len(inst.notes)
@@ -206,7 +212,9 @@ def transcribe_auto(audio_path: str | Path) -> Tuple[Path, Dict]:
     if model == "piano":
         midi, info = transcribe_piano(audio_path), {}
     elif model == "multi":
-        midi, info = transcribe_multi(audio_path), {}
+        from app.core.vocals import lead_vocal_track
+
+        midi, info = lead_vocal_track(transcribe_multi(audio_path))
     elif model == "stems":
         midi, info = transcribe_stems(audio_path)
     else:

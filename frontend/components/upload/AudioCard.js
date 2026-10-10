@@ -13,6 +13,7 @@ export default function AudioCard({
 }) {
   const [model, setModel] = useState("auto");
   const [playable, setPlayable] = useState(false);
+  const [vocalTrack, setVocalTrack] = useState(true);
   const [handSpan, setHandSpan] = useState(14);
   return (
     <ThemedCard
@@ -25,7 +26,7 @@ export default function AudioCard({
           </div>
           <div className="flex gap-2 flex-wrap">
             <PrimaryButton
-              onClick={() => transcribeMidi(model, { playable, handSpan })}
+              onClick={() => transcribeMidi(model, { playable, handSpan, vocalTrack })}
               disabled={!audioFile || busy}
             >
               Transcribe → MIDI
@@ -77,6 +78,24 @@ export default function AudioCard({
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="mt-4">
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={vocalTrack}
+            onChange={(e) => setVocalTrack(e.target.checked)}
+            className="mt-0.5 accent-purple-500"
+          />
+          <span>
+            <span className="block text-sm font-medium text-gray-300">Voice as its own melody</span>
+            <span className="block text-[11px] text-gray-500">
+              Puts the singer on a clean "Lead vocal" track, one note at a time. With General, the voice is
+              separated first so it can&apos;t become instrument notes (adds about a minute).
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="mt-4">
