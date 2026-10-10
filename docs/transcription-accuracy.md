@@ -5,7 +5,8 @@ How well each MIDI model does on the [MAESTRO v3](https://magenta.tensorflow.org
 
 | Model | Audio | Note F1 | Precision | Recall | Note+offset F1 | Avg time |
 |---|---|---|---|---|---|---|
-| basic | wav | 0.703 | 0.726 | 0.715 | 0.143 | 2.9s |
+| basic (defaults) | wav | 0.703 | 0.726 | 0.715 | 0.143 | 2.9s |
+| basic (tuned) | wav | 0.749 | 0.740 | 0.787 | 0.182 | 2.7s |
 | basic | mp3 | 0.703 | 0.727 | 0.715 | 0.142 | 2.3s |
 | piano | wav | 0.974 | 0.985 | 0.964 | 0.360 | 27.2s |
 | piano | mp3 | 0.974 | 0.985 | 0.964 | 0.360 | 26.9s |

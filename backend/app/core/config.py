@@ -30,6 +30,10 @@ class Settings:
     BASIC_PITCH_BIN: str = os.getenv("SM_BASIC_PITCH_BIN", "basic-pitch")  # if installed
     # tflite-runtime can't load the model under numpy 2, so default to ONNX
     BASIC_PITCH_SERIALIZATION: str = os.getenv("SM_BASIC_PITCH_SERIALIZATION", "onnx")
+    # Tuned on MAESTRO validation (36 combinations): note F1 0.675 → 0.744 vs Basic Pitch defaults (0.5 / 0.3 / 127.7)
+    BASIC_PITCH_ONSET: float = float(os.getenv("SM_BASIC_PITCH_ONSET", "0.6"))
+    BASIC_PITCH_FRAME: float = float(os.getenv("SM_BASIC_PITCH_FRAME", "0.3"))
+    BASIC_PITCH_MIN_NOTE_MS: float = float(os.getenv("SM_BASIC_PITCH_MIN_NOTE_MS", "58"))
 
     # Visualization
     FIG_DPI: int = int(os.getenv("SM_FIG_DPI", "140"))

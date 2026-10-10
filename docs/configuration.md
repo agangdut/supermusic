@@ -17,6 +17,7 @@ With Docker, put settings in a `.env` file next to `docker-compose.yml` (start f
 | `SM_DEMUCS_BIN` | `demucs` | Demucs command |
 | `SM_BASIC_PITCH_BIN` | `basic-pitch` | Basic Pitch command |
 | `SM_BASIC_PITCH_SERIALIZATION` | `onnx` | Basic Pitch model format (`onnx`, `tf`, `tflite`, `coreml`) |
+| `SM_BASIC_PITCH_ONSET` · `SM_BASIC_PITCH_FRAME` · `SM_BASIC_PITCH_MIN_NOTE_MS` | `0.6` · `0.3` · `58` | General model settings, tuned on MAESTRO (see [accuracy](transcription-accuracy.md)) |
 | `SM_YTDLP_FORMAT` | `bestaudio/best` | yt-dlp format selector |
 | `SM_FIG_DPI` | `140` | Resolution of generated images |
 | `DATABASE_URL` | `sqlite:///./data/supermusic.db` | Reserved for the database (not used yet) |

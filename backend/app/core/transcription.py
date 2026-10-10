@@ -37,7 +37,14 @@ def transcribe_to_midi(audio_path: str | Path, out_dir: Path | None = None) -> P
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # basic-pitch <output_dir> <input_audio>
-    cmd = [basic_pitch, "--model-serialization", settings.BASIC_PITCH_SERIALIZATION, str(out_dir), str(audio_path)]
+    cmd = [
+        basic_pitch,
+        "--model-serialization", settings.BASIC_PITCH_SERIALIZATION,
+        "--onset-threshold", str(settings.BASIC_PITCH_ONSET),
+        "--frame-threshold", str(settings.BASIC_PITCH_FRAME),
+        "--minimum-note-length", str(settings.BASIC_PITCH_MIN_NOTE_MS),
+        str(out_dir), str(audio_path),
+    ]
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"basic-pitch failed ({proc.returncode}):\n{proc.stdout}")
