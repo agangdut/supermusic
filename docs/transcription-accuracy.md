@@ -103,11 +103,11 @@ Separating the voice before Full band makes things *worse*, because Demucs leave
 **What the app does now** (the "Voice as its own melody" option, on by default):
 
 - **General:** separates the voice with Demucs first, transcribes the backing without it, and adds the voice as a clean "Lead vocal" track. That removes the voice-caused notes in the table above, at the cost of about a minute of separation on a CPU.
-- **Full band and Auto:** no separation. YourMT3+'s singing tracks are folded into one "Lead vocal".
+- **Full band and Auto:** the band is transcribed from the full mix (no separation, see test 2). If the GAME service is running, the voice is then separated with Demucs and transcribed by **GAME**, a model trained only on singing, which replaces the band model's own voice track. Without GAME, the band model's singing tracks are folded into one "Lead vocal".
 - **Stems:** the vocal stem becomes a "Lead vocal" track.
 - In every mode the Lead vocal is cleaned up: one note at a time (the strongest wins), blips under 80 ms dropped, tiny gaps merged, and notes more than 14 semitones from the melody's centre (bass bleed, octave errors) removed.
 
-We don't have reference melodies for these songs, so the Lead vocal itself isn't scored yet. Rap has no fixed pitch, so its "melody" follows the speaking voice's rise and fall rather than a tune.
+The Lead vocal is scored on MulTTiPop clips that have a vocal part ("Vocal F1" in `scripts/eval_pop.py`; compare `muscriptor_vocal` with `muscriptor_game`). Results pending. Rap has no fixed pitch, so its "melody" follows the speaking voice's rise and fall rather than a tune.
 
 ## How Auto decides
 

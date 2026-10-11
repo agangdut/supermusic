@@ -172,3 +172,40 @@ def lead_vocal_track(midi_path: str | Path) -> Tuple[Path, Dict]:
     out = Path(midi_path).with_name(Path(midi_path).stem + "_lead.mid")
     pm.write(str(out))
     return out, {"vocal_notes": len(lead.notes)}
+
+
+GAME_MIN_NOTE = 0.05  # seconds; GAME's own segmentation is good, so only drop clicks
+
+
+def sung_lead_vocal(midi_path: str | Path, audio_path: str | Path) -> Tuple[Path, Dict]:
+    """For full-band output: replace the model's own voice track with GAME's
+    transcription of the separated vocal, which follows the singer more closely.
+    Falls back to `lead_vocal_track` when the song has no vocals."""
+    import pretty_midi
+
+    from app.core.game_client import transcribe_singing
+    from app.core.progress import report
+
+    report("Separating the voice to transcribe the singing…")
+    vocals, _backing, share = split_vocals(audio_path)
+    if share < VOCAL_PRESENT:
+        path, info = lead_vocal_track(midi_path)
+        return path, {**info, "vocal_share": round(share, 3)}
+
+    report("Transcribing the singing with GAME…")
+    try:
+        sung = pretty_midi.PrettyMIDI(str(transcribe_singing(vocals)))
+    except RuntimeError:  # GAME down or failed: the full-band model's own voice track still works
+        path, info = lead_vocal_track(midi_path)
+        return path, {**info, "vocal_share": round(share, 3), "vocal_stem": str(vocals)}
+    notes = sorted((n for i in sung.instruments for n in i.notes if n.end - n.start >= GAME_MIN_NOTE),
+                   key=lambda n: n.start)
+    pm = pretty_midi.PrettyMIDI(str(midi_path))
+    voice = [i for i in pm.instruments if not i.is_drum and any(w in i.name.lower() for w in ("sing", "voice", "vocal"))]
+    lead = pretty_midi.Instrument(program=VOCAL_PROGRAM, name="Lead vocal")
+    lead.notes = [pretty_midi.Note(velocity=90, pitch=n.pitch, start=n.start, end=n.end) for n in notes]
+    pm.instruments = [lead] + [i for i in pm.instruments if i not in voice]
+    out = Path(midi_path).with_name(Path(midi_path).stem + "_lead.mid")
+    pm.write(str(out))
+    return out, {"vocal_notes": len(lead.notes), "vocal_engine": "GAME", "vocal_share": round(share, 3),
+                 "vocal_stem": str(vocals)}

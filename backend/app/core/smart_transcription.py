@@ -313,7 +313,11 @@ def transcribe_auto(audio_path: str | Path) -> Tuple[Path, Dict]:
         from app.core.vocals import lead_vocal_track
 
         try:
-            midi, info = lead_vocal_track(muscriptor_client.transcribe_muscriptor(audio_path))
+            from app.core import game_client
+            from app.core.vocals import sung_lead_vocal
+
+            raw = muscriptor_client.transcribe_muscriptor(audio_path)
+            midi, info = sung_lead_vocal(raw, audio_path) if game_client.available() else lead_vocal_track(raw)
         except RuntimeError as e:  # e.g. the model couldn't load; YourMT3+ is the next best
             if not available():
                 raise

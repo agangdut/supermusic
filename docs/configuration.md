@@ -32,6 +32,8 @@ With Docker, put settings in a `.env` file next to `docker-compose.yml` (start f
 | `HF_TOKEN` | (empty) | Hugging Face read token for MuScriptor's weights. Accept the licence on [muscriptor-medium](https://huggingface.co/MuScriptor/muscriptor-medium) first. Non-commercial use only (CC BY-NC 4.0) |
 | `MUSCRIPTOR_MODEL` | `medium` | `small`, `medium` or `large` (large needs more than the RTX 2060's 6 GB) |
 | `MUSCRIPTOR_FAST` | `0` | `1` transcribes 4 five-second sections at once: roughly 3x faster, slightly rougher where sections join (not yet measured) |
+| `GAME_URL` | `http://game:8300` | Where the backend finds the GAME singing transcriber. If it isn't reachable, Full band and Auto use MuScriptor's own voice track |
+| `GAME_MODEL` | `medium` | `small`, `medium` or `large` GAME weights (non-commercial licence, downloaded on first use) |
 
 The `yourmt3` container runs on CPU unless you add `docker-compose.gpu.yml` (NVIDIA only). Its 562 MB model downloads once into `data/models/yourmt3`. To make the GPU the default on your machine, copy `docker-compose.gpu.yml` to `docker-compose.override.yml`; Compose loads that automatically, and git ignores it.
 

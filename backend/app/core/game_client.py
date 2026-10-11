@@ -1,0 +1,40 @@
+"""
+Client for the GAME service (services/game): turns an isolated singing voice
+into notes. Full-band models catch the band well but miss much of the vocal
+line; GAME is trained only on singing, so it handles slides, vibrato and
+repeated syllables better.
+"""
+from __future__ import annotations
+
+import json
+import os
+import urllib.error
+import urllib.request
+import uuid
+from pathlib import Path
+
+from app.core.config import settings
+
+URL = os.getenv("GAME_URL", "http://game:8300")
+
+
+def available() -> bool:
+    try:
+        with urllib.request.urlopen(f"{URL}/health", timeout=3) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def transcribe_singing(vocal_path: str | Path, out_dir: Path | None = None) -> Path:
+    vocal_path = Path(vocal_path)
+    out_dir = (out_dir or (settings.PROCESSED_DIR / "midi")) / uuid.uuid4().hex
+    body = json.dumps({"audio_path": str(vocal_path.resolve()), "out_dir": str(out_dir)}).encode()
+    req = urllib.request.Request(f"{URL}/transcribe", data=body, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=3600) as r:
+            return Path(json.loads(r.read())["midi_path"])
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(json.loads(e.read() or b"{}").get("detail", f"GAME error {e.code}"))
+    except urllib.error.URLError:
+        raise RuntimeError("The GAME vocal service isn't running. Start it with: docker compose up -d game")

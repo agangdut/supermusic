@@ -12,6 +12,7 @@ services:
       - TORCH_HOME=/app/data/models/torch
       - YOURMT3_URL=http://yourmt3:8100
       - MUSCRIPTOR_URL=http://muscriptor:8200
+      - GAME_URL=http://game:8300
     volumes:
       - ./data:/app/data
       - ./static:/app/static
@@ -38,6 +39,16 @@ services:
       - HF_HOME=/app/data/models/hf
       - MUSCRIPTOR_MODEL=${MUSCRIPTOR_MODEL:-medium}
       - MUSCRIPTOR_FAST=${MUSCRIPTOR_FAST:-0}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  # Singing-voice transcription (GAME, OpenVPI 2026) for the Lead vocal track.
+  # Weights download on first use; non-commercial use only (CC BY-NC-SA 4.0).
+  game:
+    build: ./services/game
+    environment:
+      - GAME_MODEL=${GAME_MODEL:-medium}
     volumes:
       - ./data:/app/data
     restart: unless-stopped

@@ -20,7 +20,8 @@ from app.core.transcription import transcribe_to_midi
 from app.core.yourmt3_client import transcribe_multi
 from app.core.muscriptor_client import transcribe_muscriptor
 from app.core.progress import estimate_seconds, report, reporting, run_with_context
-from app.core.vocals import lead_vocal_track, split_vocals, transcribe_vocal_aware
+from app.core.game_client import available as game_available
+from app.core.vocals import lead_vocal_track, split_vocals, sung_lead_vocal, transcribe_vocal_aware
 
 try:
     from app.utils.storage import job_store, save_artifact  # type: ignore
@@ -153,6 +154,8 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                     midi = (transcribe_multi if req.model == "multi" else transcribe_muscriptor)(audio_path)
                     if not req.vocal_track:
                         return midi, {}
+                    if game_available():  # a singing-only model follows the voice more closely
+                        return sung_lead_vocal(midi, audio_path)
                     report("Cleaning up the vocal melody…")
                     return lead_vocal_track(midi)
                 if req.model == "basic" and req.vocal_track:
