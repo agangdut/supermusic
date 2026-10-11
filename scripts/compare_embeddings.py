@@ -195,16 +195,20 @@ def _tensor(out):
 
 
 class Clap:
-    name = "laion/larger_clap_music"
     sr = 48000
 
-    def __init__(self, device: str):
+    def __init__(self, device: str, name: str = "laion/larger_clap_music"):
         import torch
         from transformers import ClapModel, ClapProcessor
 
-        self.torch, self.device = torch, device
-        self.model = ClapModel.from_pretrained(self.name).to(device).eval()
-        self.proc = ClapProcessor.from_pretrained(self.name)
+        self.torch, self.device, self.name = torch, device, name
+        model, info = ClapModel.from_pretrained(name, output_loading_info=True)
+        # Weights the checkpoint didn't supply start random, which quietly ruins the embeddings
+        self.missing = sorted(info.get("missing_keys", []))
+        if self.missing:
+            print(f"  WARNING: {len(self.missing)} CLAP weights missing from {name}, e.g. {self.missing[:3]}")
+        self.model = model.to(device).eval()
+        self.proc = ClapProcessor.from_pretrained(name)
 
     def __call__(self, wins: Sequence[np.ndarray]) -> np.ndarray:
         with self.torch.no_grad():
@@ -279,6 +283,14 @@ def genre_agreement(x: np.ndarray, genres: Sequence, artists: Sequence[str], k: 
     return float(np.mean(scores)) if scores else float("nan")
 
 
+def mean_cosine(x: np.ndarray) -> float:
+    """Average cosine similarity between different songs (near 1.0 means collapsed)."""
+    u = x / (np.linalg.norm(x, axis=1, keepdims=True) + 1e-9)
+    s = u @ u.T
+    n = len(x)
+    return float((s.sum() - np.trace(s)) / (n * (n - 1)))
+
+
 def genre_chance(genres: Sequence) -> float:
     g = pd.Series([x for x in genres if x is not None])
     p = g.value_counts(normalize=True)
@@ -305,6 +317,8 @@ def main() -> None:
     ap.add_argument("--name", default=None)
     ap.add_argument("--device", default=None)
     ap.add_argument("--skip", nargs="*", default=[], choices=["mert", "clap"])
+    ap.add_argument("--clap-model", default="laion/larger_clap_music",
+                    help="e.g. laion/clap-htsat-unfused, laion/larger_clap_general")
     args = ap.parse_args()
 
     name = args.name or ("deezer_charts" if args.deezer else args.audio_dir.name)
@@ -338,7 +352,7 @@ def main() -> None:
         models["mert"] = Mert(device)
     if "clap" not in args.skip:
         print("Loading CLAP ...")
-        models["clap"] = Clap(device)
+        models["clap"] = Clap(device, args.clap_model)
 
     feats: List[dict] = []
     vecs: Dict[str, List[np.ndarray]] = {m: [] for m in models}
@@ -411,9 +425,22 @@ def main() -> None:
                          **{s: [label(j) for j in nn[s][i][:3]] for s in names}})
     result["examples"] = examples
 
+    # Health checks: vectors that all point the same way can't tell songs apart
+    result["spread"] = {s: mean_cosine(x) for s, x in spaces.items() if s != "map"}
+
     if "clap" in models:
-        q = models["clap"].text(DEFAULT_QUERIES)
+        clap = models["clap"]
+        result["clap_model"] = clap.name
+        result["clap_missing_weights"] = len(clap.missing)
         c = spaces["clap"] / np.linalg.norm(spaces["clap"], axis=1, keepdims=True)
+        names_g = sorted({g for g in genres if g is not None})
+        if len(names_g) >= 2:
+            # Zero-shot: label each song with the genre whose description it sits closest to
+            t = clap.text([f"This is a {g} song." for g in names_g])
+            pred = [names_g[j] for j in np.argmax(c @ t.T, axis=1)]
+            hits = [p == g for p, g in zip(pred, genres) if g is not None]
+            result["clap_zero_shot"] = {"accuracy": float(np.mean(hits)), "chance": 1 / len(names_g)}
+        q = clap.text(DEFAULT_QUERIES)
         sims = q @ c.T
         result["text_search"] = {qq: [label(j) for j in np.argsort(-sims[qi])[:5]] for qi, qq in enumerate(DEFAULT_QUERIES)}
 
@@ -439,6 +466,14 @@ def render(r: dict, name: str) -> str:
             best = int(np.nanargmax(g["mert_by_layer"]))
             lines += ["", "MERT by layer: " + ", ".join(f"{i}: {v:.0%}" for i, v in enumerate(g["mert_by_layer"]))
                       + f" (best: layer {best})"]
+    lines += ["", "## Health checks", ""]
+    for s, v in r.get("spread", {}).items():
+        lines.append(f"- {s}: average similarity between different songs {v:.2f} (close to 1.00 means every song looks the same)")
+    if "clap_model" in r:
+        lines.append(f"- CLAP checkpoint: {r['clap_model']}, missing weights: {r['clap_missing_weights']}")
+    if "clap_zero_shot" in r:
+        z = r["clap_zero_shot"]
+        lines.append(f"- CLAP zero-shot genre (\"This is a <genre> song.\"): {z['accuracy']:.1%} correct, chance {z['chance']:.1%}")
     lines += ["", "## Examples (3 closest songs in each space)", ""]
     for e in r["examples"]:
         lines.append(f"**{e['song']}**" + (f" ({e['genre']})" if e["genre"] else ""))
