@@ -385,6 +385,39 @@ def _spread_clusters(emb: np.ndarray, labels: np.ndarray) -> np.ndarray:
         target = 8 + 2.4 * math.sqrt(len(idx))
         if radius > 1e-6:
             out[idx] = centre + offsets * (target / radius)
+    return _separate_clusters(out, labels)
+
+
+def _separate_clusters(emb: np.ndarray, labels: np.ndarray, gap: float = 10.0) -> np.ndarray:
+    """Nudge overlapping clusters apart so each one reads as its own island."""
+    ids = sorted(set(labels.tolist()))
+    if len(ids) < 2:
+        return emb
+    idx = [np.where(labels == c)[0] for c in ids]
+    centres = np.array([emb[i].mean(axis=0) for i in idx])
+    radii = np.array([np.linalg.norm(emb[i] - emb[i].mean(axis=0), axis=1).mean() * 1.6 if len(i) > 1 else 4.0 for i in idx])
+    moved = centres.copy()
+    for _ in range(200):
+        shifted = False
+        for a in range(len(ids)):
+            for b in range(a + 1, len(ids)):
+                d = moved[b] - moved[a]
+                dist = float(np.linalg.norm(d))
+                need = radii[a] + radii[b] + gap
+                if dist >= need:
+                    continue
+                direction = d / dist if dist > 1e-6 else np.random.default_rng(a * 31 + b).normal(size=3)
+                direction /= np.linalg.norm(direction)
+                push = (need - dist) / 2 * direction
+                moved[a] -= push
+                moved[b] += push
+                shifted = True
+        if not shifted:
+            break
+    out = emb.copy()
+    for i, before, after in zip(idx, centres, moved):
+        out[i] += after - before
+    out -= out.mean(axis=0)
     return out
 
 
@@ -398,8 +431,12 @@ def _cluster(emb: np.ndarray, k: Optional[int]) -> np.ndarray:
     if k:
         k = max(1, min(k, n - 1))
         return KMeans(n_clusters=k, n_init=10, random_state=42).fit_predict(emb)
+    # Real libraries blur together, so silhouette alone tends to pick 2 huge
+    # clusters. Ask for roughly one cluster per ~30 tracks at least.
+    k_max = min(10, max(3, n // 5))
+    k_min = min(k_max, max(2, round(math.sqrt(n) / 2.5)))
     best, best_score = None, -1.0
-    for k in range(2, min(10, max(3, n // 5)) + 1):
+    for k in range(k_min, k_max + 1):
         labels = KMeans(n_clusters=k, n_init=10, random_state=42).fit_predict(emb)
         score = silhouette_score(emb, labels)
         if score > best_score:

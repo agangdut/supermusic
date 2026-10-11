@@ -85,13 +85,15 @@ export default function Graph3D({ data, selectedId, focusIds, picks, mode, onSel
 
   const graph = useMemo(() => {
     if (!data) return { nodes: [], links: [] };
-    const maxEng = Math.max(0.0001, ...data.tracks.map((t) => t.engagement ?? 0));
+    // Imports without play counts have no engagement; give every star the same modest size
+    const engs = data.tracks.map((t) => t.engagement).filter((v) => v != null);
+    const maxEng = engs.length ? Math.max(...engs) : 0;
     return {
       nodes: data.tracks.map((t) => ({
         ...t,
         // Pin each track where the embedding put it, so position means similarity
         fx: t.x, fy: t.y, fz: t.z,
-        size: 2.5 + 5.5 * ((t.engagement ?? 0.4) / maxEng),
+        size: maxEng > 0 ? 2.5 + 5.5 * ((t.engagement ?? 0) / maxEng) : 3.5,
       })),
       links: data.edges.map((e) => ({ ...e })),
     };
@@ -135,7 +137,9 @@ export default function Graph3D({ data, selectedId, focusIds, picks, mode, onSel
     if (selectedId != null) return s === selectedId || t === selectedId;
     if (mode === "hidden") return l.kind === "hidden";
     if (focus) return focus.has(s) && focus.has(t);
-    return true;
+    // Overview: keep each cluster's own web plus the hidden threads. Links between
+    // neighbouring clusters are left out, or a real library turns into one big mesh.
+    return l.kind === "hidden" || !l.bridge;
   };
 
   // Cluster names floating above each group
@@ -166,7 +170,9 @@ export default function Graph3D({ data, selectedId, focusIds, picks, mode, onSel
   useEffect(() => {
     const fg = fgRef.current;
     if (!fg || !data) return;
-    const t = setTimeout(() => fg.cameraPosition({ x: 0, y: 30, z: 175 }, { x: 0, y: 0, z: 0 }, 1200), 50);
+    // Pull back far enough for the widest library to fit
+    const r = Math.max(90, ...data.tracks.map((t) => Math.hypot(t.x, t.y, t.z)));
+    const t = setTimeout(() => fg.cameraPosition({ x: 0, y: r * 0.17, z: r * 1.75 }, { x: 0, y: 0, z: 0 }, 1200), 50);
     return () => clearTimeout(t);
   }, [data]);
 
@@ -206,9 +212,9 @@ export default function Graph3D({ data, selectedId, focusIds, picks, mode, onSel
         linkVisibility={linkVisible}
         linkColor={(l) => (l.kind === "hidden" ? HIDDEN_COLOR : colorFor(typeof l.source === "object" ? l.source.cluster : 0))}
         linkOpacity={0.22}
-        linkWidth={(l) => (l.kind === "hidden" ? 1.2 : 0.25)}
-        linkDirectionalParticles={(l) => (l.kind === "hidden" ? 3 : focus ? 1 : 0)}
-        linkDirectionalParticleWidth={(l) => (l.kind === "hidden" ? 1.8 : 1)}
+        linkWidth={(l) => (l.kind === "hidden" ? 0.6 : 0.25)}
+        linkDirectionalParticles={(l) => (l.kind === "hidden" ? 2 : focus ? 1 : 0)}
+        linkDirectionalParticleWidth={(l) => (l.kind === "hidden" ? 1.2 : 1)}
         linkDirectionalParticleSpeed={(l) => 0.004 + 0.006 * (l.strength ?? 0.5)}
         linkDirectionalParticleColor={(l) => (l.kind === "hidden" ? HIDDEN_COLOR : "#ffffff")}
       />
