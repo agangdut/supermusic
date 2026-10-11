@@ -183,7 +183,8 @@ def _zscore(col: np.ndarray) -> np.ndarray:
 def _split_tags(v: Any) -> List[str]:
     if v is None or (isinstance(v, float) and math.isnan(v)):
         return []
-    return [t.strip().lower() for t in re.split(r"[;,|/]", str(v)) if t.strip()]
+    # Not "/": names like "Hip-Hop/Rap" (Apple) or "Rap/Hip Hop" (Deezer) are one genre, not two
+    return [t.strip().lower() for t in re.split(r"[;,|]", str(v)) if t.strip()]
 
 
 def _one_hot(values: List[List[str]], min_count: int = 1) -> Tuple[np.ndarray, List[str]]:
@@ -285,7 +286,7 @@ def _prepare(df: pd.DataFrame, opts: MapOptions) -> _Prepared:
     genre_names: Dict[str, str] = {}
     if cols["genre"]:
         for v in df[cols["genre"]]:
-            for t in re.split(r"[;,|/]", str(v)) if pd.notna(v) else []:
+            for t in re.split(r"[;,|]", str(v)) if pd.notna(v) else []:
                 genre_names.setdefault(t.strip().lower(), t.strip())
     if any(genres):
         g, _ = _one_hot(genres)

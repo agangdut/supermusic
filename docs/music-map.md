@@ -57,7 +57,7 @@ Click **Import Spotify / Apple Music** and pick one or more files. SuperMusic wo
 
 Pick a library or playlist file **and** a listening-history file together. Songs are matched by artist and title (ignoring "feat." credits), plays and skips are added up, and features come from whichever file has them. A play shorter than 30 seconds counts as a skip.
 
-Listening histories don't include genre, tempo or key. With **Look up genre, tempo, key and energy online** ticked (the default), each song is looked up on Deezer's public API for its genre and release year. Its 30-second preview is then analysed on your computer for tempo, key (Krumhansl–Schmuckler), energy and brightness. Only song titles and artists leave your machine. Results are cached in `data/cache/deezer`, so re-importing is quick. The first import takes about 1–2 seconds per song, for up to 1,500 songs, most-played first.
+Listening histories don't include genre, tempo or key. With **Look up genre, tempo, key and energy online** ticked (the default), each song is looked up online. **Genre** comes from listener tags: Last.fm if you put a free `LASTFM_API_KEY` in `.env`, otherwise MusicBrainz (no key needed). Tags are boiled down to about 20 plain genres (Pop, Hip-Hop, R&B, Rock, Electronic, Latin, …), non-genre tags such as "seen live" are dropped, and each song keeps at most two. Deezer's album genre is only a last resort, because Deezer files whole albums under one coarse genre and calls a lot of non-rap music "Rap/Hip Hop". **Release year** comes from Deezer, but only from a search hit by the same artist, so a similarly titled song by someone else can't be used. The song's 30-second preview is then analysed on your computer for tempo, key (Krumhansl–Schmuckler), energy and brightness. Only song titles and artists leave your machine. Results are cached in `data/cache/deezer_v2` and `data/cache/genres` (one lookup per artist), so re-importing is quick. The first import takes about 1–2 seconds per song, plus about a second per new artist for MusicBrainz, for up to 1,500 songs, most-played first. If an old map has wrong genres, import the original export files again with the online lookup ticked.
 
 The merged library is saved to `data/processed/library/`, and the sliders and **Remap** work on it like any other map.
 
@@ -69,7 +69,7 @@ Use the same **Import** button. Column names are matched loosely (case doesn't m
 |---|---|
 | Name | `title`, `name`, `track`, `song` |
 | Artist / album | `artist`, `artists` / `album` |
-| Genre | `genre`, `genres`, `style`, `tags` (split several with `;` or `,`) |
+| Genre | `genre`, `genres`, `style`, `tags` (split several with `;` or `,`; `Hip-Hop/Rap` stays one genre) |
 | Key | `key` as `Am`, `C#m`, `F# minor`, `Bb`, Camelot `8A`, or Spotify's `0–11` plus a `mode` column |
 | Tempo | `bpm`, `tempo` |
 | Mood | `energy`, `valence`, `danceability`, `acousticness`, `instrumentalness`, `speechiness`, `liveness`, `loudness` |
