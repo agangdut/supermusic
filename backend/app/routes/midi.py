@@ -16,6 +16,7 @@ from app.core.smart_transcription import transcribe_auto, transcribe_stems
 from app.core.playability import DEFAULT_SPAN, make_playable, playability_report
 from app.core.transcription import transcribe_to_midi
 from app.core.yourmt3_client import transcribe_multi
+from app.core.progress import estimate_seconds, report, reporting, run_with_context
 from app.core.vocals import lead_vocal_track, transcribe_vocal_aware
 
 try:
@@ -67,31 +68,37 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
 
     async def _worker(j: Job) -> None:
         try:
-            j.progress = 10
-            j.message = "Loading audio file…"
-            await asyncio.sleep(0.1)
-            
+            report("Checking the audio file…")
             audio_path = Path(req.source_path)
             if not audio_path.exists():
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
-            
-            j.progress = 30
-            j.message = {
-                "auto": "Listening for instruments, then transcribing…",
-                "piano": "Transcribing piano to MIDI…",
-                "stems": "Splitting into stems, then transcribing each…",
-                "cover": "Arranging a piano cover…",
-                "multi": "Transcribing every instrument with YourMT3+…",
-            }.get(req.model, "Transcribing to MIDI…")
+            try:
+                import librosa
+
+                duration_s = float(librosa.get_duration(path=str(audio_path)))
+            except Exception:
+                duration_s = None
+            j.eta_s = estimate_seconds(req.model, duration_s, vocal_split=(req.model == "basic" and req.vocal_track))
+            j.progress = 5
 
             def run():
+                report({
+                    "auto": "Listening for which instruments are playing…",
+                    "piano": "Transcribing piano…",
+                    "stems": "Splitting the song into 6 parts…",
+                    "cover": "Arranging a piano cover…",
+                    "multi": "Transcribing every instrument with YourMT3+…",
+                }.get(req.model, "Transcribing…"))
                 if req.model == "auto":
                     return transcribe_auto(audio_path)
                 if req.model == "stems":
                     return transcribe_stems(audio_path)
                 if req.model == "multi":
                     midi = transcribe_multi(audio_path)
-                    return lead_vocal_track(midi) if req.vocal_track else (midi, {})
+                    if not req.vocal_track:
+                        return midi, {}
+                    report("Cleaning up the vocal melody…")
+                    return lead_vocal_track(midi)
                 if req.model == "basic" and req.vocal_track:
                     return transcribe_vocal_aware(audio_path, transcribe_to_midi)
                 if req.model == "cover":
@@ -101,15 +108,15 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
 
             # Run transcription in executor to avoid blocking
             loop = asyncio.get_event_loop()
-            midi_path, info = await loop.run_in_executor(None, run)
+            midi_path, info = await loop.run_in_executor(None, run_with_context(run))
 
-            j.progress = 80
-            j.message = "Saving MIDI file…"
-            
+            report("Saving the MIDI file…")
+            j.progress = 90
+
             artifacts = {}
             playability = None
             if req.playable:
-                j.message = "Arranging for two hands…"
+                report("Arranging for two hands…")
                 playable_path, playability = await loop.run_in_executor(
                     None, lambda: make_playable(midi_path, hand_span=req.hand_span)
                 )
@@ -117,7 +124,7 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                 midi_path = playable_path
 
             # A listenable piano rendering, when FluidSynth is installed
-            j.message = "Rendering a piano preview…"
+            report("Rendering a piano preview…")
             preview = await loop.run_in_executor(None, render_audio, midi_path)
             if preview:
                 artifacts["preview"] = save_artifact(j, preview.name, preview.read_bytes())
@@ -125,14 +132,6 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
             # Read MIDI file and save as artifact
             midi_bytes = midi_path.read_bytes()
             artifact_path = save_artifact(j, midi_path.name if req.playable else f"{audio_path.stem}.mid", midi_bytes)
-            
-            # Get audio duration for metrics
-            try:
-                import librosa
-                y, sr = librosa.load(str(audio_path), sr=None)
-                duration_s = float(librosa.get_duration(y=y, sr=sr))
-            except Exception:
-                duration_s = None
             
             j.mark_success(
                 {
@@ -148,9 +147,13 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                 ),
             )
         except Exception as e:  # pragma: no cover
-            j.mark_failed(str(e), "MIDI conversion failed")
+            j.mark_failed(str(e), f"Failed while: {j.stage or 'starting'}")
 
-    bg.add_task(_worker, job)
+    async def _run(j: Job) -> None:
+        with reporting(j):
+            await _worker(j)
+
+    bg.add_task(_run, job)
     return job
 
 

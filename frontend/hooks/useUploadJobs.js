@@ -18,6 +18,16 @@ const mapStatus = (status) => {
 
 const isTerminal = (s) => ["success", "failed", "canceled", "done", "error"].includes(s);
 
+const MODE_LABELS = { auto: "Auto", multi: "Full band", stems: "Stems", piano: "Piano", basic: "General", cover: "Piano cover" };
+export const jobLabel = (j) => {
+  const t = j.job_type || j.type;
+  if (t === "midi_conversion") return `MIDI (${MODE_LABELS[j.payload?.model] || "General"})`;
+  if (t === "stem_separation") return "Stem separation";
+  if (t === "csv_enrichment") return "CSV enrichment";
+  if (t === "track_download") return "Download";
+  return "Job";
+};
+
 
 export default function useUploadJobs() {
   const [audioFile, setAudioFile] = useState(null);
@@ -65,49 +75,65 @@ export default function useUploadJobs() {
   }, []);
 
   // polling unfinished jobs and extracting artifacts when complete
+  const handleFinished = useCallback((j, data) => {
+    const artifacts = data.result?.artifacts;
+    if (data.status === "done" && artifacts) {
+      if (j.job_type === "midi_conversion" && artifacts.midi) {
+        setLatestMidi(normalizeJobArtifacts({ result: { artifacts } }).result.artifacts);
+      } else if (j.job_type === "stem_separation") {
+        setLatestStems(normalizeJobArtifacts({ result: { artifacts } }).result.artifacts);
+      } else if (j.job_type === "csv_enrichment" && artifacts.csv) {
+        setLatestCsv(artifacts.csv);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!jobs.some((j) => !isTerminal(j.status))) return;
 
     const handle = setInterval(async () => {
-      try {
-        const next = await Promise.all(
-          jobs.map(async (j) => {
-            if (isTerminal(j.status) || !j.id || !j.job_type) return j;
-            try {
-              const area = areaForJobType(j.job_type);
-              if (!area) return j;
-              const data = await getJob(area, j.id);
-              // Map backend status to frontend status
-              const mappedData = {
-                ...data,
-                status: mapStatus(data.status),
-              };
-              
-              // Extract artifacts when job completes
-              if ((mappedData.status === "success" || data.status === "done") && data.result?.artifacts) {
-                const artifacts = data.result.artifacts;
-                if (j.job_type === "midi_conversion" && artifacts.midi) {
-                  setLatestMidi(normalizeJobArtifacts({ result: { artifacts } }).result.artifacts);
-                } else if (j.job_type === "stem_separation" && artifacts) {
-                  setLatestStems(normalizeJobArtifacts({ result: { artifacts } }).result.artifacts);
-                } else if (j.job_type === "csv_enrichment" && artifacts.csv) {
-                  setLatestCsv(artifacts.csv);
-                }
-              }
-              
-              return { ...j, ...mappedData };
-            } catch {
-              return j;
+      const next = await Promise.all(
+        jobs.map(async (j) => {
+          if (isTerminal(j.status) || !j.id || !j.job_type) return j;
+          const area = areaForJobType(j.job_type);
+          if (!area) return j;
+          try {
+            const data = await getJob(area, j.id);
+            const status = mapStatus(data.status);
+            if (isTerminal(status)) {
+              handleFinished(j, data);
+              if (status === "success") notify(`${jobLabel(j)} finished ✓`, "ok");
+              else notify(`${jobLabel(j)} failed: ${data.error_hint || data.error_detail || "unknown error"}`, "err");
             }
-          })
-        );
-        setJobs(next);
-      } catch {
-        // swallow
-      }
+            return { ...j, ...data, status, lastSeen: Date.now(), missedPolls: 0 };
+          } catch (err) {
+            const msg = String(err?.message || err);
+            // The server answered, but doesn't know the job: it restarted and lost it
+            if (/not found|404/i.test(msg)) {
+              notify(`${jobLabel(j)} was lost when the server restarted.`, "err");
+              return {
+                ...j, status: "failed", lost: true,
+                message: "Lost when the server restarted",
+                error_hint: "The server restarted while this was running, so the job was lost. Start it again.",
+              };
+            }
+            // Couldn't reach the server at all; keep the job, flag the connection
+            return { ...j, missedPolls: (j.missedPolls || 0) + 1 };
+          }
+        })
+      );
+      setJobs(next);
     }, 2000);
 
     return () => clearInterval(handle);
+  }, [jobs, handleFinished, notify]);
+
+  // Show running jobs in the browser tab title, so you can switch away and still see it
+  useEffect(() => {
+    const base = "SuperMusic";
+    const running = jobs.filter((j) => !isTerminal(j.status)).length;
+    document.title = running ? `⏳ ${running} job${running > 1 ? "s" : ""} running · ${base}` : base;
+    return () => { document.title = base; };
   }, [jobs]);
 
   // upload file and return server path
@@ -169,10 +195,14 @@ export default function useUploadJobs() {
           notify(`Job started: ${job.message || successMsg}`, "info");
         }
       } catch (err) {
+        const detail = String(err?.message || err);
         updateJob(jobId, {
-          status: "error",
+          status: "failed",
           message: failMsg,
-          error_detail: String(err),
+          error_detail: detail,
+          error_hint: /failed to fetch|networkerror|load failed/i.test(detail)
+            ? "Couldn't reach the SuperMusic server. Is Docker running? Try: docker compose up -d"
+            : undefined,
         });
         notify(failMsg, "err");
       } finally {
@@ -181,6 +211,23 @@ export default function useUploadJobs() {
       }
     },
     [notify, pushJob, updateJob]
+  );
+
+  // Run a finished or failed job again with the same settings (no re-upload needed)
+  const retryJob = useCallback(
+    (j) => {
+      const p = j.payload || {};
+      const type = j.job_type || j.type;
+      const run = {
+        midi_conversion: () => midiConvert(p),
+        stem_separation: () => stemsSeparate(p),
+        csv_enrichment: () => csvEnrich(p),
+      }[type];
+      if (!run) return notify("This job can't be retried. Start it again from the form.", "warn");
+      setJobs((prev) => prev.filter((x) => x.id !== j.id));
+      return createJob(type, run, `${jobLabel(j)} finished ✓`, `${jobLabel(j)} failed`);
+    },
+    [createJob, notify]
   );
 
   // public actions
@@ -299,6 +346,7 @@ export default function useUploadJobs() {
 
     // actions
     transcribeMidi,
+    retryJob,
     separateStems,
     enrichCsv,
     clearJobs,

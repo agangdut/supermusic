@@ -115,12 +115,17 @@ def transcribe_stems(audio_path: str | Path, out_dir: Optional[Path] = None) -> 
     import pretty_midi
 
     audio_path = Path(audio_path)
+    from app.core.progress import report
+
+    report("Splitting the song into 6 parts…")
     stems = separate_stems(audio_path, _work_dir("stems6"), model=SIX_STEM_MODEL)
     shares = stem_shares(stems)
 
     merged = pretty_midi.PrettyMIDI()
     tracks: Dict[str, int] = {}
     for name, path in stems.items():
+        if shares.get(name, 0) >= MIN_STEM_SHARE:
+            report(f"Transcribing the {name} part…")
         if shares.get(name, 0) < MIN_STEM_SHARE:
             continue
         if name == "piano" and shares.get(name, 0) < PIANO_TRACK_MIN:
@@ -207,8 +212,12 @@ def choose_model(shares: Dict[str, float], multi_available: bool = False) -> Tup
 def transcribe_auto(audio_path: str | Path) -> Tuple[Path, Dict]:
     from app.core.yourmt3_client import available, transcribe_multi
 
+    from app.core.progress import report
+
     shares = detect_instruments(audio_path)
     model, why = choose_model(shares, multi_available=available())
+    label = {"piano": "the Piano model", "multi": "YourMT3+ (Full band)", "stems": "Stems", "basic": "General"}[model]
+    report(f"Heard {why}; transcribing with {label}…")
     if model == "piano":
         midi, info = transcribe_piano(audio_path), {}
     elif model == "multi":

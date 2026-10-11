@@ -26,6 +26,7 @@ export default function UploadPage() {
     separateStems,
     enrichCsv,
     clearJobs,
+    retryJob,
   } = useUploadJobs();
 
   return (
@@ -70,6 +71,7 @@ export default function UploadPage() {
             latestMidi={latestMidi}
             latestStems={latestStems}
             latestCsv={latestCsv}
+            retryJob={retryJob}
           />
         </div>
       </div>

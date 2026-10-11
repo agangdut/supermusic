@@ -33,12 +33,12 @@ export default function ArtifactList({
   };
 
   return (
-    <ul className={`mt-2 divide-y rounded-lg border bg-white ${className}`}>
+    <ul className={`mt-2 divide-y divide-white/5 rounded-lg border border-white/10 bg-black/20 ${className}`}>
       {items.map(({ key, label, url }) => (
         <li key={key} className="flex items-center justify-between gap-3 px-3 py-2">
           <div className="min-w-0 flex items-center gap-2">
             <span className="text-base">{extEmoji(label, url)}</span>
-            <span className="truncate text-sm font-medium">{label}</span>
+            <span className="truncate text-sm font-medium text-gray-200">{label}</span>
           </div>
           <div className="shrink-0 flex items-center gap-2">
             {url && (
@@ -47,13 +47,13 @@ export default function ArtifactList({
                   href={url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-sm underline decoration-dotted hover:decoration-solid"
+                  className="text-sm text-indigo-300 underline decoration-dotted hover:decoration-solid"
                 >
                   open
                 </a>
                 <button
                   onClick={() => copy(url)}
-                  className="rounded-md border px-2 py-1 text-xs hover:bg-gray-50"
+                  className="rounded-md border border-white/10 px-2 py-1 text-xs text-gray-300 hover:bg-white/10"
                   title="Copy URL"
                 >
                   copy
@@ -63,7 +63,7 @@ export default function ArtifactList({
             {onUse && url && (
               <button
                 onClick={() => onUse(key, url)}
-                className="rounded-md border px-2 py-1 text-xs hover:bg-gray-50"
+                className="rounded-md border border-white/10 px-2 py-1 text-xs text-gray-300 hover:bg-white/10"
               >
                 use
               </button>

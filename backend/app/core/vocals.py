@@ -120,6 +120,9 @@ def transcribe_vocal_aware(audio_path: str | Path, engine: Callable[[Path], Path
     import pretty_midi
 
     audio_path = Path(audio_path)
+    from app.core.progress import report
+
+    report("Separating the voice from the music…")
     vocals, backing, share = split_vocals(audio_path)
     info: Dict = {"vocal_share": round(share, 3)}
 
@@ -127,6 +130,7 @@ def transcribe_vocal_aware(audio_path: str | Path, engine: Callable[[Path], Path
         info["vocals"] = "none detected"
         return Path(engine(audio_path)), info
 
+    report("Transcribing the music without the voice…")
     accomp = pretty_midi.PrettyMIDI(str(engine(backing)))
     # anything the engine still calls a voice in the backing is leakage
     accomp.instruments = [i for i in accomp.instruments
@@ -135,6 +139,7 @@ def transcribe_vocal_aware(audio_path: str | Path, engine: Callable[[Path], Path
         if not i.name.strip():
             i.name = "Instruments"
 
+    report("Transcribing the vocal melody…")
     melody = vocal_melody(vocals, engine)
     inst = pretty_midi.Instrument(program=VOCAL_PROGRAM, name="Lead vocal")
     inst.notes = melody

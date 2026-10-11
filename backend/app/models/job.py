@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -103,6 +103,12 @@ class Job(ORMModel):
     error_detail: Optional[str] = Field(
         default=None, description="If status=error, a concise error string"
     )
+    error_hint: Optional[str] = Field(default=None, description="If status=error, what the user can do about it")
+
+    # Live progress (see app/core/progress.py)
+    stage: Optional[str] = Field(default=None, description="The step the job is on right now")
+    stages: List[Dict[str, Any]] = Field(default_factory=list, description="Steps so far, with start/end times")
+    eta_s: Optional[float] = Field(default=None, description="Rough expected total run time in seconds")
 
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -144,12 +150,18 @@ class Job(ORMModel):
         if message:
             self.message = message
         self.progress = 100
+        if self.stages and self.stages[-1].get("ended_at") is None:
+            self.stages[-1]["ended_at"] = datetime.utcnow().isoformat()
+        self.stage = None
         self.updated_at = datetime.utcnow()
 
     def mark_failed(self, error_detail: str, message: Optional[str] = None) -> None:
         """Mark job as failed."""
+        from app.core.progress import friendly_error
+
         self.status = JobStatus.error
         self.error_detail = error_detail
+        self.error_hint = friendly_error(error_detail)
         self.finished_at = datetime.utcnow()
         if message:
             self.message = message

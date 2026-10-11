@@ -9,6 +9,7 @@ export default function ResultsCard({
   busy,
   jobs,
   clearJobs,
+  retryJob,
   latestMidi,
   latestStems,
   latestCsv,
@@ -32,7 +33,7 @@ export default function ResultsCard({
           </PrimaryButton>
         }
       >
-        <ResultsPanel jobs={jobs} />
+        <ResultsPanel jobs={jobs} onRetry={retryJob} />
       </ThemedCard>
 
       {(latestMidi || latestStems || latestCsv) && (

@@ -8,12 +8,13 @@ import JobCard from "./JobCard";
 export default function ResultsPanel({
   jobs = [],
   onUseArtifact,   // optional: passed down to JobCard
+  onRetry,         // optional: (job) => void, shows "Try again" on failed jobs
   className = "",
   emptyState = "No jobs yet. Kick off a task to see results here.",
 }) {
   if (!jobs.length) {
     return (
-      <div className={`rounded-xl border bg-white p-6 text-center text-sm text-gray-500 ${className}`}>
+      <div className={`rounded-xl border border-white/10 bg-white/[0.03] p-6 text-center text-sm text-gray-400 ${className}`}>
         {emptyState}
       </div>
     );
@@ -22,7 +23,7 @@ export default function ResultsPanel({
   return (
     <div className={`grid gap-3 ${className}`}>
       {jobs.map((j) => (
-        <JobCard key={j.id} job={j} onUseArtifact={onUseArtifact} />
+        <JobCard key={j.id} job={j} onUseArtifact={onUseArtifact} onRetry={onRetry} />
       ))}
     </div>
   );

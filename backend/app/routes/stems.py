@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from ..models.job import Job, JobType
 from ..utils.storage import job_store, save_artifact
 from app.core.separator import separate_stems as run_separation
+from app.core.progress import estimate_seconds, report, reporting, run_with_context
 
 try:
     from app.utils.storage import job_store, save_artifact  # type: ignore
@@ -45,21 +46,22 @@ async def separate_stems(req: StemSeparationRequest, bg: BackgroundTasks) -> Job
             if not audio_path.exists():
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
             
-            j.progress = 20
-            j.message = f"Loading audio and initializing {req.model} model…"
-            await asyncio.sleep(0.1)
-            
-            j.progress = 40
-            j.message = "Separating stems…"
-            
+            try:
+                import librosa
+
+                j.eta_s = estimate_seconds("stems", float(librosa.get_duration(path=str(audio_path))))
+            except Exception:
+                pass
+            report(f"Separating into stems with {req.model}…")
+
             # Run separation in executor to avoid blocking
             loop = asyncio.get_event_loop()
             stems_dict = await loop.run_in_executor(
-                None, run_separation, str(audio_path), None, req.model
+                None, run_with_context(run_separation, str(audio_path), None, req.model)
             )
-            
-            j.progress = 80
-            j.message = "Saving stem files…"
+
+            report("Saving the stem files…")
+            j.progress = 90
             
             # Copy stems to artifacts
             artifacts: Dict[str, str] = {}
@@ -75,9 +77,13 @@ async def separate_stems(req: StemSeparationRequest, bg: BackgroundTasks) -> Job
                 message="Stem separation complete",
             )
         except Exception as e:  # pragma: no cover
-            j.mark_failed(str(e), "Stem separation failed")
+            j.mark_failed(str(e), f"Failed while: {j.stage or 'starting'}")
 
-    bg.add_task(_worker, job)
+    async def _run(j: Job) -> None:
+        with reporting(j):
+            await _worker(j)
+
+    bg.add_task(_run, job)
     return job
 
 
