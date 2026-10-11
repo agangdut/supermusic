@@ -29,6 +29,12 @@ export const jobLabel = (j) => {
 };
 
 
+// MIDI files as URLs, plus the melody score when the job measured one
+const midiResult = (result) => ({
+  ...normalizeJobArtifacts({ result }).result.artifacts,
+  melody: result?.metrics?.melody,
+});
+
 export default function useUploadJobs() {
   const [audioFile, setAudioFile] = useState(null);
   const [csvFile, setCsvFile] = useState(null);
@@ -80,7 +86,7 @@ export default function useUploadJobs() {
     const artifacts = data.result?.artifacts;
     if (data.status === "done" && artifacts) {
       if (j.job_type === "midi_conversion" && artifacts.midi) {
-        setLatestMidi(normalizeJobArtifacts({ result: { artifacts } }).result.artifacts);
+        setLatestMidi(midiResult(data.result));
       } else if (j.job_type === "stem_separation") {
         setLatestStems(normalizeJobArtifacts({ result: { artifacts } }).result.artifacts);
         setLatestStemsJobId(j.id);
@@ -256,7 +262,7 @@ export default function useUploadJobs() {
         "Transcription failed ❌",
         (result) => {
           if (result?.artifacts?.midi) {
-            setLatestMidi(normalizeJobArtifacts({ result }).result.artifacts);
+            setLatestMidi(midiResult(result));
           }
         }
       );
@@ -284,7 +290,7 @@ export default function useUploadJobs() {
       "Transcription failed ❌",
       (result) => {
         if (result?.artifacts?.midi) {
-          setLatestMidi(normalizeJobArtifacts({ result }).result.artifacts);
+          setLatestMidi(midiResult(result));
         }
       }
     );

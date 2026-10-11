@@ -181,7 +181,10 @@ def transcribe_stems(
     out_dir.mkdir(parents=True, exist_ok=True)
     midi_path = out_dir / f"{audio_path.stem}.mid"
     merged.write(str(midi_path))
-    return midi_path, {"stem_shares": shares, "tracks": tracks}
+    info = {"stem_shares": shares, "tracks": tracks}
+    if "vocals" in tracks:
+        info["vocal_stem"] = str(stems["vocals"])  # lets the caller score the melody
+    return midi_path, info
 
 
 # ---------------------------------------------------------------------------

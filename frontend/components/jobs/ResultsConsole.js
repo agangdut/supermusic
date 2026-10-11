@@ -45,6 +45,7 @@ export default function ResultsConsole({ latestMidi, latestStems, latestCsv, onS
         {tab === "midi" && (midi?.midi ? (
           <div className="space-y-4">
             <MidiPlayer url={midi.midi} title={fileName(midi.midi)} />
+            {midi.melody && !midi.melody.error && <MelodyScore m={midi.melody} />}
             {midi.preview && (
               <div>
                 <div className="mb-1 text-[11px] uppercase tracking-wider text-gray-500">Rendered piano preview</div>
@@ -78,4 +79,22 @@ export default function ResultsConsole({ latestMidi, latestStems, latestCsv, onS
 
 function Empty({ what }) {
   return <div className="py-8 text-center text-sm text-gray-400">No {what} results yet.</div>;
+}
+
+// How closely the MIDI melody follows the singer's own pitch
+function MelodyScore({ m }) {
+  const tone = m.melody_match >= 60 ? "text-emerald-300" : m.melody_match >= 35 ? "text-amber-300" : "text-rose-300";
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+      <div className="flex items-baseline gap-2">
+        <span className={`text-2xl font-bold tabular-nums ${tone}`}>{Math.round(m.melody_match)}%</span>
+        <span className="text-sm text-gray-300">melody match</span>
+      </div>
+      <div className="mt-1 text-[11px] text-gray-500">
+        Of the {Math.round(m.sung_seconds)} s the singer is singing, the MIDI plays the same note {Math.round(m.melody_match)}% of the time
+        ({Math.round(m.octave_ok)}% if a wrong octave is forgiven). It plays something {Math.round(m.coverage)}% of the time,
+        and {Math.round(m.extra)}% of its melody notes land where nobody is singing.
+      </div>
+    </div>
+  );
 }

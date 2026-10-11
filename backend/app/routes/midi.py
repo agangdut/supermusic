@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, model_validator
 from ..models.job import Job, JobStatus, JobType
 from ..utils.storage import job_store, save_artifact
 from app.core.humanize import render_audio
+from app.core.melody_match import melody_match
 from app.core.piano_cover import piano_cover
 from app.core.piano_transcription import transcribe_piano
 from app.core.smart_transcription import transcribe_auto, transcribe_stems
@@ -17,7 +18,7 @@ from app.core.playability import DEFAULT_SPAN, make_playable, playability_report
 from app.core.transcription import transcribe_to_midi
 from app.core.yourmt3_client import transcribe_multi
 from app.core.progress import estimate_seconds, report, reporting, run_with_context
-from app.core.vocals import lead_vocal_track, transcribe_vocal_aware
+from app.core.vocals import lead_vocal_track, split_vocals, transcribe_vocal_aware
 
 try:
     from app.utils.storage import job_store, save_artifact  # type: ignore
@@ -174,6 +175,15 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                 artifacts["midi_original"] = save_artifact(j, f"{audio_path.stem}.mid", midi_path.read_bytes())
                 midi_path = playable_path
 
+            # How closely the melody follows the singer, when we have the voice on its own
+            vocal_stem = info.pop("vocal_stem", None)
+            if vocal_stem and Path(vocal_stem).exists():
+                report("Checking the melody against the singer…")
+                try:
+                    info["melody"] = await loop.run_in_executor(None, melody_match, midi_path, vocal_stem)
+                except Exception as e:  # a score is a bonus; never fail the job over it
+                    info["melody"] = {"error": str(e)}
+
             # A listenable piano rendering, when FluidSynth is installed
             report("Rendering a piano preview…")
             preview = await loop.run_in_executor(None, render_audio, midi_path)
@@ -206,6 +216,32 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
 
     bg.add_task(_run, job)
     return job
+
+
+class MelodyMatchRequest(BaseModel):
+    midi_path: str = Field(..., description="MIDI file to score.")
+    vocals_path: Optional[str] = Field(None, description="Isolated vocal stem (wav).")
+    audio_path: Optional[str] = Field(None, description="Full song; the voice is separated first (slower).")
+
+
+@router.post("/melody-match")
+async def score_melody(req: MelodyMatchRequest) -> Dict[str, Any]:
+    """How closely the MIDI's melody follows the singer (melody_match = % of sung time on the right note)."""
+    midi = Path(req.midi_path)
+    if not midi.exists():
+        raise HTTPException(status_code=404, detail=f"MIDI file not found: {midi}")
+    vocals = Path(req.vocals_path) if req.vocals_path else None
+    loop = asyncio.get_event_loop()
+    if vocals is None:
+        if not req.audio_path or not Path(req.audio_path).exists():
+            raise HTTPException(status_code=400, detail="Give vocals_path or an existing audio_path")
+        vocals = (await loop.run_in_executor(None, split_vocals, req.audio_path))[0]
+    if not vocals.exists():
+        raise HTTPException(status_code=404, detail=f"Vocal stem not found: {vocals}")
+    try:
+        return await loop.run_in_executor(None, melody_match, midi, vocals)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 class PlayabilityRequest(BaseModel):

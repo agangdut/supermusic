@@ -145,6 +145,7 @@ def transcribe_vocal_aware(audio_path: str | Path, engine: Callable[[Path], Path
     inst.notes = melody
     accomp.instruments.insert(0, inst)
     info["vocal_notes"] = len(melody)
+    info["vocal_stem"] = str(vocals)  # lets the caller score the melody
     info["sung_ratio"] = round(sung_ratio(vocals), 3)
 
     out = (out_dir or settings.PROCESSED_DIR / "midi") / uuid.uuid4().hex
