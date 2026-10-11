@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import uuid
 from pathlib import Path
 
 import torch
@@ -74,29 +75,96 @@ class Req(BaseModel):
     out_dir: str
 
 
+# Speed/quality trade-off. Off (default): 5-second sections are transcribed one after
+# another, each told which notes are still held from the last one. On: 4 sections at a
+# time on the GPU, roughly 3x faster, with slightly worse joins between sections.
+FAST = os.getenv("MUSCRIPTOR_FAST", "0") == "1"
+
+_jobs: dict = {}
+_gpu = threading.Lock()  # one song at a time on the GPU; others wait their turn
+
+
 @app.get("/health")
 def health():
-    return {"loaded": _model is not None, "token": bool(os.getenv("HF_TOKEN")), "device": DEVICE, "model": SIZE}
+    return {"loaded": _model is not None, "token": bool(os.getenv("HF_TOKEN")), "device": DEVICE,
+            "model": SIZE, "fast": FAST}
+
+
+def _run(job_id: str, audio: Path, out: Path) -> dict:
+    from muscriptor.events import ProgressEvent
+
+    job = _jobs.setdefault(job_id, {"status": "waiting", "completed": 0, "total": None})
+    t = time.time()
+    job["status"] = "loading"
+    try:
+        m = model()
+    except Exception as e:  # most often: licence not accepted or HF_TOKEN missing
+        job.update(status="error", error=f"MuScriptor couldn't load its model: {e}")
+        raise HTTPException(503, job["error"])
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"{audio.stem}.mid"
+    try:
+        job["status"] = "waiting"
+        with tempfile.TemporaryDirectory() as tmp, _gpu:
+            job.update(status="running", started=time.time())
+            # The model reads WAV/MP3/FLAC itself, but not M4A and the like: give it a plain WAV
+            wav = Path(tmp) / "audio.wav"
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(audio), "-ac", "1", "-ar", "16000",
+                            str(wav)], check=True)
+            kwargs = {"prelude_forcing": False, "batch_size": 4} if FAST else {}
+            events = []
+            for ev in m.transcribe(str(wav), **kwargs):
+                if isinstance(ev, ProgressEvent):
+                    job.update(completed=ev.completed, total=ev.total)
+                    if ev.completed == 0:
+                        job["gen_started"] = time.time()
+                    else:
+                        # sections differ (busy ones take longer), so this is an average
+                        per = (time.time() - job["gen_started"]) / ev.completed
+                        job["remaining_s"] = round(per * (ev.total - ev.completed), 1)
+                else:
+                    events.append(ev)
+        notes = write_midi(events, path)
+    except Exception as e:
+        job.update(status="error", error=str(e))
+        raise
+    result = {"midi_path": str(path), "notes": notes, "seconds": round(time.time() - t, 1),
+              "device": DEVICE, "model": SIZE, "fast": FAST}
+    job.update(status="done", remaining_s=0, **result)
+    return result
 
 
 @app.post("/transcribe")
 def transcribe(req: Req):
+    """Blocking: returns when the MIDI is written."""
     audio = Path(req.audio_path)
     if not audio.exists():
         raise HTTPException(404, f"Audio not found: {audio}")
-    t = time.time()
-    try:
-        m = model()
-    except Exception as e:  # most often: licence not accepted or HF_TOKEN missing
-        raise HTTPException(503, f"MuScriptor couldn't load its model: {e}")
-    out = Path(req.out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    path = out / f"{audio.stem}.mid"
-    with tempfile.TemporaryDirectory() as tmp, _lock:  # one song at a time on the GPU
-        # The model reads WAV/MP3/FLAC itself, but not M4A and the like: give it a plain WAV
-        wav = Path(tmp) / "audio.wav"
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(audio), "-ac", "1", "-ar", "16000", str(wav)],
-                       check=True)
-        events = list(m.transcribe(str(wav)))
-    notes = write_midi(events, path)
-    return {"midi_path": str(path), "notes": notes, "seconds": round(time.time() - t, 1), "device": DEVICE, "model": SIZE}
+    return _run(uuid.uuid4().hex, audio, Path(req.out_dir))
+
+
+@app.post("/jobs")
+def start_job(req: Req):
+    """Start in the background; poll GET /jobs/{id} for progress (sections done of total)."""
+    audio = Path(req.audio_path)
+    if not audio.exists():
+        raise HTTPException(404, f"Audio not found: {audio}")
+    job_id = uuid.uuid4().hex
+    _jobs[job_id] = {"status": "waiting", "completed": 0, "total": None, "device": DEVICE}
+
+    def work():
+        try:
+            _run(job_id, audio, Path(req.out_dir))
+        except Exception:
+            pass  # the error is on the job
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"id": job_id}
+
+
+@app.get("/jobs/{job_id}")
+def job_status(job_id: str):
+    job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "No such job (the service may have restarted)")
+    return {k: v for k, v in job.items() if k != "gen_started"}
