@@ -119,3 +119,37 @@ def test_transcribe_stems_rejects_a_stem_that_was_not_separated(tmp_path):
 
     with pytest.raises(ValueError, match="piano"):
         transcribe_stems(tmp_path / "song.wav", only=["piano"], stems=_fake_stems(tmp_path, ["vocals", "other"]))
+
+
+def test_muscriptor_stems_merges_and_drops_leakage(tmp_path, monkeypatch):
+    import pretty_midi
+
+    import app.core.smart_transcription as st
+
+    stems = {n: str(tmp_path / f"{n}.wav") for n in ("vocals", "drums", "bass", "other")}
+    monkeypatch.setattr(st, "separate_stems", lambda *a, **k: stems)
+    monkeypatch.setattr(st, "stem_shares", lambda s: {"vocals": 0.3, "drums": 0.3, "bass": 0.2, "other": 0.2})
+    asked = {}
+
+    def fake(audio, instruments=None, **kw):
+        name = Path(audio).stem
+        asked[name] = instruments
+        pm = pretty_midi.PrettyMIDI()
+        for label, drum in {"vocals": [("Voice", False)], "drums": [("Drums", True)],
+                            "bass": [("Electric bass", False)],
+                            "other": [("Acoustic piano", False), ("Voice", False), ("Drums", True)]}[name]:
+            inst = pretty_midi.Instrument(program=0, is_drum=drum, name=label)
+            inst.notes.append(pretty_midi.Note(90, 60, 0.0, 0.5))
+            pm.instruments.append(inst)
+        out = tmp_path / f"{name}.mid"
+        pm.write(str(out))
+        return out
+
+    import app.core.muscriptor_client as mc
+    import app.core.humanize as hz
+    monkeypatch.setattr(mc, "transcribe_muscriptor", fake)
+    monkeypatch.setattr(hz, "humanize", lambda midi, audio=None: midi)
+    midi, info = st.transcribe_muscriptor_stems(tmp_path / "song.wav", out_dir=tmp_path)
+    names = sorted((i.name, len(i.notes)) for i in pretty_midi.PrettyMIDI(str(midi)).instruments)
+    assert names == [("Acoustic piano", 1), ("Drums", 1), ("Electric bass", 1), ("Voice", 1)]
+    assert asked["bass"][0] == "acoustic_bass" and asked["vocals"] == ["voice"] and asked["other"] is None

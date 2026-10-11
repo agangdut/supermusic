@@ -48,13 +48,19 @@ def _fmt(seconds: float) -> str:
     return f"{m} min {s:02d} s" if m else f"{s} s"
 
 
-def transcribe_muscriptor(audio_path: str | Path, out_dir: Path | None = None) -> Path:
-    """Run MuScriptor and show live progress: it works through the song in 5-second sections."""
+def transcribe_muscriptor(audio_path: str | Path, out_dir: Path | None = None, instruments: list | None = None,
+                          fast: bool | None = None, beam_size: int = 1, dynamics: bool = True,
+                          label: str = "MuScriptor") -> Path:
+    """Run MuScriptor and show live progress: it works through the song in 5-second sections.
+
+    `instruments` limits which instruments it may write (names like "electric_bass", "voice");
+    `fast` batches sections for speed; `dynamics` shapes note loudness to follow the audio."""
     from app.core.progress import report_detail
 
     audio_path = Path(audio_path)
     out_dir = (out_dir or (settings.PROCESSED_DIR / "midi")) / uuid.uuid4().hex
-    job = _call("POST", "/jobs", {"audio_path": str(audio_path.resolve()), "out_dir": str(out_dir)})
+    job = _call("POST", "/jobs", {"audio_path": str(audio_path.resolve()), "out_dir": str(out_dir),
+                                  "instruments": instruments, "fast": fast, "beam_size": beam_size})
     deadline = time.time() + 3 * 3600
     while time.time() < deadline:
         st = _call("GET", f"/jobs/{job['id']}")
@@ -66,12 +72,12 @@ def transcribe_muscriptor(audio_path: str | Path, out_dir: Path | None = None) -
         if not st.get("total"):
             doing = {"loading": "loading the model (the very first run also downloads it)",
                      "waiting": "waiting for another song to finish"}.get(st["status"], "getting the audio ready")
-            report_detail(f"MuScriptor: {doing}{cpu}…")
+            report_detail(f"{label}: {doing}{cpu}…")
         else:
             done, total = st["completed"], st["total"]
             left = st.get("remaining_s")
             eta = f", about {_fmt(left)} left" if left and done else ""
-            report_detail(f"MuScriptor{cpu}: section {done} of {total} ({round(100 * done / total)}%){eta}",
+            report_detail(f"{label}{cpu}: section {done} of {total} ({round(100 * done / total)}%){eta}",
                           fraction=done / total, remaining_s=left if done else None)
         time.sleep(2)
     else:
@@ -82,8 +88,9 @@ def transcribe_muscriptor(audio_path: str | Path, out_dir: Path | None = None) -
         shutil.move(str(midi), final)
     # MuScriptor writes every note equally loud; follow the song's loudness instead
     # (quiet verses, loud choruses, melody over accompaniment) and pedal the piano parts
-    from app.core.humanize import humanize
+    if dynamics:
+        from app.core.humanize import humanize
 
-    report_detail("Shaping the dynamics to follow the song…")
-    humanize(final, audio_path)
+        report_detail("Shaping the dynamics to follow the song…")
+        humanize(final, audio_path)
     return final

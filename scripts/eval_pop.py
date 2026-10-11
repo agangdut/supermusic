@@ -4,6 +4,8 @@ built by scripts/build_pop_benchmark.py.
 
     docker compose exec backend python scripts/eval_pop.py --split dev
     docker compose exec backend python scripts/eval_pop.py --methods multi muscriptor --limit 20
+    docker compose exec backend python scripts/eval_pop.py --limit 40 --tag experiments \
+        --methods muscriptor muscriptor_fast muscriptor_beam muscriptor_stems
 
 Scores (a note counts if it starts within 50 ms of a real one):
   pitched F1   every non-drum note, right pitch; which instrument played it isn't checked
@@ -33,10 +35,18 @@ TOL = 0.05
 
 
 def transcribe(method: str, audio: Path) -> Path:
-    if method == "muscriptor":
-        from app.core.muscriptor_client import transcribe_muscriptor
+    from app.core.muscriptor_client import transcribe_muscriptor
 
-        return transcribe_muscriptor(audio)
+    if method == "muscriptor":
+        return transcribe_muscriptor(audio, dynamics=False)
+    if method == "muscriptor_fast":  # 4 sections at a time
+        return transcribe_muscriptor(audio, fast=True, dynamics=False)
+    if method == "muscriptor_beam":  # searches 3 alternatives per step
+        return transcribe_muscriptor(audio, beam_size=3, dynamics=False)
+    if method == "muscriptor_stems":  # Demucs first, MuScriptor per stem
+        from app.core.smart_transcription import transcribe_muscriptor_stems
+
+        return transcribe_muscriptor_stems(audio)[0]
     return _transcribe(method, audio)
 
 
@@ -88,6 +98,7 @@ def main() -> None:
     ap.add_argument("--root", default=str(ROOT / "data/raw/multtipop"))
     ap.add_argument("--methods", nargs="+", default=["general", "multi", "muscriptor", "stems"])
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--tag", default="", help="added to the result file names, so experiments don't overwrite each other")
     ap.add_argument("--out", default=str(ROOT / "data/processed/eval"))
     args = ap.parse_args()
 
@@ -116,7 +127,7 @@ def main() -> None:
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    with (out / f"pop_{args.split}_results.csv").open("w", newline="") as f:
+    with (out / f"pop_{args.split}{'_' + args.tag if args.tag else ''}_results.csv").open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)
@@ -133,7 +144,7 @@ def main() -> None:
         of = f1(s["tp_pitched"] + s["tp_drums"], s["ref_pitched"] + s["ref_drums"], s["est_pitched"] + s["est_drums"])[2]
         lines.append(f"| {m} | {pp:.3f} | {pr:.3f} | {pf:.3f} | {df:.3f} | {of:.3f} | "
                      f"{sum(bool(r['error']) for r in rs)} | {np.mean([r['secs'] for r in rs]):.1f}s |")
-    (out / f"pop_{args.split}_summary.md").write_text("\n".join(lines) + "\n")
+    (out / f"pop_{args.split}{'_' + args.tag if args.tag else ''}_summary.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 
 

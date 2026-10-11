@@ -188,6 +188,63 @@ def transcribe_stems(
 
 
 # ---------------------------------------------------------------------------
+# MuScriptor on separated stems (experiment, see scripts/eval_pop.py)
+# ---------------------------------------------------------------------------
+
+# Which instruments MuScriptor may write for each Demucs stem. Telling it that the
+# bass stem can only hold a bass stops it inventing guitars or pianos from leakage.
+MUSCRIPTOR_STEM_INSTRUMENTS = {
+    "vocals": ["voice"],
+    "drums": ["drums"],
+    "bass": ["acoustic_bass", "electric_bass", "contrabass", "synth_lead"],
+    "other": None,  # everything else: let it decide
+}
+MUSCRIPTOR_STEM_QUIET = 0.02  # stems with less of the energy than this are skipped
+
+
+def transcribe_muscriptor_stems(audio_path: str | Path, out_dir: Optional[Path] = None) -> Tuple[Path, Dict]:
+    """Split with Demucs (4 stems), run MuScriptor on each stem, merge the tracks."""
+    import pretty_midi
+
+    from app.core.humanize import humanize
+    from app.core.muscriptor_client import transcribe_muscriptor
+    from app.core.progress import report
+
+    audio_path = Path(audio_path)
+    report("Splitting the song into vocals, drums, bass and the rest…")
+    stems = separate_stems(audio_path, _work_dir("stems4"), model="htdemucs")
+    shares = stem_shares(stems)
+    merged = pretty_midi.PrettyMIDI()
+    tracks: Dict[str, "pretty_midi.Instrument"] = {}
+    for name, allowed in MUSCRIPTOR_STEM_INSTRUMENTS.items():
+        if name not in stems or shares.get(name, 0) < MUSCRIPTOR_STEM_QUIET:
+            continue
+        report(f"Transcribing the {name} with MuScriptor…")
+        part = pretty_midi.PrettyMIDI(str(transcribe_muscriptor(stems[name], instruments=allowed, dynamics=False,
+                                                                 label=f"MuScriptor ({name})")))
+        for inst in part.instruments:
+            # voice, drums and bass heard in the "other" stem are leakage from their own stems
+            if name == "other" and (inst.is_drum or any(w in inst.name.lower() for w in ("voice", "bass"))):
+                continue
+            key = (inst.name, inst.is_drum)
+            if key not in tracks:
+                tracks[key] = pretty_midi.Instrument(program=inst.program, is_drum=inst.is_drum, name=inst.name)
+            tracks[key].notes += inst.notes
+    merged.instruments = [t for t in tracks.values() if t.notes]
+    for t in merged.instruments:
+        t.notes.sort(key=lambda n: (n.start, n.pitch))
+    out = (out_dir or settings.PROCESSED_DIR / "midi") / uuid.uuid4().hex
+    out.mkdir(parents=True, exist_ok=True)
+    midi_path = out / f"{audio_path.stem}.mid"
+    merged.write(str(midi_path))
+    humanize(midi_path, audio_path)
+    info = {"stem_shares": shares}
+    if "vocals" in stems:
+        info["vocal_stem"] = str(stems["vocals"])
+    return midi_path, info
+
+
+# ---------------------------------------------------------------------------
 # Auto mode
 # ---------------------------------------------------------------------------
 

@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from typing import List, Optional
 
 import torch
 from fastapi import FastAPI, HTTPException
@@ -73,6 +74,9 @@ def write_midi(events, path: Path) -> int:
 class Req(BaseModel):
     audio_path: str
     out_dir: str
+    fast: Optional[bool] = None                 # None = the MUSCRIPTOR_FAST setting
+    instruments: Optional[List[str]] = None     # only these instruments may appear (e.g. ["electric_bass"])
+    beam_size: int = 1                          # >1 searches more alternatives: slower, maybe more accurate
 
 
 # Speed/quality trade-off. Off (default): 5-second sections are transcribed one after
@@ -90,7 +94,7 @@ def health():
             "model": SIZE, "fast": FAST}
 
 
-def _run(job_id: str, audio: Path, out: Path) -> dict:
+def _run(job_id: str, audio: Path, out: Path, req: Req) -> dict:
     from muscriptor.events import ProgressEvent
 
     job = _jobs.setdefault(job_id, {"status": "waiting", "completed": 0, "total": None})
@@ -111,7 +115,12 @@ def _run(job_id: str, audio: Path, out: Path) -> dict:
             wav = Path(tmp) / "audio.wav"
             subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(audio), "-ac", "1", "-ar", "16000",
                             str(wav)], check=True)
-            kwargs = {"prelude_forcing": False, "batch_size": 4} if FAST else {}
+            fast = FAST if req.fast is None else req.fast
+            kwargs = {"prelude_forcing": False, "batch_size": 4} if fast else {}
+            if req.instruments:
+                kwargs["instruments"] = req.instruments
+            if req.beam_size > 1:
+                kwargs["beam_size"] = req.beam_size
             events = []
             for ev in m.transcribe(str(wav), **kwargs):
                 if isinstance(ev, ProgressEvent):
@@ -129,7 +138,7 @@ def _run(job_id: str, audio: Path, out: Path) -> dict:
         job.update(status="error", error=str(e))
         raise
     result = {"midi_path": str(path), "notes": notes, "seconds": round(time.time() - t, 1),
-              "device": DEVICE, "model": SIZE, "fast": FAST}
+              "device": DEVICE, "model": SIZE, "fast": fast}
     job.update(status="done", remaining_s=0, **result)
     return result
 
@@ -140,7 +149,7 @@ def transcribe(req: Req):
     audio = Path(req.audio_path)
     if not audio.exists():
         raise HTTPException(404, f"Audio not found: {audio}")
-    return _run(uuid.uuid4().hex, audio, Path(req.out_dir))
+    return _run(uuid.uuid4().hex, audio, Path(req.out_dir), req)
 
 
 @app.post("/jobs")
@@ -154,7 +163,7 @@ def start_job(req: Req):
 
     def work():
         try:
-            _run(job_id, audio, Path(req.out_dir))
+            _run(job_id, audio, Path(req.out_dir), req)
         except Exception:
             pass  # the error is on the job
 
