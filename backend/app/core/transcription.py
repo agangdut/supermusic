@@ -43,6 +43,7 @@ def transcribe_to_midi(audio_path: str | Path, out_dir: Path | None = None) -> P
         "--onset-threshold", str(settings.BASIC_PITCH_ONSET),
         "--frame-threshold", str(settings.BASIC_PITCH_FRAME),
         "--minimum-note-length", str(settings.BASIC_PITCH_MIN_NOTE_MS),
+        *([] if settings.BASIC_PITCH_MELODIA else ["--no-melodia"]),
         str(out_dir), str(audio_path),
     ]
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)

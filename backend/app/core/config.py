@@ -34,6 +34,9 @@ class Settings:
     BASIC_PITCH_ONSET: float = float(os.getenv("SM_BASIC_PITCH_ONSET", "0.6"))
     BASIC_PITCH_FRAME: float = float(os.getenv("SM_BASIC_PITCH_FRAME", "0.3"))
     BASIC_PITCH_MIN_NOTE_MS: float = float(os.getenv("SM_BASIC_PITCH_MIN_NOTE_MS", "58"))
+    # The "melodia trick" adds notes where a pitch rings on with no new press heard; on piano
+    # covers they were mostly wrong (note F1 0.735 → 0.799 and 0.783 → 0.883 without it)
+    BASIC_PITCH_MELODIA: bool = os.getenv("SM_BASIC_PITCH_MELODIA", "0") == "1"
 
     # Visualization
     FIG_DPI: int = int(os.getenv("SM_FIG_DPI", "140"))

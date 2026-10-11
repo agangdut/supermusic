@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from app.core.note_cleanup import separate_notes
+
 FINGERS = 5
 DEFAULT_SPAN = 14        # semitones: a major ninth, comfortable for most adult hands
 CHORD_WINDOW = 0.035     # onsets this close together count as one chord
@@ -243,6 +245,7 @@ def make_playable(
         inst = pretty_midi.Instrument(program=0, name=name)
         inst.notes = [pretty_midi.Note(n.velocity, n.pitch, n.start, n.end) for n in result if n.hand == h]
         inst.notes.sort(key=lambda n: (n.start, n.pitch))
+        separate_notes(inst.notes)
         # Pedal goes on both tracks: MIDI pedal only affects its own channel
         inst.control_changes = [pretty_midi.ControlChange(cc.number, cc.value, cc.time) for cc in pedal]
         out.instruments.append(inst)

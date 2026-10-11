@@ -121,13 +121,15 @@ export default function MidiPlayer({ url, title }) {
           if (n.time + n.duration < t0 || n.time > t0 + windowSecs) continue;
           const pitch = t.instrument.percussion ? lo + ((n.midi - 35) % (hi - lo)) : n.midi;
           const active = pos >= n.time && pos < n.time + n.duration;
-          g.fillRect(x(n.time), h - (pitch - lo + 1) * rowH, Math.max(2, (n.duration / windowSecs) * w), Math.max(2, rowH - 1));
+          // 1px shorter so a key pressed again right away shows as two notes, not one long bar
+          const nw = Math.max(2, (n.duration / windowSecs) * w - 1);
+          g.fillRect(x(n.time), h - (pitch - lo + 1) * rowH, nw, Math.max(2, rowH - 1));
           if (active && on) {
             g.save();
             g.globalAlpha = 1;
             g.shadowColor = g.fillStyle;
             g.shadowBlur = 12;
-            g.fillRect(x(n.time), h - (pitch - lo + 1) * rowH, Math.max(2, (n.duration / windowSecs) * w), Math.max(2, rowH - 1));
+            g.fillRect(x(n.time), h - (pitch - lo + 1) * rowH, nw, Math.max(2, rowH - 1));
             g.restore();
           }
         }

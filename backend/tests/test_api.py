@@ -73,6 +73,7 @@ def test_midi_convert_needs_audio_or_stem_job():
 
 
 def test_midi_convert_reuses_a_finished_stem_job(tmp_path, monkeypatch):
+    import pretty_midi
     import app.routes.midi as midi_routes
     from app.models.job import Job, JobType
     from app.utils.storage import job_store
@@ -89,7 +90,7 @@ def test_midi_convert_reuses_a_finished_stem_job(tmp_path, monkeypatch):
     def fake_stems(audio_path, only=None, stems=None):
         seen.update(audio=str(audio_path), only=only, stems=stems)
         out = tmp_path / "out.mid"
-        out.write_bytes(b"MThd")
+        pretty_midi.PrettyMIDI().write(str(out))
         return out, {"tracks": {"vocals": 1}}
 
     monkeypatch.setattr(midi_routes, "transcribe_stems", fake_stems)

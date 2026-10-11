@@ -11,6 +11,7 @@ from ..models.job import Job, JobStatus, JobType
 from ..utils.storage import job_store, save_artifact
 from app.core.humanize import render_audio
 from app.core.melody_match import melody_match
+from app.core.note_cleanup import separate_repeats
 from app.core.piano_cover import piano_cover
 from app.core.piano_transcription import transcribe_piano
 from app.core.smart_transcription import transcribe_auto, transcribe_stems
@@ -161,6 +162,8 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
             # Run transcription in executor to avoid blocking
             loop = asyncio.get_event_loop()
             midi_path, info = await loop.run_in_executor(None, run_with_context(run))
+            # Back-to-back presses of one key would otherwise read as one long note
+            await loop.run_in_executor(None, separate_repeats, midi_path)
 
             report("Saving the MIDI file…")
             j.progress = 90
