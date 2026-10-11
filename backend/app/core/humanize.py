@@ -101,7 +101,8 @@ def humanize(midi_path: str | Path, audio_path: str | Path | None = None,
                 else:
                     v = base - 10            # inner voices sit back
                 n.velocity = int(max(20, min(115, v + rng.uniform(-4, 4))))
-        if not any(cc.number == 64 for cc in inst.control_changes):
+        # Pedal only for pianos (GM programs 0-7): on a bass or guitar it would smear every note
+        if inst.program < 8 and not any(cc.number == 64 for cc in inst.control_changes):
             inst.control_changes += _pedal(inst.notes)
     pm.write(str(out_path))
     return out_path

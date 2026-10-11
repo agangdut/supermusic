@@ -80,4 +80,10 @@ def transcribe_muscriptor(audio_path: str | Path, out_dir: Path | None = None) -
     final = out_dir / f"{audio_path.stem}.mid"
     if midi != final:
         shutil.move(str(midi), final)
+    # MuScriptor writes every note equally loud; follow the song's loudness instead
+    # (quiet verses, loud choruses, melody over accompaniment) and pedal the piano parts
+    from app.core.humanize import humanize
+
+    report_detail("Shaping the dynamics to follow the song…")
+    humanize(final, audio_path)
     return final

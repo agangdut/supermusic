@@ -47,3 +47,13 @@ def test_render_audio(tmp_path):
         assert mp3 is None
     else:
         assert mp3.exists() and mp3.stat().st_size > 10_000
+
+
+def test_no_pedal_on_bass_or_guitar(tmp_path):
+    src = _flat_part(tmp_path / "flat.mid")
+    pm = pretty_midi.PrettyMIDI(str(src))
+    pm.instruments[0].program = 33  # electric bass
+    pm.write(str(src))
+    inst = pretty_midi.PrettyMIDI(str(humanize(src))).instruments[0]
+    assert not [cc for cc in inst.control_changes if cc.number == 64]
+    assert len({n.velocity for n in inst.notes}) > 1
