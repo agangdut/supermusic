@@ -9,6 +9,8 @@ built by scripts/build_pop_benchmark.py.
     docker compose exec backend python scripts/eval_pop.py --limit 40 --tag vocals \
         --methods muscriptor_vocal muscriptor_game
 
+If a run stops part way, run the same command again: finished clips are skipped.
+
 Scores (a note counts if it starts within 50 ms of a real one):
   pitched F1   every non-drum note, right pitch; which instrument played it isn't checked
   drums F1     drum hits, grouped into kick / snare / hi-hat / tom / cymbal
@@ -125,10 +127,37 @@ def main() -> None:
     if args.limit:
         index = index[: args.limit]
 
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    name = f"pop_{args.split}{'_' + args.tag if args.tag else ''}"
+    csv_path = out / f"{name}_results.csv"
+    # Each result is saved as soon as it's scored, so a crashed or stopped run picks up where it left off.
+    # Delete the CSV (or use a new --tag) to start over.
     rows = []
+    if csv_path.exists():
+        with csv_path.open(newline="") as f:
+            rows = [{k: (v if k in ("id", "song", "method", "error") else float(v or 0)) for k, v in r.items()}
+                    for r in csv.DictReader(f)]
+        rows = [r for r in rows if not r["error"]]  # failed clips get another go
+        if rows:
+            print(f"Resuming: {len(rows)} results already in {csv_path.name}", flush=True)
+    done = {(r["id"], r["method"]) for r in rows}
+    fields = ["id", "song", "method", "ref_pitched", "est_pitched", "tp_pitched", "ref_drums", "est_drums", "tp_drums",
+              "ref_vocal", "est_vocal", "tp_vocal", "pitched_f1", "secs", "error"]
+
+    def save():
+        tmp = csv_path.with_suffix(".tmp")
+        with tmp.open("w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore", restval=0)
+            w.writeheader()
+            w.writerows(rows)
+        tmp.replace(csv_path)
+
     for i, clip in enumerate(index, 1):
         ref_p, ref_d, ref_v = load(ROOT / clip["midi"], clip["midi_offset"], clip["seconds"])
         for method in args.methods:
+            if (clip["id"], method) in done:
+                continue
             t = time.time()
             err = ""
             try:
@@ -146,13 +175,10 @@ def main() -> None:
                          "secs": round(time.time() - t, 1), "error": err})
             print(f"[{i}/{len(index)}] {method:10s} pitched F1 {rows[-1]['pitched_f1']:.3f} "
                   f"({rows[-1]['secs']}s) {rows[-1]['song'][:50]} {err}", flush=True)
+            save()
 
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-    with (out / f"pop_{args.split}{'_' + args.tag if args.tag else ''}_results.csv").open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
-        w.writeheader()
-        w.writerows(rows)
+    ids = {c["id"] for c in index}
+    rows = [r for r in rows if r["id"] in ids]  # a smaller --limit than last time scores only those clips
 
     # Totals over all clips (every note counts once), like the paper
     lines = [f"# MulTTiPop {args.split} ({len(index)} pop clips, {sum(c['seconds'] for c in index) / 60:.1f} min)", "",
@@ -168,7 +194,7 @@ def main() -> None:
         vf = f1(s["tp_vocal"], s["ref_vocal"], s["est_vocal"])[2]
         lines.append(f"| {m} | {pp:.3f} | {pr:.3f} | {pf:.3f} | {df:.3f} | {of:.3f} | {vf:.3f} | "
                      f"{sum(bool(r['error']) for r in rs)} | {np.mean([r['secs'] for r in rs]):.1f}s |")
-    (out / f"pop_{args.split}{'_' + args.tag if args.tag else ''}_summary.md").write_text("\n".join(lines) + "\n")
+    (out / f"{name}_summary.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 
 
