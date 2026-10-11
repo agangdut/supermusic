@@ -10,3 +10,12 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+
+  muscriptor:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

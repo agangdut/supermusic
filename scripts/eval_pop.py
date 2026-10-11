@@ -1,0 +1,141 @@
+"""
+How accurate is each MIDI mode on real pop songs? Scored on MulTTiPop clips
+built by scripts/build_pop_benchmark.py.
+
+    docker compose exec backend python scripts/eval_pop.py --split dev
+    docker compose exec backend python scripts/eval_pop.py --methods multi muscriptor --limit 20
+
+Scores (a note counts if it starts within 50 ms of a real one):
+  pitched F1   every non-drum note, right pitch; which instrument played it isn't checked
+  drums F1     drum hits, grouped into kick / snare / hi-hat / tom / cymbal
+  overall F1   both together (the MulTTiPop paper's "harmonic-percussive" score)
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(ROOT / "scripts"))
+
+import mir_eval  # noqa: E402
+import numpy as np  # noqa: E402
+import pretty_midi  # noqa: E402
+
+from eval_musicnet import transcribe as _transcribe  # noqa: E402
+
+TOL = 0.05
+
+
+def transcribe(method: str, audio: Path) -> Path:
+    if method == "muscriptor":
+        from app.core.muscriptor_client import transcribe_muscriptor
+
+        return transcribe_muscriptor(audio)
+    return _transcribe(method, audio)
+
+
+def drum_group(pitch: int) -> int:
+    if pitch in (35, 36):
+        return 0  # kick
+    if pitch in (37, 38, 39, 40):
+        return 1  # snare / clap
+    if pitch in (42, 44, 46):
+        return 2  # hi-hat
+    if pitch in (41, 43, 45, 47, 48, 50):
+        return 3  # toms
+    return 4      # cymbals and the rest
+
+
+def load(midi: Path, shift: float, seconds: float):
+    """(pitched notes, drum hits) as [(onset, pitch)], shifted onto the clip's clock."""
+    pm = pretty_midi.PrettyMIDI(str(midi))
+    pitched, drums = [], []
+    for inst in pm.instruments:
+        for n in inst.notes:
+            t = n.start - shift
+            if 0 <= t < seconds:
+                (drums if inst.is_drum else pitched).append((t, drum_group(n.pitch) if inst.is_drum else n.pitch))
+    return pitched, drums
+
+
+def matches(ref, est) -> int:
+    """How many estimated notes pair up with a reference note (same pitch/group, onset within 50 ms)."""
+    if not ref or not est:
+        return 0
+    ri = np.array([[t, t + 0.1] for t, _ in ref])
+    ei = np.array([[t, t + 0.1] for t, _ in est])
+    # pitch class trick: equal "pitches" in Hz only when the labels are equal
+    rp = np.array([pretty_midi.note_number_to_hz(p) for _, p in ref])
+    ep = np.array([pretty_midi.note_number_to_hz(p) for _, p in est])
+    return len(mir_eval.transcription.match_notes(ri, rp, ei, ep, onset_tolerance=TOL, offset_ratio=None))
+
+
+def f1(tp: int, n_ref: int, n_est: int):
+    p = tp / n_est if n_est else 0.0
+    r = tp / n_ref if n_ref else 0.0
+    return p, r, (2 * p * r / (p + r) if p + r else 0.0)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--split", choices=["dev", "test"], default="dev")
+    ap.add_argument("--root", default=str(ROOT / "data/raw/multtipop"))
+    ap.add_argument("--methods", nargs="+", default=["general", "multi", "muscriptor", "stems"])
+    ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--out", default=str(ROOT / "data/processed/eval"))
+    args = ap.parse_args()
+
+    index = json.loads((Path(args.root) / args.split / "index.json").read_text())
+    if args.limit:
+        index = index[: args.limit]
+
+    rows = []
+    for i, clip in enumerate(index, 1):
+        ref_p, ref_d = load(ROOT / clip["midi"], clip["midi_offset"], clip["seconds"])
+        for method in args.methods:
+            t = time.time()
+            err = ""
+            try:
+                est_p, est_d = load(Path(transcribe(method, ROOT / clip["audio"])), 0.0, clip["seconds"])
+            except Exception as e:
+                est_p, est_d, err = [], [], str(e)[:200]
+            tp_p, tp_d = matches(ref_p, est_p), matches(ref_d, est_d)
+            rows.append({"id": clip["id"], "song": f'{clip["artist"]} - {clip["name"]}', "method": method,
+                         "ref_pitched": len(ref_p), "est_pitched": len(est_p), "tp_pitched": tp_p,
+                         "ref_drums": len(ref_d), "est_drums": len(est_d), "tp_drums": tp_d,
+                         "pitched_f1": round(f1(tp_p, len(ref_p), len(est_p))[2], 3),
+                         "secs": round(time.time() - t, 1), "error": err})
+            print(f"[{i}/{len(index)}] {method:10s} pitched F1 {rows[-1]['pitched_f1']:.3f} "
+                  f"({rows[-1]['secs']}s) {rows[-1]['song'][:50]} {err}", flush=True)
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    with (out / f"pop_{args.split}_results.csv").open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+
+    # Totals over all clips (every note counts once), like the paper
+    lines = [f"# MulTTiPop {args.split} ({len(index)} pop clips, {sum(c['seconds'] for c in index) / 60:.1f} min)", "",
+             "| Method | Pitched P | Pitched R | Pitched F1 | Drums F1 | Overall F1 | Failed clips | Avg time |",
+             "|---|---|---|---|---|---|---|---|"]
+    for m in args.methods:
+        rs = [r for r in rows if r["method"] == m]
+        s = {k: sum(r[k] for r in rs) for k in ("ref_pitched", "est_pitched", "tp_pitched", "ref_drums", "est_drums", "tp_drums")}
+        pp, pr, pf = f1(s["tp_pitched"], s["ref_pitched"], s["est_pitched"])
+        df = f1(s["tp_drums"], s["ref_drums"], s["est_drums"])[2]
+        of = f1(s["tp_pitched"] + s["tp_drums"], s["ref_pitched"] + s["ref_drums"], s["est_pitched"] + s["est_drums"])[2]
+        lines.append(f"| {m} | {pp:.3f} | {pr:.3f} | {pf:.3f} | {df:.3f} | {of:.3f} | "
+                     f"{sum(bool(r['error']) for r in rs)} | {np.mean([r['secs'] for r in rs]):.1f}s |")
+    (out / f"pop_{args.split}_summary.md").write_text("\n".join(lines) + "\n")
+    print("\n".join(lines))
+
+
+if __name__ == "__main__":
+    main()

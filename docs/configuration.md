@@ -28,6 +28,9 @@ With Docker, put settings in a `.env` file next to `docker-compose.yml` (start f
 | Variable | Default | What it does |
 |---|---|---|
 | `YOURMT3_URL` | `http://yourmt3:8100` | Where the backend finds the Full band transcriber |
+| `MUSCRIPTOR_URL` | `http://muscriptor:8200` | Where the backend finds the "Full band (new)" MuScriptor transcriber |
+| `HF_TOKEN` | (empty) | Hugging Face read token for MuScriptor's weights. Accept the licence on [muscriptor-medium](https://huggingface.co/MuScriptor/muscriptor-medium) first. Non-commercial use only (CC BY-NC 4.0) |
+| `MUSCRIPTOR_MODEL` | `medium` | `small`, `medium` or `large` (large needs more than the RTX 2060's 6 GB) |
 
 The `yourmt3` container runs on CPU unless you add `docker-compose.gpu.yml` (NVIDIA only). Its 562 MB model downloads once into `data/models/yourmt3`. To make the GPU the default on your machine, copy `docker-compose.gpu.yml` to `docker-compose.override.yml`; Compose loads that automatically, and git ignores it.
 

@@ -18,6 +18,7 @@ from app.core.smart_transcription import transcribe_auto, transcribe_stems
 from app.core.playability import DEFAULT_SPAN, make_playable, playability_report
 from app.core.transcription import transcribe_to_midi
 from app.core.yourmt3_client import transcribe_multi
+from app.core.muscriptor_client import transcribe_muscriptor
 from app.core.progress import estimate_seconds, report, reporting, run_with_context
 from app.core.vocals import lead_vocal_track, split_vocals, transcribe_vocal_aware
 
@@ -51,9 +52,10 @@ class MIDIConvertRequest(BaseModel):
             '"piano" (MAESTRO-trained, solo piano), '
             '"stems" (split into 6 stems, transcribe each, multi-track MIDI), '
             '"cover" (Pop2Piano: arrange the song for solo piano), '
-            '"multi" (YourMT3+: every instrument in a full mix, best on bands; needs the yourmt3 service).'
+            '"multi" (YourMT3+: every instrument in a full mix, best on bands; needs the yourmt3 service), '
+            '"muscriptor" (MuScriptor: newer full-band model; needs the muscriptor service and a Hugging Face token).'
         ),
-        pattern="^(auto|basic|piano|stems|cover|multi)$",
+        pattern="^(auto|basic|piano|stems|cover|multi|muscriptor)$",
     )
     composer: str = Field("composer1", description="Piano cover style, composer1 to composer21.", pattern="^composer([1-9]|1[0-9]|2[01])$")
     playable: bool = Field(False, description="Rewrite the MIDI so two hands (10 fingers) can play it.")
@@ -141,13 +143,14 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                     ),
                     "cover": "Arranging a piano cover…",
                     "multi": "Transcribing every instrument with YourMT3+…",
+                    "muscriptor": "Transcribing every instrument with MuScriptor…",
                 }.get(req.model, "Transcribing…"))
                 if req.model == "auto":
                     return transcribe_auto(audio_path)
                 if req.model == "stems":
                     return transcribe_stems(audio_path, only=req.stems or None, stems=separated[1] if separated else None)
-                if req.model == "multi":
-                    midi = transcribe_multi(audio_path)
+                if req.model in ("multi", "muscriptor"):
+                    midi = (transcribe_multi if req.model == "multi" else transcribe_muscriptor)(audio_path)
                     if not req.vocal_track:
                         return midi, {}
                     report("Cleaning up the vocal melody…")

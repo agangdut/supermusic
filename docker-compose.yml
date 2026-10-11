@@ -11,6 +11,7 @@ services:
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
       - TORCH_HOME=/app/data/models/torch
       - YOURMT3_URL=http://yourmt3:8100
+      - MUSCRIPTOR_URL=http://muscriptor:8200
     volumes:
       - ./data:/app/data
       - ./static:/app/static
@@ -23,6 +24,19 @@ services:
     environment:
       - WANDB_MODE=disabled
       - HF_HOME=/app/data/models/hf
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  # Multi-instrument transcription (MuScriptor, 2026). Its weights are gated:
+  # accept the licence on https://huggingface.co/MuScriptor/muscriptor-medium
+  # and put HF_TOKEN=hf_... in .env. Non-commercial use only (CC BY-NC 4.0).
+  muscriptor:
+    build: ./services/muscriptor
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      - HF_HOME=/app/data/models/hf
+      - MUSCRIPTOR_MODEL=${MUSCRIPTOR_MODEL:-medium}
     volumes:
       - ./data:/app/data
     restart: unless-stopped
