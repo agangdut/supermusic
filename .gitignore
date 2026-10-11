@@ -128,3 +128,10 @@ frontend/tmp_uploads/
 
 # Local Docker Compose tweaks (e.g. GPU on this machine)
 docker-compose.override.yml
+
+# ------------------------
+# 🎵 Audio & MIDI files (never commit)
+# ------------------------
+*.mp3
+*.mid
+*.midi
