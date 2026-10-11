@@ -275,6 +275,13 @@ def analyse_preview(mp3: bytes) -> dict:
         f.write(mp3)
         f.flush()
         y, sr = librosa.load(f.name, sr=22050, mono=True)
+    return analyse_audio(y, sr)
+
+
+def analyse_audio(y: np.ndarray, sr: int) -> dict:
+    """Tempo, key, energy and brightness from mono audio (the map's audio-derived features)."""
+    import librosa
+
     if len(y) < sr * 5:
         return {}
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
