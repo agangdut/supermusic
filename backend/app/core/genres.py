@@ -50,7 +50,7 @@ _RULES: List[Tuple[str, str]] = [
     ("Punk", r"punk|\bemo\b|hardcore|screamo"),
     ("Soundtrack", r"soundtrack|\bscore\b|\bfilms?\b|\bgames?\b|musical|show ?tunes|\banime\b"),
     ("Classical", r"classical|orchestr|opera|symphon|chamber music|baroque|romantic era|contemporary classical"),
-    ("Rock", r"rock|grunge|shoegaze|britpop|new wave"),
+    ("Rock", r"rock|grunge|shoegaze|britpop|new wave|psych"),
     # "dance pop", "synthpop", "indie pop", "art pop": pop is the head word
     ("Pop", r"pop$"),
     ("Jazz", r"jazz|swing|bebop|big band"),
@@ -85,7 +85,7 @@ def canonical(tag: str) -> Optional[str]:
 def summarise(tags: Iterable[Tuple[str, float]], max_genres: int = MAX_GENRES) -> List[str]:
     """Weighted tags -> up to `max_genres` genres, strongest first.
 
-    A second genre is kept only if it has at least 40% of the top one's
+    A second genre is kept only if it has at least half the top one's
     weight, so a single stray tag can't relabel an artist."""
     score: Dict[str, float] = {}
     for name, weight in tags:
@@ -96,7 +96,7 @@ def summarise(tags: Iterable[Tuple[str, float]], max_genres: int = MAX_GENRES) -
         return []
     ranked = sorted(score.items(), key=lambda kv: -kv[1])
     top = ranked[0][1]
-    return [g for g, s in ranked[:max_genres] if s >= 0.4 * top]
+    return [g for g, s in ranked[:max_genres] if s >= 0.5 * top]
 
 
 # ---------------------------------------------------------------------------

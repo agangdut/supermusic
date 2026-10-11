@@ -66,3 +66,31 @@ def test_map_without_listening_data():
 def test_map_needs_comparable_columns():
     with pytest.raises(ValueError):
         build_map(pd.DataFrame({"title": ["a", "b", "c"], "artist": ["x", "y", "z"]}))
+
+
+def test_spotify_genre_tags_become_broad_labels():
+    """Exportify gives each song many detailed tags; labels should name the broad genre,
+    not whichever tag ("rap") happens to be most common."""
+    import random
+
+    from app.core.music_map import MapOptions, build_map
+
+    artists = {
+        "Drake": "canadian hip hop,canadian pop,hip hop,pop rap,rap,toronto rap",
+        "Travis Scott": "hip hop,rap,slap house",
+        "Taylor Swift": "pop",
+        "Dua Lipa": "dance pop,pop,uk pop",
+        "Arctic Monkeys": "garage rock,modern rock,permanent wave,rock,sheffield indie",
+        "Bad Bunny": "reggaeton,trap latino,urbano latino",
+    }
+    rnd = random.Random(0)
+    rows = [{"title": f"{a} {k}", "artist": a, "genre": g, "bpm": rnd.uniform(80, 150), "energy": rnd.random()}
+            for a, g in artists.items() for k in range(10)]
+    m = build_map(pd.DataFrame(rows), MapOptions(weights={"genre": 2.0}))
+    by_artist = {t["artist"]: t["genre"] for t in m["tracks"]}
+    assert by_artist == {"Drake": "Hip-Hop", "Travis Scott": "Hip-Hop", "Taylor Swift": "Pop", "Dua Lipa": "Pop",
+                         "Arctic Monkeys": "Rock", "Bad Bunny": "Latin"}
+    labels = {g["name"] for c in m["clusters"] for g in c.get("top_genres", [])}
+    assert labels <= {"Hip-Hop", "Pop", "Rock", "Latin"}
+    drake = next(t for t in m["tracks"] if t["artist"] == "Drake")
+    assert "toronto rap" in drake["styles"]  # the detail is still there

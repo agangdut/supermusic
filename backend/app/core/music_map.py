@@ -25,6 +25,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from app.core.genres import summarise as summarise_genres
+
 # ---------------------------------------------------------------------------
 # Column detection
 # ---------------------------------------------------------------------------
@@ -187,6 +189,12 @@ def _split_tags(v: Any) -> List[str]:
     return [t.strip().lower() for t in re.split(r"[;,|]", str(v)) if t.strip()]
 
 
+def _broad_genres(tags: List[str]) -> List[str]:
+    """Fine-grained tags -> at most two broad genres. Earlier tags count a little more,
+    since Exportify lists the main artist's genres before any featured artist's."""
+    return summarise_genres([(t, 1.0 / (1 + 0.15 * i)) for i, t in enumerate(tags)])
+
+
 def _one_hot(values: List[List[str]], min_count: int = 1) -> Tuple[np.ndarray, List[str]]:
     counts: Dict[str, int] = {}
     for tags in values:
@@ -236,8 +244,10 @@ class _Prepared:
     cols: Dict[str, Optional[str]]
     keys: List[Optional[Key]]
     bpm: Optional[np.ndarray]
-    genres: List[List[str]]
+    genres: List[List[str]]  # broad genres (lower case), at most two per track
     genre_names: Dict[str, str]
+    styles: List[List[str]]  # the file's own detailed tags
+    style_names: Dict[str, str]
     artists: List[str]
     musical: Optional[np.ndarray]
     features: np.ndarray
@@ -282,15 +292,31 @@ def _prepare(df: pd.DataFrame, opts: MapOptions) -> _Prepared:
         if np.isfinite(bpm).any():
             add(_zscore(np.log2(np.where(bpm > 0, bpm, np.nan)))[:, None], 1.2 * w["tempo"], "tempo")
 
-    genres = [_split_tags(v) for v in df[cols["genre"]]] if cols["genre"] else [[] for _ in range(len(df))]
-    genre_names: Dict[str, str] = {}
+    # Genre columns from Spotify hold many fine-grained tags per song ("toronto rap, pop rap, canadian pop").
+    # Counted as-is, a tag that many artists share ("rap", "pop") ends up naming every cluster, and the
+    # fragments are too sparse to group songs. So each song also gets one or two broad genres (Hip-Hop,
+    # Pop, R&B, ...): these drive the grouping and every label; the detailed tags only fine-tune.
+    styles = [_split_tags(v) for v in df[cols["genre"]]] if cols["genre"] else [[] for _ in range(len(df))]
+    style_names: Dict[str, str] = {}
     if cols["genre"]:
         for v in df[cols["genre"]]:
             for t in re.split(r"[;,|]", str(v)) if pd.notna(v) else []:
-                genre_names.setdefault(t.strip().lower(), t.strip())
+                style_names.setdefault(t.strip().lower(), t.strip())
+    genres: List[List[str]] = []
+    genre_names: Dict[str, str] = {}
+    for tags in styles:
+        broad = _broad_genres(tags)
+        if not broad and tags:  # nothing recognisable: keep the file's own first tag
+            broad = [style_names.get(tags[0], tags[0])]
+        genres.append([g.lower() for g in broad])
+        for g in broad:
+            genre_names.setdefault(g.lower(), g)
     if any(genres):
         g, _ = _one_hot(genres)
         add(g, 1.6 * w["genre"], "genre")
+    if any(set(t) != set(g) for t, g in zip(styles, genres)):
+        st, _ = _one_hot(styles)
+        add(st, 0.6 * w["genre"], "style")
 
     lower = {c.lower(): c for c in df.columns}
     mood_cols = [lower[f] for f in AUDIO_FEATURES if f in lower]
@@ -339,6 +365,7 @@ def _prepare(df: pd.DataFrame, opts: MapOptions) -> _Prepared:
 
     return _Prepared(
         df=df, cols=cols, keys=keys, bpm=bpm, genres=genres, genre_names=genre_names,
+        styles=styles, style_names=style_names,
         artists=artists, musical=musical,
         features=np.hstack(blocks), feature_groups=groups, mood_cols=mood_cols,
         engagement=_engagement(df, cols),
@@ -630,6 +657,7 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None) -> Dict[str, 
             "artist": p.artists[i] or None,
             "album": str(row[album_col]) if album_col and pd.notna(row[album_col]) else None,
             "genre": ", ".join(p.gname(g) for g in p.genres[i]) or None,
+            "styles": [p.style_names.get(t, t) for t in p.styles[i]] or None,
             "key": p.keys[i].name if p.keys[i] else None,
             "camelot": p.keys[i].camelot if p.keys[i] else None,
             "bpm": round(float(p.bpm[i]), 1) if p.bpm is not None and np.isfinite(p.bpm[i]) else None,
