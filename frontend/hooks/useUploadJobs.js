@@ -39,6 +39,7 @@ export default function useUploadJobs() {
 
   const [latestMidi, setLatestMidi] = useState(null);
   const [latestStems, setLatestStems] = useState(null);
+  const [latestStemsJobId, setLatestStemsJobId] = useState(null);
   const [latestCsv, setLatestCsv] = useState(null);
 
   const runningRef = useRef(false);
@@ -82,6 +83,7 @@ export default function useUploadJobs() {
         setLatestMidi(normalizeJobArtifacts({ result: { artifacts } }).result.artifacts);
       } else if (j.job_type === "stem_separation") {
         setLatestStems(normalizeJobArtifacts({ result: { artifacts } }).result.artifacts);
+        setLatestStemsJobId(j.id);
       } else if (j.job_type === "csv_enrichment" && artifacts.csv) {
         setLatestCsv(artifacts.csv);
       }
@@ -231,7 +233,7 @@ export default function useUploadJobs() {
   );
 
   // public actions
-  const transcribeMidi = useCallback(async (model = "auto", { playable = false, handSpan = 14, vocalTrack = true } = {}) => {
+  const transcribeMidi = useCallback(async (model = "auto", { playable = false, handSpan = 14, vocalTrack = true, stems } = {}) => {
     if (!audioFile) {
       notify("Please select an audio file first.", "warn");
       return;
@@ -246,7 +248,10 @@ export default function useUploadJobs() {
       // Step 2: Create MIDI conversion job
       await createJob(
         "midi_conversion",
-        () => midiConvert({ source_path: audioPath, model, playable, hand_span: handSpan, vocal_track: vocalTrack }),
+        () => midiConvert({
+          source_path: audioPath, model, playable, hand_span: handSpan, vocal_track: vocalTrack,
+          stems: model === "stems" ? stems : undefined,
+        }),
         "Transcription complete 🎹",
         "Transcription failed ❌",
         (result) => {
@@ -261,6 +266,29 @@ export default function useUploadJobs() {
       setBusy(false);
     }
   }, [audioFile, uploadFile, createJob, notify]);
+
+  // Turn stems from the last separation into MIDI, without separating again
+  const transcribeSeparatedStems = useCallback(async (stems, { playable = false, handSpan = 14 } = {}) => {
+    if (!latestStemsJobId) {
+      notify("Separate the stems first.", "warn");
+      return;
+    }
+    if (!stems?.length) {
+      notify("Pick at least one stem.", "warn");
+      return;
+    }
+    await createJob(
+      "midi_conversion",
+      () => midiConvert({ stem_job_id: latestStemsJobId, model: "stems", stems, playable, hand_span: handSpan }),
+      "Transcription complete 🎹",
+      "Transcription failed ❌",
+      (result) => {
+        if (result?.artifacts?.midi) {
+          setLatestMidi(normalizeJobArtifacts({ result }).result.artifacts);
+        }
+      }
+    );
+  }, [latestStemsJobId, createJob, notify]);
 
   const separateStems = useCallback(async () => {
     if (!audioFile) {
@@ -338,6 +366,7 @@ export default function useUploadJobs() {
     runningCount,
     latestMidi,
     latestStems,
+    latestStemsJobId,
     latestCsv,
 
     // setters for inputs
@@ -347,6 +376,7 @@ export default function useUploadJobs() {
     // actions
     transcribeMidi,
     retryJob,
+    transcribeSeparatedStems,
     separateStems,
     enrichCsv,
     clearJobs,

@@ -19,10 +19,12 @@ export default function UploadPage() {
     runningCount,
     latestMidi,
     latestStems,
+    latestStemsJobId,
     latestCsv,
     setAudioFile,
     setCsvFile,
     transcribeMidi,
+    transcribeSeparatedStems,
     separateStems,
     enrichCsv,
     clearJobs,
@@ -72,6 +74,7 @@ export default function UploadPage() {
             latestStems={latestStems}
             latestCsv={latestCsv}
             retryJob={retryJob}
+            onStemsToMidi={latestStemsJobId ? transcribeSeparatedStems : null}
           />
         </div>
       </div>

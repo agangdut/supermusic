@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from ..models.job import Job, JobType
+from ..models.job import Job, JobStatus, JobType
 from ..utils.storage import job_store, save_artifact
 from app.core.humanize import render_audio
 from app.core.piano_cover import piano_cover
@@ -35,8 +35,11 @@ except Exception:  # pragma: no cover
 router = APIRouter(prefix="/midi", tags=["midi"])
 
 
+STEM_NAMES = ("vocals", "drums", "bass", "guitar", "piano", "other")
+
+
 class MIDIConvertRequest(BaseModel):
-    source_path: str = Field(..., description="Input audio file (wav/mp3).")
+    source_path: Optional[str] = Field(None, description="Input audio file (wav/mp3). Not needed with stem_job_id.")
     onset_sensitivity: float = Field(0.6, ge=0.0, le=1.0)
     model: str = Field(
         "basic",
@@ -58,10 +61,51 @@ class MIDIConvertRequest(BaseModel):
                     "(slower) so it can't turn into instrument notes.",
     )
     hand_span: int = Field(DEFAULT_SPAN, ge=10, le=17, description="Widest stretch per hand, in semitones (12 = octave, 14 = ninth, 16 = tenth).")
+    stems: Optional[List[str]] = Field(
+        None,
+        description=f"Stems mode only: transcribe just these stems ({', '.join(STEM_NAMES)}). Empty means all.",
+    )
+    stem_job_id: Optional[str] = Field(
+        None,
+        description="Reuse the stems of a finished stem-separation job instead of separating again "
+                    "(implies the stems model).",
+    )
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.stems:
+            self.stems = [s.lower() for s in self.stems]
+            bad = [s for s in self.stems if s not in STEM_NAMES]
+            if bad:
+                raise ValueError(f"Unknown stem(s): {', '.join(bad)}. Choose from {', '.join(STEM_NAMES)}.")
+        if self.stem_job_id:
+            self.model = "stems"
+        elif not self.source_path:
+            raise ValueError("Give source_path (an audio file) or stem_job_id (an earlier stem separation).")
+        return self
+
+
+def _separated_stems(job_id: str) -> tuple[Path, Dict[str, str]]:
+    """The original audio and the stem files of a finished stem-separation job."""
+    job = job_store.get(job_id)
+    if not job or job.job_type != JobType.STEM_SEPARATION:
+        raise HTTPException(status_code=404, detail="Stem separation job not found")
+    if job.status != JobStatus.done or not (job.result or {}).get("artifacts"):
+        raise HTTPException(status_code=409, detail="That stem separation hasn't finished yet")
+    stems = {name: path for name, path in job.result["artifacts"].items() if Path(path).exists()}
+    return Path((job.payload or {}).get("audio_path", "")), stems
 
 
 @router.post("/convert", response_model=Job)
 async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
+    separated = _separated_stems(req.stem_job_id) if req.stem_job_id else None
+    if separated:
+        if not req.source_path:
+            req.source_path = str(separated[0])
+        if req.stems:
+            missing = [s for s in req.stems if s not in separated[1]]
+            if missing:
+                raise HTTPException(status_code=400, detail=f"That separation has no {', '.join(missing)} stem")
     job = Job(job_type=JobType.MIDI_CONVERSION, payload=req.dict())
     job_store[str(job.id)] = job
     job.mark_running("Transcribing audio to MIDI…")
@@ -70,7 +114,7 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
         try:
             report("Checking the audio file…")
             audio_path = Path(req.source_path)
-            if not audio_path.exists():
+            if not audio_path.exists() and not separated:
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
             try:
                 import librosa
@@ -78,21 +122,28 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                 duration_s = float(librosa.get_duration(path=str(audio_path)))
             except Exception:
                 duration_s = None
-            j.eta_s = estimate_seconds(req.model, duration_s, vocal_split=(req.model == "basic" and req.vocal_track))
+            if separated:  # no separation to wait for, just one General pass per picked stem
+                per_stem = estimate_seconds("basic", duration_s)
+                j.eta_s = per_stem and round(per_stem * len(req.stems or separated[1]), 1)
+            else:
+                j.eta_s = estimate_seconds(req.model, duration_s, vocal_split=(req.model == "basic" and req.vocal_track))
             j.progress = 5
 
             def run():
                 report({
                     "auto": "Listening for which instruments are playing…",
                     "piano": "Transcribing piano…",
-                    "stems": "Splitting the song into 6 parts…",
+                    "stems": (
+                        f"Transcribing the {' + '.join(req.stems) if req.stems else 'separated'} stems…" if separated
+                        else "Splitting the song into 6 parts…"
+                    ),
                     "cover": "Arranging a piano cover…",
                     "multi": "Transcribing every instrument with YourMT3+…",
                 }.get(req.model, "Transcribing…"))
                 if req.model == "auto":
                     return transcribe_auto(audio_path)
                 if req.model == "stems":
-                    return transcribe_stems(audio_path)
+                    return transcribe_stems(audio_path, only=req.stems or None, stems=separated[1] if separated else None)
                 if req.model == "multi":
                     midi = transcribe_multi(audio_path)
                     if not req.vocal_track:

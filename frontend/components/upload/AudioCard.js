@@ -4,6 +4,16 @@ import { useState } from "react";
 import PrimaryButton from "./PrimaryButton";
 import ThemedCard from "./ThemedCard";
 
+// The six parts the Stems model splits a song into
+const STEMS = [
+  { id: "vocals", name: "Vocals" },
+  { id: "bass", name: "Bass" },
+  { id: "piano", name: "Piano" },
+  { id: "guitar", name: "Guitar" },
+  { id: "drums", name: "Drums" },
+  { id: "other", name: "Other" },
+];
+
 export default function AudioCard({
   audioFile,
   setAudioFile,
@@ -15,6 +25,8 @@ export default function AudioCard({
   const [playable, setPlayable] = useState(false);
   const [vocalTrack, setVocalTrack] = useState(true);
   const [handSpan, setHandSpan] = useState(14);
+  const [stems, setStems] = useState(STEMS.map((s) => s.id));
+  const toggleStem = (id) => setStems((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   return (
     <ThemedCard
       title="Audio"
@@ -26,8 +38,11 @@ export default function AudioCard({
           </div>
           <div className="flex gap-2 flex-wrap">
             <PrimaryButton
-              onClick={() => transcribeMidi(model, { playable, handSpan, vocalTrack })}
-              disabled={!audioFile || busy}
+              onClick={() => transcribeMidi(model, {
+                playable, handSpan, vocalTrack,
+                stems: stems.length === STEMS.length ? undefined : stems,
+              })}
+              disabled={!audioFile || busy || (model === "stems" && !stems.length)}
             >
               Transcribe → MIDI
             </PrimaryButton>
@@ -79,6 +94,31 @@ export default function AudioCard({
           ))}
         </div>
       </div>
+
+      {model === "stems" && (
+        <div className="mt-4">
+          <span className="text-sm font-medium text-gray-300">Which parts to turn into MIDI</span>
+          <span className="block text-[11px] text-gray-500">
+            Untick what you don&apos;t need. Just Vocals + Bass often gives the cleanest result on pop.
+          </span>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {STEMS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => toggleStem(s.id)}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                  stems.includes(s.id)
+                    ? "border-purple-400/60 bg-purple-500/10 text-white"
+                    : "border-white/10 text-gray-500 hover:border-white/20"
+                }`}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-4">
         <label className="flex items-start gap-2 cursor-pointer">

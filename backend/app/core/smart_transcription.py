@@ -19,7 +19,7 @@ from __future__ import annotations
 import subprocess
 import uuid
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Iterable, Optional, Tuple
 
 import numpy as np
 
@@ -110,34 +110,56 @@ def drums_to_notes(path: str | Path):
 # Stems mode
 # ---------------------------------------------------------------------------
 
-def transcribe_stems(audio_path: str | Path, out_dir: Optional[Path] = None) -> Tuple[Path, Dict]:
-    """Separate into 6 stems, transcribe each, merge. Returns (midi_path, info)."""
+def transcribe_stems(
+    audio_path: str | Path,
+    out_dir: Optional[Path] = None,
+    only: Optional[Iterable[str]] = None,
+    stems: Optional[Dict[str, str]] = None,
+) -> Tuple[Path, Dict]:
+    """Separate into 6 stems, transcribe each, merge. Returns (midi_path, info).
+
+    only: transcribe just these stems (e.g. {"vocals", "bass"}). A stem the
+        person picked is kept even when it is quiet, since they asked for it.
+    stems: stems that were already separated ({name: wav path}), e.g. by an
+        earlier stem-separation job, so Demucs doesn't have to run again.
+    """
     import pretty_midi
 
     audio_path = Path(audio_path)
     from app.core.progress import report
 
-    report("Splitting the song into 6 parts…")
-    stems = separate_stems(audio_path, _work_dir("stems6"), model=SIX_STEM_MODEL)
+    if stems is None:
+        report("Splitting the song into 6 parts…")
+        stems = separate_stems(audio_path, _work_dir("stems6"), model=SIX_STEM_MODEL)
+    picked = {s.lower() for s in only} if only else None
+    if picked is not None:
+        missing = picked - set(stems)
+        if missing:
+            raise ValueError(f"No {', '.join(sorted(missing))} stem to transcribe (have: {', '.join(stems)}).")
     shares = stem_shares(stems)
 
     merged = pretty_midi.PrettyMIDI()
     tracks: Dict[str, int] = {}
     for name, path in stems.items():
-        if shares.get(name, 0) >= MIN_STEM_SHARE:
-            report(f"Transcribing the {name} part…")
-        if shares.get(name, 0) < MIN_STEM_SHARE:
+        if picked is not None:
+            if name not in picked:
+                continue
+        elif shares.get(name, 0) < MIN_STEM_SHARE:
             continue
-        if name == "piano" and shares.get(name, 0) < PIANO_TRACK_MIN:
+        elif name == "piano" and shares.get(name, 0) < PIANO_TRACK_MIN:
             continue
+        report(f"Transcribing the {name} part…")
         if name == "drums":
             inst = pretty_midi.Instrument(program=0, is_drum=True, name="Drums")
             inst.notes = drums_to_notes(path)
         else:
             # The piano model copes with a band around it far better than with
             # Demucs' piano stem (0.87 vs 0.66 note F1 in scripts/eval_mix.py),
-            # so it listens to the original mix.
-            midi = transcribe_piano(audio_path) if name == "piano" else transcribe_to_midi(path)
+            # so it listens to the original mix (when we still have it).
+            if name == "piano":
+                midi = transcribe_piano(audio_path if audio_path.exists() else path)
+            else:
+                midi = transcribe_to_midi(path)
             inst = pretty_midi.Instrument(program=PROGRAMS.get(name, 0), name=name.capitalize())
             for src in pretty_midi.PrettyMIDI(str(midi)).instruments:
                 inst.notes.extend(src.notes)
@@ -154,7 +176,7 @@ def transcribe_stems(audio_path: str | Path, out_dir: Optional[Path] = None) -> 
             tracks[name] = len(inst.notes)
 
     if not merged.instruments:
-        raise RuntimeError("No notes found in any stem.")
+        raise RuntimeError("No notes found in the chosen stems." if picked else "No notes found in any stem.")
     out_dir = (out_dir or (settings.PROCESSED_DIR / "midi")) / uuid.uuid4().hex
     out_dir.mkdir(parents=True, exist_ok=True)
     midi_path = out_dir / f"{audio_path.stem}.mid"

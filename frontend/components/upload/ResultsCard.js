@@ -13,6 +13,7 @@ export default function ResultsCard({
   latestMidi,
   latestStems,
   latestCsv,
+  onStemsToMidi,
 }) {
   return (
     <div className="space-y-6">
@@ -45,6 +46,8 @@ export default function ResultsCard({
             latestMidi={latestMidi}
             latestStems={latestStems}
             latestCsv={latestCsv}
+            onStemsToMidi={onStemsToMidi}
+            busy={busy}
           />
         </ThemedCard>
       )}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import StemsToMidi from "./StemsToMidi";
 
 // Players use the Web Audio API, so they only load in the browser
 const MidiPlayer = dynamic(() => import("@/components/player/MidiPlayer"), { ssr: false });
@@ -9,7 +10,7 @@ const StemMixer = dynamic(() => import("@/components/player/StemMixer"), { ssr: 
 
 const fileName = (url) => decodeURIComponent(String(url).split("/").pop() || "").replace(/^[0-9a-f-]{36}_/, "");
 
-export default function ResultsConsole({ latestMidi, latestStems, latestCsv }) {
+export default function ResultsConsole({ latestMidi, latestStems, latestCsv, onStemsToMidi, busy }) {
   const [tab, setTab] = useState("midi");
 
   // Jump to whichever result arrived most recently
@@ -58,7 +59,12 @@ export default function ResultsConsole({ latestMidi, latestStems, latestCsv }) {
           </div>
         ) : <Empty what="MIDI" />)}
 
-        {tab === "stems" && (latestStems ? <StemMixer stems={latestStems} /> : <Empty what="stem" />)}
+        {tab === "stems" && (latestStems ? (
+          <div className="space-y-4">
+            <StemMixer stems={latestStems} />
+            {onStemsToMidi && <StemsToMidi stems={latestStems} onConvert={onStemsToMidi} busy={busy} />}
+          </div>
+        ) : <Empty what="stem" />)}
 
         {tab === "csv" && (latestCsv ? (
           <a href={latestCsv} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-400 underline hover:text-indigo-300">
