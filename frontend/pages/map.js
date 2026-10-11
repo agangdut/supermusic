@@ -283,6 +283,7 @@ export default function MapPage() {
               data={data}
               selectedId={selectedId}
               focusIds={focusIds}
+              focusCluster={clusterFocus}
               picks={picks}
               mode={tab}
               onSelect={(id) => { setSelectedId(id); if (id != null) setClusterFocus(null); }}

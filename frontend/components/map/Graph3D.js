@@ -1,6 +1,6 @@
 // Client-only 3D "brain map" of a music library.
 // Loaded with next/dynamic (ssr: false) because three.js needs the browser.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph3D from "react-force-graph-3d";
 import * as THREE from "three";
 import { colorFor } from "./colors";
@@ -70,7 +70,7 @@ function textSprite(text, color) {
   return sprite;
 }
 
-export default function Graph3D({ data, selectedId, focusIds, picks, mode, onSelect }) {
+export default function Graph3D({ data, selectedId, focusIds, focusCluster, picks, mode, onSelect }) {
   const fgRef = useRef();
   const wrapRef = useRef();
   const [size, setSize] = useState({ width: 800, height: 600 });
@@ -83,7 +83,11 @@ export default function Graph3D({ data, selectedId, focusIds, picks, mode, onSel
     return () => ro.disconnect();
   }, []);
 
+  const glowMats = useRef(new Map()); // node id -> glow material, so dimming never rebuilds the scene
+  const labelSprites = useRef(new Map()); // cluster id -> label sprite
+
   const graph = useMemo(() => {
+    glowMats.current.clear();
     if (!data) return { nodes: [], links: [] };
     // Imports without play counts have no engagement; give every star the same modest size
     const engs = data.tracks.map((t) => t.engagement).filter((v) => v != null);
@@ -102,12 +106,17 @@ export default function Graph3D({ data, selectedId, focusIds, picks, mode, onSel
   const pickSet = useMemo(() => new Set(picks || []), [picks]);
   const focus = focusIds && focusIds.size ? focusIds : null;
 
-  const isLit = (id) => !focus || focus.has(id);
+  const DIM = 0.22;
+  const focusRef = useRef(focus);
+  focusRef.current = focus;
 
-  // Glowing sprite per node; rebuilt when highlighting changes
-  const nodeObject = (node) => {
+  // Glowing sprite per node. Only rebuilt when the selection or mode changes;
+  // focus changes just fade materials (see the effect below), which avoids the
+  // whole map flickering out and back in when you pick a cluster.
+  const nodeObject = useCallback((node) => {
     const group = new THREE.Group();
-    const lit = isLit(node.id);
+    const f = focusRef.current;
+    const lit = !f || f.has(node.id);
     const isPick = mode === "picks" && pickSet.has(node.id);
     const color = isPick ? PICK_COLOR : colorFor(node.cluster);
     const mat = new THREE.SpriteMaterial({
@@ -116,8 +125,9 @@ export default function Graph3D({ data, selectedId, focusIds, picks, mode, onSel
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      opacity: lit ? 0.9 : 0.1,
+      opacity: lit ? 0.9 : DIM,
     });
+    glowMats.current.set(node.id, mat);
     const glow = new THREE.Sprite(mat);
     const s = node.id === selectedId ? node.size * 2.6 : isPick ? Math.max(node.size, 5) * 2 : node.size * 1.6;
     glow.scale.set(s, s, 1);
@@ -129,7 +139,15 @@ export default function Graph3D({ data, selectedId, focusIds, picks, mode, onSel
       group.add(ring);
     }
     return group;
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, mode, pickSet, data]);
+
+  // Fade tracks and cluster names in and out of focus
+  useEffect(() => {
+    for (const [id, mat] of glowMats.current) mat.opacity = !focus || focus.has(id) ? 0.9 : DIM;
+    const litClusters = focus ? new Set((data?.tracks || []).filter((t) => focus.has(t.id)).map((t) => t.cluster)) : null;
+    for (const [cid, sprite] of labelSprites.current) sprite.material.opacity = !litClusters || litClusters.has(cid) ? 0.9 : 0.25;
+  }, [focus, data]);
 
   const linkVisible = (l) => {
     const s = typeof l.source === "object" ? l.source.id : l.source;
@@ -158,11 +176,13 @@ export default function Graph3D({ data, selectedId, focusIds, picks, mode, onSel
       const name = c.label.split(" · ").slice(0, 2).join(" · ");
       const sprite = textSprite(name, colorFor(c.id));
       sprite.position.set(cx, cy, cz);
+      labelSprites.current.set(c.id, sprite);
       labels.add(sprite);
     }
     scene.add(labels);
     return () => {
       scene.remove(labels);
+      labelSprites.current.clear();
     };
   }, [data]);
 
@@ -175,6 +195,26 @@ export default function Graph3D({ data, selectedId, focusIds, picks, mode, onSel
     const t = setTimeout(() => fg.cameraPosition({ x: 0, y: r * 0.17, z: r * 1.75 }, { x: 0, y: 0, z: 0 }, 1200), 50);
     return () => clearTimeout(t);
   }, [data]);
+
+  // Fly to a picked cluster, and back out to the whole map when it is cleared
+  const framedCluster = useRef(null);
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg || !data || selectedId != null) return;
+    if (focusCluster == null) {
+      if (framedCluster.current == null) return;
+      framedCluster.current = null;
+      const r = Math.max(90, ...data.tracks.map((t) => Math.hypot(t.x, t.y, t.z)));
+      fg.cameraPosition({ x: 0, y: r * 0.17, z: r * 1.75 }, { x: 0, y: 0, z: 0 }, 1000);
+      return;
+    }
+    const members = data.tracks.filter((t) => t.cluster === focusCluster);
+    if (!members.length) return;
+    framedCluster.current = focusCluster;
+    const c = ["x", "y", "z"].map((k) => members.reduce((a, t) => a + t[k], 0) / members.length);
+    const spread = Math.max(20, ...members.map((t) => Math.hypot(t.x - c[0], t.y - c[1], t.z - c[2])));
+    fg.cameraPosition({ x: c[0], y: c[1] + spread * 0.3, z: c[2] + spread * 3 }, { x: c[0], y: c[1], z: c[2] }, 1000);
+  }, [focusCluster, selectedId, data]);
 
   // Fly to the selected track
   useEffect(() => {
