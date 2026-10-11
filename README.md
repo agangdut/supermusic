@@ -23,7 +23,7 @@
 
 | | What it does | Powered by |
 |---|---|---|
-| 🎹 **Audio → MIDI** | Transcribes a song into a playable `.mid` file. **Auto** detects the instruments; **Stems** gives one track per instrument; **Piano** is tuned for piano ([accuracy](docs/transcription-accuracy.md)). Tick **Playable by two hands** to get a left/right hand part a pianist can actually play ([how](docs/playable-piano.md)), or pick **Piano cover** to have the song arranged for piano | [Basic Pitch](https://github.com/spotify/basic-pitch), [ByteDance piano model](https://github.com/bytedance/piano_transcription) (MAESTRO) |
+| 🎹 **Audio → MIDI** | Transcribes a song into a playable `.mid` file. **Auto** detects the instruments; **Full band** transcribes every instrument in a mix (MuScriptor, the most accurate on pop); **Stems** gives one track per instrument; **Piano** is tuned for piano ([accuracy](docs/transcription-accuracy.md)). Tick **Playable by two hands** to get a left/right hand part a pianist can actually play ([how](docs/playable-piano.md)), or pick **Piano cover** to have the song arranged for piano | [Basic Pitch](https://github.com/spotify/basic-pitch), [ByteDance piano model](https://github.com/bytedance/piano_transcription) (MAESTRO) |
 | 🥁 **Stem separation** | Splits a mix into vocals, drums, bass and other | [Demucs](https://github.com/facebookresearch/demucs) |
 | 🧾 **CSV enrichment** | Adds BPM, key and duration to a track list, plus YouTube and MusicBrainz info | librosa |
 | ⬇️ **Track download** | Grabs the audio from a YouTube (or similar) link | [yt-dlp](https://github.com/yt-dlp/yt-dlp) |
@@ -60,7 +60,7 @@ cd supermusic
 docker compose up --build
 ```
 
-Have an NVIDIA GPU? Run `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build` instead, so the Full band (YourMT3+) transcriber runs on it.
+Have an NVIDIA GPU? Run `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build` instead, so the Full band transcribers (MuScriptor and YourMT3+) run on it. MuScriptor also needs a free Hugging Face token in `.env` (see [configuration](docs/configuration.md)).
 
 | Open | To |
 |---|---|

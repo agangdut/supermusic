@@ -55,6 +55,21 @@ Most songs aren't solo piano, so a second test (`scripts/eval_mix.py`) mixes a b
 - Stems doesn't help on classical ensembles: Demucs is trained on pop stems, so strings and winds get split badly.
 - MusicNet's labels were aligned automatically and contain some timing errors, which caps every score. Compare the modes against each other, not against the MAESTRO numbers.
 
+## Real pop songs (MulTTiPop)
+
+The tests above are piano and classical music. [MulTTiPop](https://huggingface.co/datasets/gclef-cmu/multtipop) (CMU, 2026) is real pop: short sections (about 22 s each) of songs by 263 artists, with every instrument's notes lined up to the recording and checked by people. None of these models trained on it. Scored on the 169-clip dev set (about an hour of music, October 2026) with `scripts/eval_pop.py`. A note counts if it starts within 50 ms of a real one; for pitched notes, which instrument played it isn't checked.
+
+| Mode | Pitched precision | Pitched recall | Pitched F1 | Drums F1 | Overall F1 | Avg time per clip |
+|---|---|---|---|---|---|---|
+| General (Basic Pitch) | 0.374 | 0.119 | 0.181 | 0.000 | 0.143 | 1.9s |
+| Full band (YourMT3+) | 0.335 | 0.299 | 0.316 | 0.462 | 0.352 | 5.1s |
+| **Full band (MuScriptor)** | **0.470** | **0.423** | **0.445** | **0.570** | **0.474** | 17.2s |
+
+- **MuScriptor is the best model for pop.** It finds 42% of the real notes (YourMT3+ finds 30%) and more of what it writes is right (47% vs 34%). It's also better on drums. It takes about 3x longer, roughly 0.8 seconds per second of music on an RTX 2060.
+- **Pop is much harder than piano.** Even the best model gets under half the notes, against 0.97 on solo piano. A full mix hides quiet parts (pads, backing vocals, doubled guitars) under louder ones.
+- **General isn't meant for full mixes.** It catches 12% of the notes and writes no drums.
+- Auto now uses MuScriptor for everything except solo piano. MuScriptor hasn't been tested on MAESTRO or MusicNet yet, so solo piano keeps the Piano model.
+
 ## Voices
 
 A transcriber hears a singer as just another instrument. Two tests show where that goes wrong.
@@ -101,9 +116,10 @@ Auto separates a 30-second excerpt from the middle of the song into 6 parts and 
 | Detected | Auto uses |
 |---|---|
 | Piano is 60% or more | **Piano** |
-| Anything else, when the YourMT3+ service is running | **Full band** (YourMT3+) |
-| Without YourMT3+: piano is 15% or more, or drums + vocals are 25% or more | **Stems** |
-| Without YourMT3+: anything else | **General** |
+| Anything else, when the MuScriptor service is running with its Hugging Face token | **Full band** (MuScriptor) |
+| Anything else, when only YourMT3+ is running (or MuScriptor fails) | **Full band (YourMT3+)** |
+| Neither running: piano is 15% or more, or drums + vocals are 25% or more | **Stems** |
+| Neither running: anything else | **General** |
 
 ## Run it yourself
 
@@ -118,3 +134,10 @@ docker compose exec backend python scripts/eval_mix.py --backing drums.wav bass.
 ```
 
 Both need `data/raw/maestro/maestro-v3.0.0.zip` (108 GB). Results go to `data/processed/eval/`.
+
+For the pop test, first fetch the clips (needs YouTube access), then score:
+
+```bash
+docker compose exec backend python scripts/build_pop_benchmark.py --split dev
+docker compose exec backend python scripts/eval_pop.py --split dev --methods general multi muscriptor
+```

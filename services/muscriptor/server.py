@@ -76,7 +76,7 @@ class Req(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"loaded": _model is not None, "device": DEVICE, "model": SIZE}
+    return {"loaded": _model is not None, "token": bool(os.getenv("HF_TOKEN")), "device": DEVICE, "model": SIZE}
 
 
 @app.post("/transcribe")

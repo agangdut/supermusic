@@ -72,8 +72,8 @@ export default function AudioCard({
         <div className="mt-2 grid grid-cols-2 gap-2">
           {[
             { id: "auto", name: "Auto", note: "Detects the instruments and picks for you" },
-            { id: "multi", name: "Full band", note: "Most accurate on mixes (YourMT3+, uses your GPU)" },
-            { id: "muscriptor", name: "Full band (new)", note: "MuScriptor, 2026: newer model, being tested on pop" },
+            { id: "muscriptor", name: "Full band", note: "Most accurate on pop and band mixes (MuScriptor, uses your GPU)" },
+            { id: "multi", name: "Full band (YourMT3+)", note: "Older full-band model: about 3x faster, less accurate on pop" },
             { id: "stems", name: "Stems", note: "Split first, then one track per instrument" },
             { id: "piano", name: "Piano", note: "Solo piano, trained on MAESTRO" },
             { id: "basic", name: "General", note: "Fastest, any single instrument" },

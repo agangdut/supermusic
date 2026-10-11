@@ -51,10 +51,10 @@ def run_with_context(fn: Callable, *args, **kwargs) -> Callable[[], Any]:
 # Rough seconds of work per second of audio, measured on an RTX 2060 + Ryzen
 # CPU (Docker). Used only to draw an estimated progress bar.
 SPEED = {
-    "basic": 0.05, "piano": 0.5, "multi": 0.12, "muscriptor": 0.3, "stems": 1.1, "cover": 0.6,
+    "basic": 0.05, "piano": 0.5, "multi": 0.12, "muscriptor": 0.75, "stems": 1.1, "cover": 0.6,
     "separate_vocals": 0.45, "detect": 0.0, "auto": 0.5,
 }
-FIXED = {"detect": 15.0, "multi": 5.0, "muscriptor": 20.0, "basic": 3.0, "piano": 5.0, "stems": 10.0, "cover": 15.0}
+FIXED = {"detect": 15.0, "multi": 5.0, "muscriptor": 10.0, "basic": 3.0, "piano": 5.0, "stems": 10.0, "cover": 15.0}
 
 
 def estimate_seconds(mode: str, duration_s: Optional[float], vocal_split: bool = False) -> Optional[float]:
@@ -62,7 +62,7 @@ def estimate_seconds(mode: str, duration_s: Optional[float], vocal_split: bool =
         return None
     t = SPEED.get(mode, 0.5) * duration_s + FIXED.get(mode, 5.0)
     if mode == "auto":
-        t = FIXED["detect"] + SPEED["multi"] * duration_s + FIXED["multi"]
+        t = FIXED["detect"] + SPEED["muscriptor"] * duration_s + FIXED["muscriptor"]
     if vocal_split:
         t += SPEED["separate_vocals"] * duration_s
     return round(t, 1)
@@ -72,7 +72,7 @@ def friendly_error(err: str) -> str:
     """One sentence a user can act on, for the most common failures."""
     e = err.lower()
     if "yourmt3" in e and ("isn't running" in e or "connection refused" in e or "urlopen" in e):
-        return "The Full band engine isn't running. Start it with: docker compose up -d yourmt3, then try again."
+        return "The Full band (YourMT3+) engine isn't running. Start it with: docker compose up -d yourmt3, then try again."
     if "out of memory" in e or "cuda error" in e or "memoryerror" in e or "killed" in e:
         return "The computer ran out of memory on this song. Try a shorter clip, or the General mode."
     if "muscriptor" in e and ("isn't running" in e or "connection refused" in e or "urlopen" in e):

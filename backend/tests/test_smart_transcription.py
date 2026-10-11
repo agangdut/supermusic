@@ -53,6 +53,13 @@ def test_choose_model_prefers_yourmt3_when_running():
     assert choose_model({"piano": 0.95, "other": 0.05}, multi_available=True)[0] == "piano"
 
 
+def test_choose_model_prefers_muscriptor_over_yourmt3():
+    shares = {"guitar": 0.4, "vocals": 0.3, "drums": 0.3}
+    assert choose_model(shares, multi_available=True, muscriptor_available=True)[0] == "muscriptor"
+    assert choose_model(shares, muscriptor_available=True)[0] == "muscriptor"
+    assert choose_model({"piano": 0.95, "other": 0.05}, multi_available=True, muscriptor_available=True)[0] == "piano"
+
+
 def _fake_stems(tmp_path, names):
     sr = 22050
     t = np.arange(sr) / sr

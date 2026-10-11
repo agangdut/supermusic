@@ -216,11 +216,17 @@ def detect_instruments(audio_path: str | Path) -> Dict[str, float]:
     return stem_shares(stems)
 
 
-def choose_model(shares: Dict[str, float], multi_available: bool = False) -> Tuple[str, str]:
+def choose_model(shares: Dict[str, float], multi_available: bool = False,
+                 muscriptor_available: bool = False) -> Tuple[str, str]:
     piano = shares.get("piano", 0)
     busy = shares.get("drums", 0) + shares.get("vocals", 0)
     if piano >= PIANO_DOMINANT:
         return "piano", f"mostly piano ({round(piano * 100)}% of the sound)"
+    if muscriptor_available:
+        # On real pop songs (MulTTiPop, 169 clips) MuScriptor caught more notes than
+        # YourMT3+: pitched F1 0.445 vs 0.316, drums 0.570 vs 0.462
+        top = max(shares, key=shares.get) if shares else "unknown"
+        return "muscriptor", f"a mix led by {top} ({round(shares.get(top, 0) * 100)}%)"
     if multi_available:
         # YourMT3+ beats Stems and General on everything but solo piano
         # (piano in a band: 0.92 vs 0.87 vs 0.47 note F1; see docs/transcription-accuracy.md)
@@ -235,22 +241,36 @@ def choose_model(shares: Dict[str, float], multi_available: bool = False) -> Tup
 
 
 def transcribe_auto(audio_path: str | Path) -> Tuple[Path, Dict]:
+    from app.core import muscriptor_client
     from app.core.yourmt3_client import available, transcribe_multi
 
     from app.core.progress import report
 
     shares = detect_instruments(audio_path)
-    model, why = choose_model(shares, multi_available=available())
-    label = {"piano": "the Piano model", "multi": "YourMT3+ (Full band)", "stems": "Stems", "basic": "General"}[model]
+    model, why = choose_model(shares, multi_available=available(), muscriptor_available=muscriptor_client.available())
+    label = {"piano": "the Piano model", "muscriptor": "MuScriptor (Full band)", "multi": "YourMT3+ (Full band)",
+             "stems": "Stems", "basic": "General"}[model]
     report(f"Heard {why}; transcribing with {label}…")
+    info: Dict = {}
+    if model == "muscriptor":
+        from app.core.vocals import lead_vocal_track
+
+        try:
+            midi, info = lead_vocal_track(muscriptor_client.transcribe_muscriptor(audio_path))
+        except RuntimeError as e:  # e.g. the model couldn't load; YourMT3+ is the next best
+            if not available():
+                raise
+            report("MuScriptor failed; transcribing with YourMT3+ instead…")
+            model, info = "multi", {"fallback_from": f"muscriptor: {str(e)[:120]}"}
     if model == "piano":
-        midi, info = transcribe_piano(audio_path), {}
+        midi = transcribe_piano(audio_path)
     elif model == "multi":
         from app.core.vocals import lead_vocal_track
 
-        midi, info = lead_vocal_track(transcribe_multi(audio_path))
+        midi, more = lead_vocal_track(transcribe_multi(audio_path))
+        info = {**info, **more}
     elif model == "stems":
         midi, info = transcribe_stems(audio_path)
-    else:
-        midi, info = transcribe_to_midi(audio_path), {}
+    elif model == "basic":
+        midi = transcribe_to_midi(audio_path)
     return midi, {"chosen_model": model, "reason": why, "detected": shares, **info}

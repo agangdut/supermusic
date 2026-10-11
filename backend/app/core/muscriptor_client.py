@@ -20,9 +20,11 @@ URL = os.getenv("MUSCRIPTOR_URL", "http://muscriptor:8200")
 
 
 def available() -> bool:
+    """Running, and able to load its model (already loaded, or has a Hugging Face token)."""
     try:
         with urllib.request.urlopen(f"{URL}/health", timeout=3) as r:
-            return r.status == 200
+            h = json.loads(r.read())
+            return bool(h.get("loaded") or h.get("token"))
     except Exception:
         return False
 
