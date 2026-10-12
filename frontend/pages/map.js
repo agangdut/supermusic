@@ -65,6 +65,28 @@ function TrackLine({ t, onClick, sub }) {
   );
 }
 
+// Open a song on YouTube or Spotify: the CSV's own link when it has one, otherwise a search
+function ListenLinks({ t }) {
+  if (!t) return null;
+  const q = encodeURIComponent([t.artist, t.title].filter(Boolean).join(" "));
+  const links = [
+    ["YouTube", t.youtube_url || `https://www.youtube.com/results?search_query=${q}`, "hover:text-rose-300"],
+    ["Spotify", t.spotify_url || `https://open.spotify.com/search/${q}`, "hover:text-emerald-300"],
+  ];
+  return (
+    <span className="flex shrink-0 gap-1">
+      {links.map(([label, href, hover]) => (
+        <a key={label} href={href} target="_blank" rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          title={`Open ${t.title} on ${label}`}
+          className={`rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] text-gray-400 transition hover:border-white/25 ${hover}`}>
+          {label}
+        </a>
+      ))}
+    </span>
+  );
+}
+
 export default function MapPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -464,6 +486,10 @@ export default function MapPage() {
                   <span className="text-[11px] uppercase tracking-wider text-sky-200/80">If you like {selected.title}</span>
                   <button onClick={() => setSelectedId(null)} className="text-[11px] text-gray-500 hover:text-white">Close</button>
                 </div>
+                <div className="mt-1.5 flex items-center gap-2 text-[11px] text-gray-500">
+                  <span className="min-w-0 truncate">{[selected.title, selected.artist].filter(Boolean).join(" · ")}</span>
+                  <ListenLinks t={selected} />
+                </div>
                 {likes.loading && <p className="mt-2 text-xs text-gray-500">Finding songs you may like…</p>}
                 {likes.error && <p className="mt-2 text-xs text-rose-300">{likes.error}</p>}
                 {likes.results && (
@@ -476,7 +502,10 @@ export default function MapPage() {
                     <div className="mt-2 space-y-2.5">
                       {likes.results.map((r) => (
                         <div key={r.id}>
-                          <TrackLine t={byId[r.id]} onClick={() => setSelectedId(r.id)} />
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-0 flex-1"><TrackLine t={byId[r.id]} onClick={() => setSelectedId(r.id)} /></div>
+                            <ListenLinks t={byId[r.id]} />
+                          </div>
                           {(r.reasons?.length > 0 || r.rarely_played) && (
                             <div className="ml-4 text-[11px] text-gray-500">
                               {[r.rarely_played && "you rarely play this", ...(r.reasons || []).slice(0, 2)].filter(Boolean).join(" · ")}

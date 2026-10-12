@@ -682,6 +682,28 @@ def estimate_build_seconds(n: int) -> float:
     return est
 
 
+LINK_COLUMNS = {"uri", "track_uri", "spotify_uri", "spotify_url", "spotify_link", "url", "link",
+                "youtube_url", "youtube_link", "youtube"}
+
+
+def _links(row, cols) -> Dict[str, str]:
+    """Direct Spotify/YouTube links when the CSV has them (the page falls back to a search link)."""
+    out: Dict[str, str] = {}
+    for c in cols:
+        v = row[c]
+        if not isinstance(v, str):
+            continue
+        v = v.strip()
+        if v.startswith("spotify:track:"):
+            out.setdefault("spotify_url", "https://open.spotify.com/track/" + v.split(":")[-1])
+        elif v.startswith("https://open.spotify.com/"):
+            out.setdefault("spotify_url", v)
+        elif v.startswith(("https://www.youtube.com/", "https://youtube.com/", "https://music.youtube.com/",
+                           "https://youtu.be/", "http://www.youtube.com/", "http://youtu.be/")):
+            out.setdefault("youtube_url", v)
+    return out
+
+
 def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
               progress: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
     """`progress`, if given, is called with the name of each step as it starts."""
@@ -759,6 +781,7 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
 
     # ---- tracks ----------------------------------------------------------------
     title_col, artist_col, album_col = p.cols["title"], p.cols["artist"], p.cols["album"]
+    link_cols = [c for c in df.columns if str(c).lower() in LINK_COLUMNS]
     tracks = []
     for i in range(n):
         row = df.iloc[i]
@@ -776,6 +799,7 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
             "cluster": int(labels[i]),
             "engagement": round(float(eng[i]), 3) if eng is not None else None,
         }
+        t.update(_links(row, link_cols))
         if p.cols["plays"]:
             v = pd.to_numeric(pd.Series([row[p.cols["plays"]]]), errors="coerce").iloc[0]
             t["plays"] = int(v) if pd.notna(v) else 0

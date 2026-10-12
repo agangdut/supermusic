@@ -205,3 +205,13 @@ def test_import_listen_limit_caps_previews(monkeypatch):
             break
         _time.sleep(0.05)
     assert seen["limit"] == 3
+
+
+def test_tracks_carry_spotify_and_youtube_links():
+    df, _ = _library(3)
+    df["uri"] = ["spotify:track:abc123", None, "nope"] * 2
+    df["youtube_url"] = [None, "https://youtu.be/xyz", None] * 2
+    t = build_map(df)["tracks"]
+    assert t[0]["spotify_url"] == "https://open.spotify.com/track/abc123" and "youtube_url" not in t[0]
+    assert t[1]["youtube_url"] == "https://youtu.be/xyz" and "spotify_url" not in t[1]
+    assert "spotify_url" not in t[2]
