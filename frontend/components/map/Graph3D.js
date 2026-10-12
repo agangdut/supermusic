@@ -81,7 +81,11 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
     // Skip 0x0 sizes: the map page is hidden (not unmounted) while you're on another tab
     const ro = new ResizeObserver(([e]) => {
       const { width, height } = e.contentRect;
-      if (width && height) setSize({ width, height });
+      if (!width || !height) return;
+      setSize({ width, height });
+      // The rotate controls measure the canvas once; if the map was built while hidden
+      // they measured 0x0 and dragging does nothing, so let them measure again
+      fgRef.current?.controls()?.handleResize?.();
     });
     ro.observe(wrapRef.current);
     return () => ro.disconnect();
