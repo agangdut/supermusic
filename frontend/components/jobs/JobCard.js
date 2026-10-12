@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ArtifactList from "./ArtifactList";
 import { jobLabel } from "@/hooks/useUploadJobs";
 
@@ -59,7 +59,11 @@ export default function JobCard({ job, onUseArtifact, onRetry, className = "" })
   const end = parseTime(finished_at);
   const elapsed = start ? ((running ? now : end || now) - start) / 1000 : null;
   const estimated = eta_s && elapsed != null ? Math.min(95, (elapsed / eta_s) * 100) : 0;
-  const pct = running ? Math.max(progress || 0, estimated) : status === "success" || status === "done" ? 100 : progress || 0;
+  // The estimate can grow mid-job (a slower step than expected); never move the bar backwards
+  const maxPct = useRef(0);
+  const pct = running
+    ? (maxPct.current = Math.max(maxPct.current, progress || 0, estimated))
+    : status === "success" || status === "done" ? 100 : progress || 0;
   const slow = running && eta_s && elapsed > eta_s * 1.5;
   const remaining = running && eta_s && elapsed != null ? eta_s - elapsed : null;
   const [showDetails, setShowDetails] = useState(false);
@@ -79,7 +83,7 @@ export default function JobCard({ job, onUseArtifact, onRetry, className = "" })
         </div>
         <div className="shrink-0 text-right text-[11px] tabular-nums text-gray-500">
           {elapsed != null && <div>{running ? `${fmtDuration(elapsed)} elapsed` : `took ${fmtDuration(elapsed)}`}</div>}
-          {running && remaining != null && !slow && <div>about {fmtDuration(Math.max(5, remaining))} left</div>}
+          {running && remaining != null && !slow && <div>{remaining > 5 ? `about ${fmtDuration(remaining)} left` : "finishing up…"}</div>}
         </div>
       </header>
 

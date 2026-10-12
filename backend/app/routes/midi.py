@@ -19,7 +19,7 @@ from app.core.playability import DEFAULT_SPAN, make_playable, playability_report
 from app.core.transcription import transcribe_to_midi
 from app.core.yourmt3_client import transcribe_multi
 from app.core.muscriptor_client import transcribe_muscriptor
-from app.core.progress import estimate_seconds, report, reporting, run_with_context
+from app.core.progress import begin, estimate_seconds, plan_later, report, reporting, run_with_context
 from app.core.game_client import available as game_available
 from app.core.vocals import lead_vocal_track, split_vocals, sung_lead_vocal, transcribe_vocal_aware
 
@@ -132,6 +132,14 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
                 j.eta_s = per_stem and round(per_stem * len(req.stems or separated[1]), 1)
             else:
                 j.eta_s = estimate_seconds(req.model, duration_s, vocal_split=(req.model == "basic" and req.vocal_track))
+            # Steps after the main transcription also count towards time left
+            sung = req.vocal_track and req.model in ("multi", "muscriptor", "auto") and not separated and game_available()
+            stems_used = req.stems or (separated[1] if separated else STEM_NAMES)
+            measured = sung or (req.vocal_track and req.model == "basic") or (req.model == "stems" and "vocals" in stems_used)
+            later = plan_later(j, duration_s, (["separate_vocals", "game"] if sung else [])
+                               + (["melody"] if measured else []) + ["preview"])
+            if j.eta_s:
+                j.eta_s = round(j.eta_s + later, 1)
             j.progress = 5
 
             def run():
@@ -187,14 +195,14 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
             # How closely the melody follows the singer, when we have the voice on its own
             vocal_stem = info.pop("vocal_stem", None)
             if vocal_stem and Path(vocal_stem).exists():
-                report("Checking the melody against the singer…")
+                begin("melody", "Checking the melody against the singer…")
                 try:
                     info["melody"] = await loop.run_in_executor(None, melody_match, midi_path, vocal_stem)
                 except Exception as e:  # a score is a bonus; never fail the job over it
                     info["melody"] = {"error": str(e)}
 
             # A listenable piano rendering, when FluidSynth is installed
-            report("Rendering a piano preview…")
+            begin("preview", "Rendering a piano preview…")
             preview = await loop.run_in_executor(None, render_audio, midi_path)
             if preview:
                 artifacts["preview"] = save_artifact(j, preview.name, preview.read_bytes())

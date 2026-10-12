@@ -57,7 +57,40 @@ def report_detail(stage: str, fraction: Optional[float] = None, remaining_s: Opt
     if remaining_s is not None:
         started = getattr(job, "started_at", None) or getattr(job, "created_at", None)
         if started is not None:
-            job.eta_s = round((now - started).total_seconds() + remaining_s + 5, 1)
+            later = sum((getattr(job, "later_steps", None) or {}).values())
+            job.eta_s = round((now - started).total_seconds() + remaining_s + later + 5, 1)
+
+
+# Steps that run after the main transcription, in seconds per second of audio
+# (+ fixed). Measured roughly on a 4-core CPU; the backend has no GPU.
+LATER_SPEED = {"separate_vocals": 0.45, "game": 0.1, "melody": 0.25, "preview": 0.05}
+LATER_FIXED = {"separate_vocals": 5.0, "game": 5.0, "melody": 2.0, "preview": 3.0}
+
+
+def plan_later(job, duration_s: Optional[float], steps) -> float:
+    """Remember which steps follow the main one, so time-left counts them. Returns their total."""
+    if not duration_s:
+        job.later_steps = {}
+        return 0.0
+    job.later_steps = {s: round(LATER_SPEED[s] * duration_s + LATER_FIXED[s], 1) for s in steps}
+    return sum(job.later_steps.values())
+
+
+def begin(step: str, stage: str) -> None:
+    """Start one of the planned later steps: show it, and re-estimate time left from
+    what's actually still to do, so the countdown never sits at "a few seconds left"."""
+    report(stage)
+    job = _current.get()
+    later = dict(getattr(job, "later_steps", None) or {}) if job is not None else {}
+    if step not in later:
+        return
+    keys = list(later)
+    later = {k: later[k] for k in keys[keys.index(step):]}
+    started = getattr(job, "started_at", None) or getattr(job, "created_at", None)
+    if started is not None:
+        job.eta_s = round((datetime.utcnow() - started).total_seconds() + sum(later.values()), 1)
+    later.pop(step)  # what's left after this step, for any later report_detail
+    job.later_steps = later
 
 
 @contextmanager

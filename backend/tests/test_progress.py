@@ -23,3 +23,23 @@ def test_friendly_error_fallback_and_estimate():
     assert friendly_error("weird") .startswith("Something went wrong")
     assert estimate_seconds("stems", 100) > estimate_seconds("multi", 100)
     assert estimate_seconds("basic", None) is None
+
+
+def test_time_left_counts_steps_after_transcription():
+    from datetime import datetime, timedelta
+
+    from app.core.progress import begin, plan_later, report_detail, reporting
+
+    class J:
+        progress, stages, eta_s = 0, [], None
+        started_at = datetime.utcnow() - timedelta(seconds=100)
+
+    job = J()
+    later = plan_later(job, 100, ["separate_vocals", "game", "melody", "preview"])
+    assert later == 50 + 15 + 27 + 8
+    with reporting(job):
+        report_detail("MuScriptor: section 9 of 10", 0.9, remaining_s=10)
+        assert 100 + 10 + later <= job.eta_s <= 100 + 10 + later + 6  # not just MuScriptor's own 10 s
+        begin("melody", "Checking the melody…")  # GAME steps skipped or done: only melody + preview left
+        assert 100 + 27 + 8 - 1 <= job.eta_s <= 100 + 27 + 8 + 1
+        assert job.later_steps == {"preview": 8}

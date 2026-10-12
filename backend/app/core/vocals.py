@@ -184,15 +184,15 @@ def sung_lead_vocal(midi_path: str | Path, audio_path: str | Path) -> Tuple[Path
     import pretty_midi
 
     from app.core.game_client import transcribe_singing
-    from app.core.progress import report
+    from app.core.progress import begin
 
-    report("Separating the voice to transcribe the singing…")
+    begin("separate_vocals", "Separating the voice to transcribe the singing…")
     vocals, _backing, share = split_vocals(audio_path)
     if share < VOCAL_PRESENT:
         path, info = lead_vocal_track(midi_path)
         return path, {**info, "vocal_share": round(share, 3)}
 
-    report("Transcribing the singing with GAME…")
+    begin("game", "Transcribing the singing with GAME…")
     try:
         sung = pretty_midi.PrettyMIDI(str(transcribe_singing(vocals)))
     except RuntimeError:  # GAME down or failed: the full-band model's own voice track still works

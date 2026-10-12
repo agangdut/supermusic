@@ -109,6 +109,8 @@ class Job(ORMModel):
     stage: Optional[str] = Field(default=None, description="The step the job is on right now")
     stages: List[Dict[str, Any]] = Field(default_factory=list, description="Steps so far, with start/end times")
     eta_s: Optional[float] = Field(default=None, description="Rough expected total run time in seconds")
+    later_steps: Dict[str, float] = Field(default_factory=dict, exclude=True,
+                                          description="Estimated seconds of each step still to come after the main one")
 
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
