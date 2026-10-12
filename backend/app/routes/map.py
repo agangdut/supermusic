@@ -112,6 +112,7 @@ class ImportJob:
         self.cached_times: List[float] = []
         self.listen = {"todo": 0, "done": 0, "have": 0}
         self.listening = False
+        self.skip_listen = False  # set by POST /import/{id}/skip-listen
         self.listen_times: List[float] = []
         self._listen_last = 0.0
         self.draw_started: Optional[float] = None
@@ -175,7 +176,7 @@ class ImportJob:
         if self.enrich and not self.lookup_planned:
             return None  # still counting what needs looking up
         listen_left = 0.0
-        if self.listening:
+        if self.listening and not self.skip_listen:
             listen_left = max(self.listen["todo"] - self.listen["done"], 0) * self._avg(self.listen_times, LISTEN_SONG_S)
         lookup_left = self._lookup_left() if self.enrich and self.step != "listen" else 0.0
         return lookup_left + listen_left + estimate_build_seconds(self.songs)
@@ -213,8 +214,11 @@ class ImportJob:
             ls = self.listen
             state = "active" if self.step == "listen" else "done"
             detail = f"{ls['done']:,} of {ls['todo']:,} songs" if state == "active" else \
-                f"{ls['have']:,} songs have a sound description"
-            steps.append({"key": "listen", "label": "Listen to previews", "state": state, "detail": detail})
+                f"{ls['have']:,} songs have a sound description" + (" (skipped the rest)" if self.skip_listen else "")
+            if state == "active" and self.skip_listen:
+                detail = "Skipping…"
+            steps.append({"key": "listen", "label": "Listen to previews", "state": state, "detail": detail,
+                          "skippable": state == "active" and not self.skip_listen})
         draw_state = "done" if self.status == "done" else "active" if self.step == "draw" else "waiting"
         steps.append({"key": "draw", "label": "Draw your map", "state": draw_state,
                       "detail": self.draw_detail if draw_state == "active" else
@@ -246,6 +250,7 @@ class ImportJob:
 async def import_library(
     files: List[UploadFile] = File(..., description="Spotify / Apple Music exports or CSVs; several at once is fine."),
     enrich: bool = Form(True, description="Look songs up online (genre from Last.fm/MusicBrainz tags, year from Deezer) and analyse 30 s previews for tempo/key/energy."),
+    listen: bool = Form(True, description="Also run each preview through CLAP for a 'sound' description (the slow 'Listen to previews' step). Needs enrich and the CLAP service."),
     limit: int = Form(1500, ge=1, le=5000),
 ) -> dict:
     parsed, detected = [], []
@@ -267,16 +272,17 @@ async def import_library(
             job.songs = int(len(df))
             found = None
             # Sound vectors need the CLAP service; without it the map uses tags and features only
-            listen = enrich and sound.available()
+            listening = listen and enrich and sound.available()
             if enrich:
                 def on_start(plan):
                     job.on_start(plan)
                     job.step = "lookup"
                 df, found = library_import.enrich(df, limit=limit, on_start=on_start, on_song=job.on_song)
-            if listen:
+            if listening:
                 job.start_listening()
                 try:
-                    df, job.listen["have"] = sound.add_sound(df, limit=limit, progress=job.on_listen)
+                    df, job.listen["have"] = sound.add_sound(df, limit=limit, progress=job.on_listen,
+                                                             stop=lambda: job.skip_listen)
                 except RuntimeError as e:  # the service stopped mid-import: carry on without sound
                     job.warning = f"Songs weren't given a sound description: {e}"
             out = settings.PROCESSED_DIR / "library"
@@ -316,6 +322,16 @@ def import_status(job_id: str) -> dict:
     if view["status"] != "done":
         view.pop("result")
     return view
+
+
+@router.post("/import/{job_id}/skip-listen")
+def skip_listen(job_id: str) -> dict:
+    """Stop the "Listen to previews" step early and draw the map with the songs heard so far."""
+    job = _imports.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="This import is no longer running (the server may have restarted). Please import again.")
+    job.skip_listen = True
+    return {k: v for k, v in job.view().items() if k != "result"}
 
 
 @router.get("/estimate")

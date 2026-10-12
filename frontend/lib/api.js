@@ -172,11 +172,17 @@ export async function uploadCsv(file) {
 }
 
 /** POST /map/import — Spotify / Apple Music exports (several files at once). Returns an import job. */
-export async function importLibrary(files, { enrich = true } = {}) {
+export async function importLibrary(files, { enrich = true, listen = true } = {}) {
   const form = new FormData();
   for (const f of files) form.append("files", f);
   form.append("enrich", enrich ? "true" : "false");
+  form.append("listen", listen ? "true" : "false");
   return apiFetch("/map/import", { method: "POST", body: form });
+}
+
+/** POST /map/import/{id}/skip-listen — stop listening to previews and draw the map now. */
+export async function skipListening(id) {
+  return apiFetch(`/map/import/${id}/skip-listen`, { method: "POST" });
 }
 
 /** GET /map/import/{id} */

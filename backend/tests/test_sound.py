@@ -128,6 +128,29 @@ def test_import_progress_shows_listening_step():
     assert step["state"] == "active" and step["detail"] == "1 of 3 songs"
     assert v["eta_s"] is not None
 
+    assert step["skippable"]
+
+
+def test_add_sound_can_be_stopped_early(monkeypatch):
+    monkeypatch.setattr(sound, "embed_audio", lambda data: _unit(np.ones(16)))
+    monkeypatch.setattr(sound, "_preview", lambda artist, title: b"audio")
+    df = pd.DataFrame([{"title": f"Skip {i}", "artist": f"Stopper {i}"} for i in range(5)])
+    heard = []
+    out, have = sound.add_sound(df, progress=lambda n, t: heard.append(n), stop=lambda: len(heard) >= 2)
+    assert have == 2 and heard == [1, 2]
+
+
+def test_skipping_listening_shows_in_progress():
+    from app.routes.map import ImportJob
+
+    job = ImportJob([{"file": "a.csv", "type": "CSV", "songs": 3}], enrich=True)
+    job.lookup_planned = True
+    job.start_listening()
+    job.on_listen(1, 3)
+    job.skip_listen = True
+    step = next(s for s in job.view()["steps"] if s["key"] == "listen")
+    assert step["detail"] == "Skipping…" and not step["skippable"]
+
 
 def test_songs_you_may_like_follow_sound():
     from app.core.music_map import similar_tracks

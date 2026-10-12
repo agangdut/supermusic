@@ -4,7 +4,7 @@ import Head from "next/head";
 
 import PageShell from "@/components/layout/PageShell";
 import { setBackgroundWork } from "@/lib/backgroundWork";
-import { buildMap, getImport, getMapEstimate, importLibrary, likeSongs, searchSound } from "@/lib/api";
+import { buildMap, getImport, getMapEstimate, importLibrary, likeSongs, searchSound, skipListening } from "@/lib/api";
 import { colorFor } from "@/components/map/colors";
 import ImportProgress, { BuildProgress } from "@/components/map/ImportProgress";
 
@@ -116,6 +116,7 @@ export default function MapPage() {
 
   const [pending, setPending] = useState(null); // files picked, waiting for "Build my map"
   const [enrichOnline, setEnrichOnline] = useState(true);
+  const [listenPreviews, setListenPreviews] = useState(true);
   const [importJob, setImportJob] = useState(null);
   const [uploading, setUploading] = useState(0); // number of files being sent
   const [lastWarning, setLastWarning] = useState(null); // e.g. online lookups were skipped
@@ -141,7 +142,7 @@ export default function MapPage() {
     setUploading(files.length);
     setLastWarning(null);
     try {
-      let job = await importLibrary(files, { enrich: enrichOnline });
+      let job = await importLibrary(files, { enrich: enrichOnline, listen: listenPreviews });
       setUploading(0);
       setImportJob(job);
       let misses = 0;
@@ -303,6 +304,15 @@ export default function MapPage() {
               songs by how they sound and lets you search by vibe.
             </span>
           </label>
+          {enrichOnline && (
+            <label className="mt-2 ml-5 flex items-start gap-2 text-xs text-gray-300">
+              <input type="checkbox" checked={listenPreviews} onChange={(e) => setListenPreviews(e.target.checked)} className="mt-0.5 accent-fuchsia-500" />
+              <span>
+                Listen to previews for the &ldquo;sound&rdquo; description. This is the slow part of a big import; untick it to skip it.
+                You can also skip it partway through. Songs heard before are remembered, so the next import is faster.
+              </span>
+            </label>
+          )}
           <div className="mt-3 flex gap-2">
             <button onClick={runImport} className="rounded-lg bg-gradient-to-r from-fuchsia-600 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white">Build my map</button>
             <button onClick={() => setPending(null)} className="rounded-lg px-3 py-1.5 text-xs text-gray-400 hover:text-white">Cancel</button>
@@ -311,7 +321,19 @@ export default function MapPage() {
       )}
 
       {(uploading > 0 || importJob) && (
-        <ImportProgress job={importJob} uploading={uploading > 0} fileCount={uploading} />
+        <ImportProgress
+          job={importJob}
+          uploading={uploading > 0}
+          fileCount={uploading}
+          onSkip={async (key) => {
+            if (key !== "listen" || !importJob) return;
+            try {
+              setImportJob(await skipListening(importJob.id));
+            } catch (err) {
+              setError(err.message || String(err));
+            }
+          }}
+        />
       )}
       {importJob === null && !loading && lastWarning && (
         <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">{lastWarning}</div>

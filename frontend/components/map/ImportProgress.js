@@ -40,7 +40,7 @@ const DOT = {
  * timings (time spent / (time spent + time left)), so the bar moves at an even pace
  * whether a song comes from the cache in milliseconds or needs a fresh lookup.
  */
-export default function ImportProgress({ job, uploading, fileCount }) {
+export default function ImportProgress({ job, uploading, fileCount, onSkip }) {
   if (uploading) {
     return (
       <Panel>
@@ -64,6 +64,14 @@ export default function ImportProgress({ job, uploading, fileCount }) {
             <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${DOT[s.state] || DOT.waiting}`} />
             <span className={s.state === "waiting" ? "text-gray-500" : "text-gray-200"}>{s.label}</span>
             {s.detail && <span className="text-gray-500">{s.detail}</span>}
+            {s.skippable && onSkip && (
+              <button
+                onClick={() => onSkip(s.key)}
+                className="ml-auto rounded px-2 py-0.5 text-[11px] text-fuchsia-300 hover:bg-white/5 hover:text-white"
+              >
+                Skip
+              </button>
+            )}
           </li>
         ))}
       </ol>

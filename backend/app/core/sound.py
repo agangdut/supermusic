@@ -129,8 +129,11 @@ def _preview(artist: str, title: str) -> Optional[bytes]:
 
 
 def add_sound(df: pd.DataFrame, limit: int = 1500,
-              progress: Optional[Callable[[int, int], None]] = None) -> tuple[pd.DataFrame, int]:
-    """Fill the `sound` column for up to `limit` songs (most-played first). Returns (df, songs with sound)."""
+              progress: Optional[Callable[[int, int], None]] = None,
+              stop: Optional[Callable[[], bool]] = None) -> tuple[pd.DataFrame, int]:
+    """Fill the `sound` column for up to `limit` songs (most-played first). Returns (df, songs with sound).
+
+    `stop()` returning True ends the loop early; songs already done keep their sound."""
     df = df.copy()
     if COLUMN not in df.columns:
         df[COLUMN] = None
@@ -143,6 +146,8 @@ def add_sound(df: pd.DataFrame, limit: int = 1500,
 
     cache = _cache_dir()
     for n, i in enumerate(todo, 1):
+        if stop and stop():
+            break
         artist = str(df.at[i, "artist"]) if "artist" in df.columns and pd.notna(df.at[i, "artist"]) else ""
         title = str(df.at[i, "title"]) if "title" in df.columns and pd.notna(df.at[i, "title"]) else ""
         local = Path(str(df.at[i, path_col])) if path_col and pd.notna(df.at[i, path_col]) else None
