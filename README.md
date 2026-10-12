@@ -40,7 +40,7 @@ _October 2026._ New here? Read this, then **[How it works](docs/how-it-works.md)
 | 🥁 **Stem separation** | Splits a mix into vocals, drums, bass and other | [Demucs](https://github.com/facebookresearch/demucs) |
 | 🧾 **CSV enrichment** | Adds BPM, key and duration to a track list, plus YouTube and MusicBrainz info | librosa |
 | ⬇️ **Track download** | Grabs the audio from a YouTube (or similar) link (API only for now) | [yt-dlp](https://github.com/yt-dlp/yt-dlp) |
-| 🌌 **Music Map** | Turns your library (a CSV, or Spotify / Apple Music exports) into a 3D constellation: taste clusters, hidden connections between genres, and picks you've been missing | UMAP, scikit-learn, three.js |
+| 🌌 **Music Map** | Turns your library (a CSV, or Spotify / Apple Music exports) into a 3D constellation: taste clusters, hidden connections between genres, picks you've been missing, and search by how songs sound | UMAP, scikit-learn, three.js, CLAP |
 | 📦 **Batch and export** | Runs many files at once and zips up the results | FastAPI |
 
 Every task runs as a **job**. You start it, the page shows its progress and time left, and the finished files appear as downloads.

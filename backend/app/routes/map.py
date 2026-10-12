@@ -22,7 +22,7 @@ class MapRequest(BaseModel):
     clusters: Optional[int] = Field(None, ge=1, le=20, description="Fixed number of groups; empty picks one.")
     weights: Dict[str, float] = Field(
         default_factory=dict,
-        description="How much each aspect shapes the map: key, tempo, genre, mood, artist, era (0-2).",
+        description="How much each aspect shapes the map: key, tempo, genre, mood, artist, era, sound (0-2).",
     )
 
 
@@ -73,7 +73,7 @@ from typing import List  # noqa: E402
 
 from fastapi import File, Form, UploadFile  # noqa: E402
 
-from app.core import library_import  # noqa: E402
+from app.core import library_import, sound  # noqa: E402
 from app.core.config import settings  # noqa: E402
 
 _imports: Dict[str, "ImportJob"] = {}
@@ -82,6 +82,7 @@ _imports: Dict[str, "ImportJob"] = {}
 # analysis (~1-2 s) plus a MusicBrainz request for a new artist (1 s); a cached one costs ~nothing.
 NEW_SONG_S = 2.0
 CACHED_SONG_S = 0.02
+LISTEN_SONG_S = 1.5  # one preview fetched and run through CLAP (cached songs are near-instant)
 
 
 class ImportJob:
@@ -109,6 +110,10 @@ class ImportJob:
         self.lookup_planned = not enrich
         self.new_times: List[float] = []
         self.cached_times: List[float] = []
+        self.listen = {"todo": 0, "done": 0, "have": 0}
+        self.listening = False
+        self.listen_times: List[float] = []
+        self._listen_last = 0.0
         self.draw_started: Optional[float] = None
         self.draw_estimate = 0.0
         self.last_progress = 0
@@ -131,6 +136,17 @@ class ImportJob:
         lk["done_cached"] += r["cached"]
         lk["failed" if r["error"] else "found" if r["found"] else "not_found"] += 1
         (self.cached_times if r["cached"] else self.new_times).append(r["seconds"])
+
+    def start_listening(self) -> None:
+        self.step = "listen"
+        self.listening = True
+        self._listen_last = time.monotonic()
+
+    def on_listen(self, n: int, total: int) -> None:
+        now = time.monotonic()
+        self.listen_times.append(now - self._listen_last)
+        self._listen_last = now
+        self.listen.update(done=n, todo=total)
 
     def start_drawing(self, n: int) -> None:
         self.step = "draw"
@@ -158,7 +174,11 @@ class ImportJob:
             return max(left, 0.0)
         if self.enrich and not self.lookup_planned:
             return None  # still counting what needs looking up
-        return (self._lookup_left() if self.enrich else 0.0) + estimate_build_seconds(self.songs)
+        listen_left = 0.0
+        if self.listening:
+            listen_left = max(self.listen["todo"] - self.listen["done"], 0) * self._avg(self.listen_times, LISTEN_SONG_S)
+        lookup_left = self._lookup_left() if self.enrich and self.step != "listen" else 0.0
+        return lookup_left + listen_left + estimate_build_seconds(self.songs)
 
     def view(self) -> dict:
         now = self.finished or time.monotonic()
@@ -189,6 +209,12 @@ class ImportJob:
                 detail = f"{lk['found']:,} found, {lk['not_found']:,} not found" + \
                          (f", {lk['failed']:,} failed" if lk["failed"] else "")
             steps.append({"key": "lookup", "label": "Look songs up online", "state": state, "detail": detail})
+        if self.listening:
+            ls = self.listen
+            state = "active" if self.step == "listen" else "done"
+            detail = f"{ls['done']:,} of {ls['todo']:,} songs" if state == "active" else \
+                f"{ls['have']:,} songs have a sound description"
+            steps.append({"key": "listen", "label": "Listen to previews", "state": state, "detail": detail})
         draw_state = "done" if self.status == "done" else "active" if self.step == "draw" else "waiting"
         steps.append({"key": "draw", "label": "Draw your map", "state": draw_state,
                       "detail": self.draw_detail if draw_state == "active" else
@@ -201,6 +227,8 @@ class ImportJob:
             message = "Done"
         elif self.step == "lookup":
             message = f"Looking up songs online… {lk['done']:,} of {lk['todo']:,}"
+        elif self.step == "listen":
+            message = f"Listening to previews… {self.listen['done']:,} of {self.listen['todo']:,}"
         elif self.step == "draw":
             message = "Drawing your map… almost done" if left == 0 else \
                 f"Drawing your map: {self.draw_detail.lower()}…" if self.draw_detail else "Drawing your map…"
@@ -238,11 +266,19 @@ async def import_library(
             df = library_import.merge(parsed)
             job.songs = int(len(df))
             found = None
+            # Sound vectors need the CLAP service; without it the map uses tags and features only
+            listen = enrich and sound.available()
             if enrich:
                 def on_start(plan):
                     job.on_start(plan)
                     job.step = "lookup"
                 df, found = library_import.enrich(df, limit=limit, on_start=on_start, on_song=job.on_song)
+            if listen:
+                job.start_listening()
+                try:
+                    df, job.listen["have"] = sound.add_sound(df, limit=limit, progress=job.on_listen)
+                except RuntimeError as e:  # the service stopped mid-import: carry on without sound
+                    job.warning = f"Songs weren't given a sound description: {e}"
             out = settings.PROCESSED_DIR / "library"
             out.mkdir(parents=True, exist_ok=True)
             csv_path = out / f"library_{job.id[:8]}.csv"
@@ -286,3 +322,30 @@ def import_status(job_id: str) -> dict:
 def estimate(tracks: int) -> dict:
     """Roughly how long drawing a map of `tracks` songs takes on this machine."""
     return {"seconds": round(estimate_build_seconds(max(tracks, 1)), 1)}
+
+
+# ---------------------------------------------------------------------------
+# Describe-a-vibe search over the songs' sound vectors
+# ---------------------------------------------------------------------------
+
+class SearchRequest(BaseModel):
+    csv_path: Optional[str] = Field(None, description="The map's library CSV (meta.library_csv or the uploaded path).")
+    sample: bool = False
+    query: str = Field(..., min_length=1, max_length=200, description='What it should sound like, e.g. "sad slow piano".')
+    limit: int = Field(20, ge=1, le=100)
+
+
+@router.post("/search")
+async def search_sound(req: SearchRequest) -> dict:
+    """Songs whose sound best matches a description. Needs a library imported with the CLAP service running."""
+    path = SAMPLE_CSV if req.sample else Path(req.csv_path or "")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"CSV file not found: {path}")
+    df = pd.read_csv(path).dropna(how="all").reset_index(drop=True)  # same rows, same ids as /build
+    if sound.matrix(df) is None:
+        raise HTTPException(status_code=400, detail="This library has no sound data yet. Import it again with the CLAP service running.")
+    try:
+        results = await run_in_threadpool(sound.search, df, req.query.strip(), req.limit)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {"query": req.query, "results": results}

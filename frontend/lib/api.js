@@ -152,6 +152,11 @@ export async function buildMap({ csv_path, sample = false, neighbors = 4, cluste
   return postJSON("/map/build", { csv_path, sample, neighbors, clusters, weights });
 }
 
+/** Songs whose sound matches a typed description (needs sound data from an import with CLAP running). */
+export async function searchSound({ csv_path, sample = false, query, limit = 20 }) {
+  return postJSON("/map/search", { csv_path, sample, query, limit });
+}
+
 /** Upload a CSV and return its server path. */
 export async function uploadCsv(file) {
   const form = new FormData();

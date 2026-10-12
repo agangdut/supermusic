@@ -19,7 +19,7 @@ Open it at **http://localhost:3000/map**. It loads a 156-track sample library (a
 
 Position means similarity. Two stars close together sound alike on the things you've weighted. The exact axes don't mean anything on their own.
 
-## The three panels
+## The panels
 
 **Clusters.** Every group gets a plain-language name, like *Neo-Soul · A minor · 84–95 BPM · upbeat*. The bar shows its **signal**. With listening data, the signal is how much more you play the cluster than its size would predict: a cluster that is 14% of your library but 20% of your plays has a lift of 1.43×. Without listening data, it shows how tightly the tracks hang together. Click a cluster to light it up.
 
@@ -27,10 +27,13 @@ Position means similarity. Two stars close together sound alike on the things yo
 - the **same or a neighbouring key** on the Camelot wheel (the system DJs use for harmonic mixing, so A minor sits next to E minor and D minor)
 - the **same tempo or half/double time**, so 87 BPM neo-soul links to 174 BPM drum & bass
 - a **similar mood** (energy, valence, danceability)
+- a **similar sound**: the two songs are among the closest 3% of pairs by their CLAP sound description (only for songs that have one, see below)
 
 They make good transitions, mashups and playlist bridges.
 
 **For you.** This tab appears when your CSV has listening data. SuperMusic averages your most-played tracks into a "taste centre", then finds the least-played third of your library that sits closest to it. It favours clusters with high signal and never shows more than four picks from one cluster. Each pick says which favourite it resembles and why.
+
+**Search.** This tab appears when songs have a sound description. Type what you want to hear, such as *sad slow piano* or *aggressive distorted guitars*, and the 20 closest-sounding songs light up on the map.
 
 The **insight cards** across the top show the strongest skews in your listening, for example *"34% of your listening is Lo-Fi, though it's only 22% of your library."*
 
@@ -43,6 +46,17 @@ The sliders change what "similar" means, from 0× (ignore) to 2× (dominant). Cl
 - **Genre:** turn it down to let sound, not labels, decide
 - **Mood:** energy, valence, danceability, acousticness…
 - **Artist:** pulls an artist's tracks together
+- **Sound:** how songs actually sound (instruments, production, vocals), heard by an AI model. Only shown when songs have a sound description
+
+## Sound descriptions (CLAP)
+
+When you import with **Look up … online** ticked and the `clap` service is running (`docker compose up -d clap`), each song's 30-second Deezer preview also goes through [CLAP](https://huggingface.co/laion/clap-htsat-unfused), an AI model trained on audio paired with text descriptions. It turns the preview into 512 numbers that describe how the song sounds, and that description powers the **Sound** slider, "similar sound" hidden links, closer **For you** picks and **Search**. The import shows this as a "Listen to previews" step.
+
+- In a test on 560 songs, songs with similar CLAP descriptions shared a genre 39% of the time, against 16% for key, tempo and energy alone (see the research section below).
+- Descriptions are saved in the library CSV as a `sound` column, so **Remap** and **Search** don't need to redo the work. They're also cached in `data/cache/sound_clap/`, so importing the same songs again is quick.
+- A CSV with a `local_path` column pointing at audio files on the server uses those files instead of Deezer previews.
+- CLAP runs on the CPU in about a second per song; `docker-compose.gpu.yml` puts it on the GPU. The model (a few hundred MB) downloads into `data/models/hf` the first time.
+- Without the service, or without online lookups, the map works exactly as before.
 
 ## Import from Spotify or Apple Music
 
@@ -91,7 +105,7 @@ Limits: at least 3 tracks and at most 5,000. Under 12 tracks, the layout uses PC
 1. **Features.** Each track becomes a vector. Keys are placed on the Camelot wheel as an angle, tempo goes on a log scale, genres and recurring artists become tags (each song's detailed genre tags, such as Spotify's "toronto rap, pop rap, canadian pop", are also summed up into one or two broad genres like Hip-Hop or Pop; the broad genres carry most of the weight and name the clusters, so one tag that many artists share can't label everything. When most of your library is one genre, say Hip-Hop, clusters are named after the subgenre that sets them apart instead, such as West Coast Hip-Hop, Trap or Trap Soul, and a cluster where no genre leads is called a "Mix of …"), and mood columns are standardised. Your slider weights scale each part.
 2. **Layout.** UMAP squeezes the vectors into 3D, and each cluster is then opened up a little so every star is visible.
 3. **Clusters.** k-means runs on the 3D layout, and the number of clusters is picked automatically by silhouette score.
-4. **Links.** Each track links to its nearest neighbours. Hidden connections use a separate "musical only" space (key, tempo folded by octave, mood) and keep only pairs from different clusters.
+4. **Links.** Each track links to its nearest neighbours. Hidden connections use a separate "musical only" space (key, tempo folded by octave, mood, and sound when there is one) and keep only pairs from different clusters.
 5. **Taste.** Plays, ratings and likes combine into one score per track, with skips counting against it. Those scores drive cluster signal, insights and picks.
 
 The code lives in [`backend/app/core/music_map.py`](../backend/app/core/music_map.py), and the 3D view in [`frontend/components/map/Graph3D.js`](../frontend/components/map/Graph3D.js). To regenerate the sample library, run `python scripts/make_sample_library.py`.
@@ -159,7 +173,7 @@ Map vs CLAP neighbour overlap is 6.8% (CKA 0.38), so CLAP also disagrees with th
 - CLAP (clap-htsat-unfused) groups songs by genre best of the three, and it also gives text search for free. It is now the script's default.
 - MERT's layer 7 comes second. Combining the two may beat either, but that hasn't been tested.
 - Why larger_clap_music failed is unknown. The re-run of that checkpoint with the new health checks (`--clap-model laion/larger_clap_music --name clap_music`) would show whether weights are missing or every song collapses to the same vector. Until then, don't use it.
-- Next step for the map: add a time-averaged CLAP vector per song as an optional "sound" feature with its own slider, for libraries that have audio, and use it for "hidden connections" and "For you" picks.
+- Done (2026-10-12): the map now has a CLAP "sound" feature, slider and search. See [Sound descriptions](#sound-descriptions-clap).
 
 ## What's next
 

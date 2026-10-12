@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import Head from "next/head";
 
 import PageShell from "@/components/layout/PageShell";
-import { buildMap, getImport, getMapEstimate, importLibrary } from "@/lib/api";
+import { buildMap, getImport, getMapEstimate, importLibrary, searchSound } from "@/lib/api";
 import { colorFor } from "@/components/map/colors";
 import ImportProgress, { BuildProgress } from "@/components/map/ImportProgress";
 
@@ -18,13 +18,17 @@ const ASPECTS = [
   { key: "genre", label: "Genre", hint: "Genre and style tags" },
   { key: "mood", label: "Mood", hint: "Energy, valence, danceability…" },
   { key: "artist", label: "Artist", hint: "Same artist pulls together" },
+  { key: "sound", label: "Sound", hint: "How songs actually sound, heard by an AI model (CLAP) from each preview", needsSound: true },
 ];
 
 const TABS = [
   { id: "clusters", label: "Clusters" },
   { id: "hidden", label: "Hidden links" },
   { id: "picks", label: "For you" },
+  { id: "search", label: "Search", needsSound: true },
 ];
+
+const EXAMPLE_SEARCHES = ["sad slow piano", "aggressive distorted guitars", "smooth jazz with saxophone", "upbeat dance with heavy bass"];
 
 function Centered({ children }) {
   return <div className="absolute inset-0 grid place-items-center text-sm text-gray-400">{children}</div>;
@@ -65,7 +69,11 @@ export default function MapPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [source, setSource] = useState({ sample: true });
-  const [weights, setWeights] = useState({ key: 1, tempo: 1, genre: 1, mood: 1, artist: 0.5 });
+  const [weights, setWeights] = useState({ key: 1, tempo: 1, genre: 1, mood: 1, artist: 0.5, sound: 1 });
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState(null); // { query, results: [{ id, score }] }
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(null);
   const [tab, setTab] = useState("clusters");
   const [selectedId, setSelectedId] = useState(null);
   const [clusterFocus, setClusterFocus] = useState(null);
@@ -85,6 +93,7 @@ export default function MapPage() {
       const res = await buildMap({ ...src, weights: w });
       if (req !== requestRef.current) return; // a newer map was requested meanwhile
       setData(res);
+      setFound(null);
       setSelectedId(null);
       setClusterFocus(null);
       setTab(res.recommendations?.length ? "picks" : "clusters");
@@ -145,6 +154,7 @@ export default function MapPage() {
       setLastWarning(job.warning || null);
       requestRef.current += 1; // anything still loading is now stale
       setData(job.result);
+      setFound(null);
       setSelectedId(null);
       setClusterFocus(null);
       setTab(job.result.recommendations?.length ? "picks" : "clusters");
@@ -155,6 +165,25 @@ export default function MapPage() {
       setUploading(0);
       setImportJob(null);
       setLoading(false);
+    }
+  };
+
+  const hasSound = (data?.meta?.sound_tracks || 0) > 0;
+
+  const runSearch = async (text) => {
+    const q = (text ?? query).trim();
+    if (!q) return;
+    setQuery(q);
+    setSearching(true);
+    setSearchError(null);
+    setSelectedId(null);
+    setClusterFocus(null);
+    try {
+      setFound(await searchSound({ ...source, query: q }));
+    } catch (e) {
+      setSearchError(e.message || String(e));
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -173,6 +202,7 @@ export default function MapPage() {
       return s;
     }
     if (clusterFocus != null) return new Set(data.tracks.filter((t) => t.cluster === clusterFocus).map((t) => t.id));
+    if (tab === "search" && found?.results.length) return new Set(found.results.map((r) => r.id));
     if (tab === "hidden") return new Set(data.hidden_connections.flatMap((h) => [h.source, h.target]));
     if (tab === "picks" && data.recommendations.length) {
       const s = new Set();
@@ -180,7 +210,7 @@ export default function MapPage() {
       return s;
     }
     return null;
-  }, [data, selectedId, clusterFocus, tab]);
+  }, [data, selectedId, clusterFocus, tab, found]);
 
   const selected = selectedId != null ? byId[selectedId] : null;
   const selectedLinks = useMemo(() => {
@@ -249,6 +279,8 @@ export default function MapPage() {
             <span>
               Look up genre, tempo, key and energy online. Song titles and artists are sent to MusicBrainz and Deezer (and Last.fm if a key is set up), and each song&apos;s
               30-second preview is analysed on this computer. Needed for listening histories, which don&apos;t include any of that.
+              If the CLAP service is running, the previews also give each song a &ldquo;sound&rdquo; description, which groups
+              songs by how they sound and lets you search by vibe.
             </span>
           </label>
           <div className="mt-3 flex gap-2">
@@ -353,7 +385,7 @@ export default function MapPage() {
         {/* Side panel */}
         <aside className="flex min-h-0 flex-col rounded-2xl border border-white/10 bg-white/[0.02]">
           <div className="flex gap-1 border-b border-white/10 p-2">
-            {TABS.map((t) => (
+            {TABS.filter((t) => !t.needsSound || hasSound).map((t) => (
               <button
                 key={t.id}
                 onClick={() => { setTab(t.id); setSelectedId(null); setClusterFocus(null); }}
@@ -395,7 +427,7 @@ export default function MapPage() {
             {tab === "hidden" && (
               <>
                 <p className="text-xs leading-5 text-gray-400">
-                  Pairs from different clusters that still match musically: same or neighbouring key, same or half/double tempo, similar mood.
+                  Pairs from different clusters that still match musically: similar sound, same or neighbouring key, same or half/double tempo, similar mood.
                   Good for transitions and playlist bridges.
                 </p>
                 {data?.hidden_connections.length === 0 && <p className="text-sm text-gray-500">No strong cross-cluster matches yet. Add key, BPM or mood columns.</p>}
@@ -406,6 +438,41 @@ export default function MapPage() {
                     <TrackLine t={byId[h.target]} onClick={() => setSelectedId(h.target)} />
                     <div className="mt-2 text-[11px] leading-5 text-fuchsia-200/80">{h.reasons.join(" · ")}</div>
                   </div>
+                ))}
+              </>
+            )}
+
+            {tab === "search" && (
+              <>
+                <form onSubmit={(e) => { e.preventDefault(); runSearch(); }} className="flex gap-2">
+                  <input
+                    id="sound-search"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Describe a sound…"
+                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white placeholder:text-gray-500 focus:border-fuchsia-400/50 focus:outline-none"
+                  />
+                  <button disabled={searching || !query.trim()} className="rounded-lg bg-white/10 px-3 text-xs text-white hover:bg-white/15 disabled:opacity-40">
+                    {searching ? "…" : "Search"}
+                  </button>
+                </form>
+                {!found && !searchError && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {EXAMPLE_SEARCHES.map((q) => (
+                      <button key={q} onClick={() => runSearch(q)} className="rounded-md border border-white/10 px-2 py-0.5 text-[11px] text-gray-400 hover:text-white">
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {searchError && <p className="text-xs text-rose-300">{searchError}</p>}
+                {found && (
+                  <p className="text-xs leading-5 text-gray-400">
+                    Best matches for &ldquo;{found.query}&rdquo; among the {data.meta.sound_tracks} songs with a sound description. Lit up on the map.
+                  </p>
+                )}
+                {found?.results.map((r) => (
+                  <TrackLine key={r.id} t={byId[r.id]} onClick={() => setSelectedId(r.id)} />
                 ))}
               </>
             )}
@@ -452,7 +519,7 @@ export default function MapPage() {
               </button>
             </div>
             <div className="grid grid-cols-1 gap-2">
-              {ASPECTS.map((a) => (
+              {ASPECTS.filter((a) => !a.needsSound || hasSound).map((a) => (
                 <label key={a.key} className="flex items-center gap-3 text-xs text-gray-300" title={a.hint}>
                   <span className="w-12">{a.label}</span>
                   <input

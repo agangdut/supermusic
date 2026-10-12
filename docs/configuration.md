@@ -35,6 +35,8 @@ With Docker, put settings in a `.env` file next to `docker-compose.yml` (start f
 | `HF_TOKEN` | (empty) | Hugging Face read token for MuScriptor's weights. Accept the licence on [muscriptor-medium](https://huggingface.co/MuScriptor/muscriptor-medium) first. Non-commercial use only (CC BY-NC 4.0) |
 | `MUSCRIPTOR_MODEL` | `medium` | `small`, `medium` or `large` (large needs more than the RTX 2060's 6 GB) |
 | `MUSCRIPTOR_FAST` | `0` | `1` transcribes 4 five-second sections at once: roughly 3x faster, slightly rougher where sections join (not yet measured) |
+| `CLAP_URL` | `http://clap:8300` | Where the backend finds the CLAP service that gives songs a "sound" description for the Music Map |
+| `CLAP_MODEL` | `laion/clap-htsat-unfused` | CLAP checkpoint. `laion/larger_clap_music` gave the same songs for every search in our test, so it isn't recommended |
 | `GAME_URL` | `http://game:8300` | Where the backend finds the GAME singing transcriber. If it isn't reachable, Full band and Auto use MuScriptor's own voice track |
 | `GAME_MODEL` | `medium` | `small`, `medium` or `large` GAME weights (non-commercial licence, downloaded on first use) |
 

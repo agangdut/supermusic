@@ -13,6 +13,7 @@ services:
       - TORCH_HOME=/app/data/models/torch
       - YOURMT3_URL=http://yourmt3:8100
       - MUSCRIPTOR_URL=http://muscriptor:8200
+      - CLAP_URL=http://clap:8300
       - GAME_URL=http://game:8300
     volumes:
       - ./data:/app/data
@@ -51,6 +52,17 @@ services:
     build: ./services/game
     environment:
       - GAME_MODEL=${GAME_MODEL:-medium}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  # CLAP (LAION) for the Music Map's "sound" feature and describe-a-vibe search.
+  # Small enough for the CPU; docker-compose.gpu.yml puts it on the GPU.
+  clap:
+    build: ./services/clap
+    environment:
+      - HF_HOME=/app/data/models/hf
+      - CLAP_MODEL=${CLAP_MODEL:-laion/clap-htsat-unfused}
     volumes:
       - ./data:/app/data
     restart: unless-stopped

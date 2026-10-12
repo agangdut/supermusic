@@ -25,6 +25,8 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from app.core import sound as _sound
+
 from app.core.genres import summarise as summarise_genres
 
 # ---------------------------------------------------------------------------
@@ -166,7 +168,7 @@ class MapOptions:
     clusters: Optional[int] = None
     # How much each aspect shapes the map (0 = ignore, 1 = normal, 2 = strong)
     weights: Dict[str, float] = field(default_factory=lambda: {
-        "key": 1.0, "tempo": 1.0, "genre": 1.0, "mood": 1.0, "artist": 0.5, "era": 0.5,
+        "key": 1.0, "tempo": 1.0, "genre": 1.0, "mood": 1.0, "artist": 0.5, "era": 0.5, "sound": 1.0,
     })
 
 
@@ -256,6 +258,8 @@ class _Prepared:
     engagement: Optional[np.ndarray]
     _lib_genres: Optional[Dict[str, float]] = None  # filled in on first use by _distinctive_style
     _lib_styles: Optional[Dict[str, float]] = None
+    sound: Optional[np.ndarray] = None  # CLAP vectors, centred and unit length; NaN rows = no audio
+    sound_close: float = 1.0            # similarity above which two songs "sound alike"
 
     def gname(self, g: str) -> str:
         return self.genre_names.get(g, g.title())
@@ -337,6 +341,11 @@ def _prepare(df: pd.DataFrame, opts: MapOptions) -> _Prepared:
         if np.isfinite(yr).any():
             add(_zscore(yr)[:, None], 0.8 * w["era"], "era")
 
+    # Sound: CLAP vectors describing how each song actually sounds (see app/core/sound.py)
+    sound, sound_close, sb = _sound_vectors(df)
+    if sb is not None:
+        add(sb, 1.0 * w["sound"], "sound")
+
     # Fall back to any other numeric columns if nothing above matched
     if not blocks:
         known = {c for c in cols.values() if c}
@@ -357,6 +366,8 @@ def _prepare(df: pd.DataFrame, opts: MapOptions) -> _Prepared:
         musical_blocks.append(tb)
     if mood_cols:
         musical_blocks.append(mood / math.sqrt(len(mood_cols)))
+    if sb is not None:
+        musical_blocks.append(sb)
     musical = np.hstack(musical_blocks) if len(musical_blocks) >= 2 else None
 
     if not blocks:
@@ -370,8 +381,32 @@ def _prepare(df: pd.DataFrame, opts: MapOptions) -> _Prepared:
         styles=styles, style_names=style_names,
         artists=artists, musical=musical,
         features=np.hstack(blocks), feature_groups=groups, mood_cols=mood_cols,
-        engagement=_engagement(df, cols),
+        engagement=_engagement(df, cols), sound=sound, sound_close=sound_close,
     )
+
+
+def _sound_vectors(df: pd.DataFrame) -> Tuple[Optional[np.ndarray], float, Optional[np.ndarray]]:
+    """(centred unit vectors with NaN rows, "sounds alike" threshold, feature block) from the sound column.
+
+    Centring removes what every song shares (CLAP vectors all point roughly the same
+    way), so similarity reflects how songs differ. The block is scaled to about the
+    weight of the genre or mood block; songs without audio sit at the centre."""
+    m = _sound.matrix(df)
+    if m is None:
+        return None, 1.0, None
+    ok = np.isfinite(m[:, 0])
+    if ok.sum() < 3:
+        return None, 1.0, None
+    c = m - m[ok].mean(axis=0)
+    c[ok] /= np.linalg.norm(c[ok], axis=1, keepdims=True) + 1e-9
+    block = np.where(ok[:, None], c, 0.0) * 1.6
+    # "Sounds alike" = among the most similar 3% of pairs (sampled for big libraries)
+    idx = np.where(ok)[0]
+    if len(idx) > 600:
+        idx = np.random.default_rng(0).choice(idx, 600, replace=False)
+    sims = c[idx] @ c[idx].T
+    close = float(np.quantile(sims[np.triu_indices(len(idx), 1)], 0.97)) if len(idx) > 2 else 1.0
+    return c, close, block
 
 
 # ---------------------------------------------------------------------------
@@ -595,6 +630,9 @@ def _cluster_label(p: _Prepared, idx: np.ndarray) -> Tuple[str, Dict[str, Any]]:
 
 def _pair_reasons(p: _Prepared, i: int, j: int) -> List[str]:
     reasons: List[str] = []
+    if p.sound is not None and np.isfinite(p.sound[i, 0]) and np.isfinite(p.sound[j, 0]):
+        if float(p.sound[i] @ p.sound[j]) >= p.sound_close:
+            reasons.append("similar sound")
     ki, kj = p.keys[i], p.keys[j]
     if ki and kj:
         h = harmonic_match(ki, kj)
@@ -813,6 +851,7 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
             "seconds": round(took, 1),
             "features_used": p.feature_groups,
             "has_listening_data": eng is not None,
+            "sound_tracks": int(np.isfinite(p.sound[:, 0]).sum()) if p.sound is not None else 0,
             "columns": {k: v for k, v in p.cols.items() if v},
         },
     }
