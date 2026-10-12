@@ -24,10 +24,10 @@
 _October 2026._ New here? Read this, then **[How it works](docs/how-it-works.md)**, the one guide that explains the whole project (written for a CS student new to ML).
 
 - **Audio → MIDI works.** **MuScriptor** is the default full-band engine: on real pop songs it scores 0.47 overall F1, against 0.35 for YourMT3+ and 0.14 for Basic Pitch. Solo piano is near perfect (0.97) with the Piano model. ([benchmarks](docs/transcription-accuracy.md))
-- **Voices** get their own clean "Lead vocal" track. **GAME**, a singing-only model, is wired in and being benchmarked against MuScriptor's own voice track.
+- **Voices** get their own clean "Lead vocal" track, transcribed by **GAME**, a singing-only model. It gets about 70% more sung notes right than MuScriptor's own voice track (vocal F1 0.25 vs 0.15), though singing is still the hardest part.
 - **Playable piano** works: "Playable by two hands", Piano cover (Pop2Piano), and a piano MP3 preview of every result.
 - **Music Map** works from a CSV or Spotify / Apple Music exports. Genres roll Spotify's detailed tags into ~20 broad ones, with an online lookup for songs that have none.
-- **Research:** learned music models group songs by genre far better than the map's own features: CLAP 39%, MERT 29%, the map 16% same-genre neighbours. Adding a CLAP vector per song to the map is the likely next step.
+- **Research:** learned music models group songs by genre far better than the map's own features: CLAP 39%, MERT 29%, the map 16% same-genre neighbours. Adding a CLAP vector per song to the map is the likely next step. We also checked our MuScriptor service against the authors' official server: same accuracy.
 - **Not done yet:** jobs and accounts are lost on restart, no job queue, no login screen, no YouTube screen, no deploy setup. See the [roadmap](docs/roadmap.md).
 
 ---
@@ -120,7 +120,7 @@ flowchart LR
     U([You]) --> FE[Next.js UI<br/>port 3000]
     FE -- "upload, start job, poll" --> API[FastAPI backend<br/>port 8000]
     API --> CPU["In the backend (CPU)<br/>Basic Pitch · Piano model · Pop2Piano<br/>Demucs · librosa · yt-dlp · Music Map"]
-    API --> GPU["Model servers (GPU)<br/>MuScriptor :8200 · YourMT3+ :8100<br/>GAME :8300"]
+    API --> GPU["Model servers (GPU)<br/>MuScriptor :8200 · YourMT3+ :8100<br/>GAME :8300 · CLAP :8300"]
     CPU & GPU --> ART[(./data<br/>uploads · results · models)]
     ART -- "download links" --> FE
 ```
@@ -134,12 +134,11 @@ The full picture, including why each big model has its own container and how a j
 ```
 backend/      FastAPI app: routes, job pipelines, auth, tests
 frontend/     Next.js UI (pages router + Tailwind)
-services/     Model servers: MuScriptor, YourMT3+, GAME (one container each)
-data/         Uploads, results and model weights at runtime (git-ignored, as are all *.mp3 / *.mid files)
-docs/         Guides, API reference, roadmap, screenshots
-scripts/      Benchmarks (eval_*), comparisons, dataset builders, deploy scripts
-supermusic/   Small Jinja web app from an earlier iteration
-legacy/       The first prototype (mixtape segmenter, desktop UI, …)
+services/     Model servers, one container each: MuScriptor, YourMT3+, GAME, CLAP
+scripts/      Benchmarks (eval_*), comparisons (compare_*), dataset builders
+docs/         Guides, benchmarks, API reference, roadmap, research notes, screenshots
+data/         Uploads, results and model weights at runtime (git-ignored; see data/README.md)
+legacy/       Older prototype code, not used by the app (see legacy/README.md)
 ```
 
 ---
@@ -179,6 +178,25 @@ On every push to `master`, CI runs the backend tests and builds the frontend.
 
 ---
 
+## 🤝 Contributing
+
+Issues and pull requests are welcome. Before opening a PR, run the backend tests (above) and `npm run build` in `frontend/`. CI runs both on every pull request.
+
+---
+
 ## 📜 License
 
-[MIT](LICENSE) © 2025 Agang Dut
+SuperMusic's own code is [MIT](LICENSE) © 2025 Agang Dut.
+
+The models it downloads have their own licences, and some are **non-commercial only**:
+
+| Model | Weights licence |
+|---|---|
+| [MuScriptor](https://huggingface.co/MuScriptor/muscriptor-medium) (Full band) | CC BY-NC 4.0, non-commercial |
+| [GAME](https://github.com/openvpi/GAME) (Lead vocal) | CC BY-NC-SA 4.0, non-commercial |
+| [YourMT3+](https://huggingface.co/spaces/mimbres/YourMT3) | Apache 2.0 (its code is included in `services/yourmt3`, see its [NOTICE](services/yourmt3/NOTICE.md)) |
+| [CLAP](https://huggingface.co/laion/clap-htsat-unfused), [Basic Pitch](https://github.com/spotify/basic-pitch), [Demucs](https://github.com/facebookresearch/demucs) | Apache 2.0 / MIT |
+
+Each `services/*/NOTICE.md` has the details. No model weights, audio or datasets are stored in this repository; they download on first use.
+
+Only process music you have the right to use. Transcribing or separating a song for personal study is one thing; sharing the stems or MIDI of someone else's song may need the rights holder's permission.

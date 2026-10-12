@@ -230,11 +230,11 @@ Things to notice in [`routes/midi.py`](../backend/app/routes/midi.py):
 | `backend/app/routes/` | HTTP endpoints. Thin: validate input, start a job, return it |
 | `backend/app/core/` | The actual audio/ML code. Each file is usable on its own, without FastAPI |
 | `backend/app/models/job.py` | The `Job` Pydantic model every long task returns |
-| `services/muscriptor/`, `services/yourmt3/`, `services/game/` | The model servers (YourMT3+ also carries the authors' model code under `amt/`) |
+| `services/muscriptor/`, `services/yourmt3/`, `services/game/`, `services/clap/` | The model servers (YourMT3+ also carries the authors' model code under `amt/`) |
 | `frontend/pages/` | `index.js` (home), `upload.js` (the Workspace), `map.js` (Music Map) |
 | `frontend/components/map/Graph3D.js` | The 3D map renderer |
 | `scripts/` | Benchmarks (`eval_*.py`), comparisons (`compare_*.py`), dataset builders (`build_*.py`), and `make_guide_figures.py` for this guide's charts |
-| `legacy/` | The first prototype, kept for reference |
+| `legacy/` | Older prototype code, kept for reference and not used by the app |
 
 > **Lesson:** keeping `core/` free of web-framework code is what makes the evaluation scripts possible. `scripts/eval_transcription.py` imports the same `transcribe_piano` function the API calls, so the benchmark measures exactly what users get. Since `scripts/` is mounted into the backend container, a pulled script fix applies without rebuilding the image.
 

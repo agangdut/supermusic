@@ -9,3 +9,5 @@ Architectures and Cross-dataset Stem Augmentation" (arXiv:2407.04822).
 The `amt/src/tests` and `amt/src/extras` folders were left out. The checkpoint
 ("YPTF.MoE+Multi (noPS)", 562 MB) is downloaded at runtime into
 data/models/yourmt3, not stored in this repository.
+
+The Apache 2.0 licence text is in `LICENSE-APACHE-2.0` next to this file.

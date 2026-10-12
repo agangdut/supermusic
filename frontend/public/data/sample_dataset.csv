@@ -1,6 +1,0 @@
-track_id,title,artist,album,genre,duration_sec,bpm,key,youtube_url,local_path,x,y,z
-1,Lo-Fi Study Beats,ChillHop Collective,Focus Sessions,Lo-Fi,185,90,Am,https://youtube.com/watch?v=xxxxxx,data/audio/lofi1.mp3,70.28248917921574,56.95164263151915,56.535714698368466
-2,Midnight Jazz,Jazz Ensemble,City Nights,Jazz,240,120,Cm,https://youtube.com/watch?v=yyyyyy,data/audio/jazz_midnight.mp3,92.49382605709981,4.419923832259864,70.33526074189533
-3,Summer Vibes,Indie Waves,Sunny Days,Indie,210,100,G,,data/audio/summer_vibes.mp3,72.21135525052222,39.03031773832918,64.72472696439155
-4,Classical Piano No.1,Erik Satie,Selected Works,Classical,195,60,F,,data/audio/satie_no1.mp3,30.82631611499066,49.37666865856004,12.567773486273648
-5,Electro Bounce,EDM Nation,Club Hits,Electronic,230,128,Dm,https://youtube.com/watch?v=zzzzzz,data/audio/electro_bounce.mp3,6.809419331658972,73.79348082082736,8.862088746305307

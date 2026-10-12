@@ -19,7 +19,6 @@ RUN --mount=type=cache,target=/root/.cache/pip pip install --default-timeout=300
 
 # Copy application code
 COPY backend/ ./backend/
-COPY data/ ./data/
 COPY scripts/ ./scripts/
 
 # Create necessary directories

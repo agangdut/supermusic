@@ -52,5 +52,4 @@ bcrypt
 websockets
 
 # Additional utilities
-python-multipart
 aiofiles

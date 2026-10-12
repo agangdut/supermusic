@@ -312,7 +312,6 @@ def main():
     args.output = resolve_output_path(args.output, args.input)
 
     api_key = os.environ.get("YOUTUBE_API_KEY")
-    # REMOVED_API_KEY
     if not api_key:
         raise SystemExit("Set YOUTUBE_API_KEY environment variable")
 

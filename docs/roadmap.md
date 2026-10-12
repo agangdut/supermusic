@@ -21,7 +21,7 @@ Verified against the running Docker stack with real audio (October 2026):
 
 ## 🎹 MIDI accuracy, next steps
 
-- [ ] Run the GAME vocal benchmark (`scripts/eval_pop.py --methods muscriptor_vocal muscriptor_game`) and keep GAME only if it wins
+- [x] Run the GAME vocal benchmark: GAME won (vocal F1 0.147 → 0.254) and is on by default
 - [x] Compare our MuScriptor with the official server: same accuracy, its timing fix didn't help (see transcription-accuracy.md)
 - [ ] Run the MuScriptor experiments: fast mode, beam search, per-stem (`muscriptor_fast`, `muscriptor_beam`, `muscriptor_stems`)
 - [ ] Test MuScriptor on solo piano (MAESTRO) and classical (MusicNet); if it matches the Piano model, Auto gets simpler
@@ -61,7 +61,7 @@ The UI covers MIDI, stems, CSV and the Music Map. These work in the API but have
 - [ ] Upload size limit
 - [ ] Clean up old uploads and artifacts automatically
 - [ ] Rate limits on the expensive endpoints (`slowapi` is installed and configured but not applied)
-- [ ] Remove the stub Next.js API routes in `frontend/pages/api/` (the UI calls FastAPI directly)
+- [x] Remove the stub Next.js API routes in `frontend/pages/api/` (the UI calls FastAPI directly)
 
 ### 6. Deploying it
 - [ ] A production compose file with HTTPS (for example behind Caddy or nginx)
