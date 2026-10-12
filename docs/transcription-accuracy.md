@@ -111,7 +111,14 @@ Separating the voice before Full band makes things *worse*, because Demucs leave
 - **Stems:** the vocal stem becomes a "Lead vocal" track.
 - In every mode the Lead vocal is cleaned up: one note at a time (the strongest wins), blips under 80 ms dropped, tiny gaps merged, and notes more than 14 semitones from the melody's centre (bass bleed, octave errors) removed.
 
-The Lead vocal is scored on MulTTiPop clips that have a vocal part ("Vocal F1" in `scripts/eval_pop.py`; compare `muscriptor_vocal` with `muscriptor_game`). Results pending. Rap has no fixed pitch, so its "melody" follows the speaking voice's rise and fall rather than a tune.
+**3. Real pop: how well does the Lead vocal follow the singer?** First 40 MulTTiPop dev clips (October 2026), `scripts/eval_pop.py --methods muscriptor_vocal muscriptor_game`. Vocal F1 compares our Lead vocal with the song's own vocal part (same pitch, start within 50 ms).
+
+| Lead vocal from | Vocal F1 | Pitched F1 (whole song) | Avg time per clip |
+|---|---|---|---|
+| MuScriptor's own voice track | 0.147 | 0.442 | 15.8s |
+| **GAME on the Demucs vocal stem** | **0.254** | **0.445** | 24.4s |
+
+GAME gets about 70% more of the sung notes right, and the whole-song score goes up slightly too. It adds about 9 seconds per 22-second clip (Demucs plus GAME). It's on by default in Full band and Auto whenever the GAME service is running. Even so, only a quarter of sung notes are caught: singers slide into notes and decorate them, so the exact start of a note is hard to pin down. Rap has no fixed pitch, so its "melody" follows the speaking voice's rise and fall rather than a tune.
 
 ## Melody match: is the tune right?
 
