@@ -35,9 +35,23 @@ import mir_eval  # noqa: E402
 import numpy as np  # noqa: E402
 import pretty_midi  # noqa: E402
 
+from app.core.progress import reporting  # noqa: E402
 from eval_musicnet import transcribe as _transcribe  # noqa: E402
 
 TOL = 0.05
+
+
+class LiveStatus:
+    """Stands in for a web job so the engines' progress messages show in the terminal,
+    e.g. "MuScriptor: section 3 of 5" or "waiting for another song to finish"."""
+
+    def __setattr__(self, key, value):
+        if key == "message" and value != getattr(self, "message", None):
+            print(f"\r    {str(value)[:110]:<110}", end="", flush=True)
+        object.__setattr__(self, key, value)
+
+
+_raw: dict = {}
 
 
 def transcribe(method: str, audio: Path) -> Path:
@@ -56,7 +70,9 @@ def transcribe(method: str, audio: Path) -> Path:
     if method in ("muscriptor_vocal", "muscriptor_game"):  # Lead vocal from MuScriptor's voice / from GAME
         from app.core.vocals import lead_vocal_track, sung_lead_vocal
 
-        raw = transcribe_muscriptor(audio, dynamics=False)
+        if _raw.get("audio") != audio:  # both vocal methods start from the same MuScriptor run
+            _raw.update(audio=audio, midi=transcribe_muscriptor(audio, dynamics=False))
+        raw = _raw["midi"]
         return (sung_lead_vocal(raw, audio) if method == "muscriptor_game" else lead_vocal_track(raw))[0]
     return _transcribe(method, audio)
 
@@ -161,7 +177,9 @@ def main() -> None:
             t = time.time()
             err = ""
             try:
-                est_p, est_d, est_v = load(Path(transcribe(method, ROOT / clip["audio"])), 0.0, clip["seconds"])
+                with reporting(LiveStatus()):
+                    midi = transcribe(method, ROOT / clip["audio"])
+                est_p, est_d, est_v = load(Path(midi), 0.0, clip["seconds"])
             except Exception as e:
                 est_p, est_d, est_v, err = [], [], [], str(e)[:200]
             tp_p, tp_d = matches(ref_p, est_p), matches(ref_d, est_d)
@@ -173,8 +191,9 @@ def main() -> None:
                          "ref_vocal": len(ref_v), "est_vocal": len(est_v), "tp_vocal": matches(ref_v, est_v),
                          "pitched_f1": round(f1(tp_p, len(ref_p), len(est_p))[2], 3),
                          "secs": round(time.time() - t, 1), "error": err})
-            print(f"[{i}/{len(index)}] {method:10s} pitched F1 {rows[-1]['pitched_f1']:.3f} "
-                  f"({rows[-1]['secs']}s) {rows[-1]['song'][:50]} {err}", flush=True)
+            line = (f"[{i}/{len(index)}] {method:10s} pitched F1 {rows[-1]['pitched_f1']:.3f} "
+                    f"({rows[-1]['secs']}s) {rows[-1]['song'][:50]} {err}")
+            print(f"\r{line:<114}", flush=True)  # padded to cover the live status line
             save()
 
     ids = {c["id"] for c in index}
