@@ -17,6 +17,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./static:/app/static
+      - ./scripts:/app/scripts   # so `git pull` updates the scripts without a rebuild
     restart: unless-stopped
 
   # Multi-instrument transcription (YourMT3+). Runs on CPU by default;
