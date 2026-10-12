@@ -180,3 +180,28 @@ def test_like_endpoint_on_sample_library():
     assert len(body["results"]) == 6 and body["basis"] == "features"
     assert "rarely_played" in body["results"][0]
     assert client.post("/map/like", json={"sample": True, "id": 99999}).status_code == 400
+
+
+def test_import_listen_limit_caps_previews(monkeypatch):
+    import time as _time
+
+    from app.core import library_import
+
+    seen = {}
+
+    def fake_add_sound(df, limit=1500, progress=None, stop=None):
+        seen["limit"] = limit
+        return df, 0
+
+    monkeypatch.setattr(library_import, "lookup", lambda a, t, analyse=True: {})
+    monkeypatch.setattr(sound, "available", lambda: True)
+    monkeypatch.setattr(sound, "add_sound", fake_add_sound)
+    csv = "title,artist\n" + "\n".join(f"Cap {i},Capper {i}" for i in range(5))
+    r = client.post("/map/import", files={"files": ("l.csv", csv, "text/csv")},
+                    data={"enrich": "true", "listen_limit": "3"})
+    job_id = r.json()["id"]
+    for _ in range(200):
+        if client.get(f"/map/import/{job_id}").json()["status"] != "running":
+            break
+        _time.sleep(0.05)
+    assert seen["limit"] == 3

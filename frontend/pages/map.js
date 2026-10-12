@@ -117,6 +117,7 @@ export default function MapPage() {
   const [pending, setPending] = useState(null); // files picked, waiting for "Build my map"
   const [enrichOnline, setEnrichOnline] = useState(true);
   const [listenPreviews, setListenPreviews] = useState(true);
+  const [listenLimit, setListenLimit] = useState(""); // blank = every song (up to the import limit)
   const [importJob, setImportJob] = useState(null);
   const [uploading, setUploading] = useState(0); // number of files being sent
   const [lastWarning, setLastWarning] = useState(null); // e.g. online lookups were skipped
@@ -142,7 +143,7 @@ export default function MapPage() {
     setUploading(files.length);
     setLastWarning(null);
     try {
-      let job = await importLibrary(files, { enrich: enrichOnline, listen: listenPreviews });
+      let job = await importLibrary(files, { enrich: enrichOnline, listen: listenPreviews, listenLimit: parseInt(listenLimit, 10) || null });
       setUploading(0);
       setImportJob(job);
       let misses = 0;
@@ -311,6 +312,21 @@ export default function MapPage() {
                 Listen to previews for the &ldquo;sound&rdquo; description. This is the slow part of a big import; untick it to skip it.
                 You can also skip it partway through. Songs heard before are remembered, so the next import is faster.
               </span>
+            </label>
+          )}
+          {enrichOnline && listenPreviews && (
+            <label className="mt-2 ml-11 flex items-center gap-2 text-xs text-gray-300">
+              <span>Only listen to the</span>
+              <input
+                type="number"
+                min="1"
+                max="5000"
+                placeholder="all"
+                value={listenLimit}
+                onChange={(e) => setListenLimit(e.target.value)}
+                className="w-20 rounded border border-white/10 bg-black/30 px-2 py-0.5 text-xs text-white"
+              />
+              <span>most-played songs (blank = all)</span>
             </label>
           )}
           <div className="mt-3 flex gap-2">

@@ -252,6 +252,7 @@ async def import_library(
     enrich: bool = Form(True, description="Look songs up online (genre from Last.fm/MusicBrainz tags, year from Deezer) and analyse 30 s previews for tempo/key/energy."),
     listen: bool = Form(True, description="Also run each preview through CLAP for a 'sound' description (the slow 'Listen to previews' step). Needs enrich and the CLAP service."),
     limit: int = Form(1500, ge=1, le=5000),
+    listen_limit: Optional[int] = Form(None, ge=1, le=5000, description="Listen to at most this many previews (most-played songs first). Defaults to `limit`."),
 ) -> dict:
     parsed, detected = [], []
     for f in files:
@@ -281,7 +282,7 @@ async def import_library(
             if listening:
                 job.start_listening()
                 try:
-                    df, job.listen["have"] = sound.add_sound(df, limit=limit, progress=job.on_listen,
+                    df, job.listen["have"] = sound.add_sound(df, limit=min(listen_limit or limit, limit), progress=job.on_listen,
                                                              stop=lambda: job.skip_listen)
                 except RuntimeError as e:  # the service stopped mid-import: carry on without sound
                     job.warning = f"Songs weren't given a sound description: {e}"
