@@ -928,3 +928,60 @@ def _recommend(p: _Prepared, eng: np.ndarray, labels: np.ndarray, clusters: List
             "reasons": reasons or ["sits in the same part of your map as your favourites"],
         })
     return out
+
+
+def similar_tracks(df: pd.DataFrame, track_id: int, opts: Optional[MapOptions] = None,
+                   limit: int = 8) -> Dict[str, Any]:
+    """"Songs you may like" for one track, from the same library.
+
+    When both songs have a CLAP sound description, how alike they sound counts for
+    most of the score; the rest (or all of it, without sound) is closeness in the
+    map's own features, so the sliders still shape the picks. At most two picks per
+    artist, so one artist can't fill the list. With listening data, songs you rarely
+    play get a small nudge up, since they are the ones you may be missing."""
+    opts = opts or MapOptions()
+    # Same rows (so the same ids) as build_map; empty columns dropped as the importer does
+    df = df.dropna(how="all").reset_index(drop=True).dropna(axis=1, how="all")
+    n = len(df)
+    if not 0 <= track_id < n:
+        raise ValueError(f"No track {track_id} in this library ({n} tracks).")
+    p = _prepare(df, opts)
+
+    d = np.linalg.norm(p.features - p.features[track_id], axis=1)
+    scale = float(np.median(d[d > 0])) if (d > 0).any() else 1.0
+    feat = np.exp(-d / (scale or 1.0))
+    score, basis = feat, "features"
+    if p.sound is not None and np.isfinite(p.sound[track_id, 0]):
+        cos = p.sound @ p.sound[track_id]  # NaN for songs without a sound description
+        has = np.isfinite(cos)
+        score = np.where(has, 0.75 * (cos + 1) / 2 + 0.25 * feat, 0.6 * feat)
+        basis = "sound"
+    eng = p.engagement
+    if eng is not None and eng.max() > 0:
+        score = score + 0.05 * (1 - eng / eng.max())
+
+    me = p.artists[track_id].lower()
+    title_col = p.cols["title"]
+    my_title = str(df.at[track_id, title_col]).strip().lower() if title_col else None
+    picks: List[Dict[str, Any]] = []
+    per_artist: Dict[str, int] = {}
+    for j in np.argsort(-score):
+        j = int(j)
+        if j == track_id:
+            continue
+        artist = p.artists[j].lower()
+        if title_col and artist == me and str(df.at[j, title_col]).strip().lower() == my_title:
+            continue  # the same song listed twice
+        if artist and per_artist.get(artist, 0) >= 2:
+            continue
+        per_artist[artist] = per_artist.get(artist, 0) + 1
+        reasons = _pair_reasons(p, track_id, j)
+        if artist and artist == me and not any(r.startswith("same artist") for r in reasons):
+            reasons.append(f"same artist ({p.artists[j]})")
+        pick = {"id": j, "score": round(float(score[j]), 3), "reasons": reasons}
+        if eng is not None:
+            pick["rarely_played"] = bool(eng[j] <= np.quantile(eng, 0.35))
+        picks.append(pick)
+        if len(picks) >= limit:
+            break
+    return {"id": track_id, "basis": basis, "results": picks}

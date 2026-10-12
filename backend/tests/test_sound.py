@@ -127,3 +127,33 @@ def test_import_progress_shows_listening_step():
     step = next(s for s in v["steps"] if s["key"] == "listen")
     assert step["state"] == "active" and step["detail"] == "1 of 3 songs"
     assert v["eta_s"] is not None
+
+
+def test_songs_you_may_like_follow_sound():
+    from app.core.music_map import similar_tracks
+
+    df, _ = _library()
+    r = similar_tracks(df, 0, limit=5)
+    assert r["basis"] == "sound" and len(r["results"]) == 5
+    assert all(df.loc[x["id"], "title"].startswith("Song 0") for x in r["results"])
+    assert all(x["id"] != 0 for x in r["results"])
+    assert any("similar sound" in x["reasons"] for x in r["results"])
+
+
+def test_songs_you_may_like_without_sound_and_artist_cap():
+    from app.core.music_map import similar_tracks
+
+    df, _ = _library()
+    df = df.drop(columns=["sound"]).assign(artist="Same Artist")
+    r = similar_tracks(df, 3, limit=5)
+    assert r["basis"] == "features"
+    assert len(r["results"]) == 2  # at most two picks per artist
+
+
+def test_like_endpoint_on_sample_library():
+    r = client.post("/map/like", json={"sample": True, "id": 0, "limit": 6})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["results"]) == 6 and body["basis"] == "features"
+    assert "rarely_played" in body["results"][0]
+    assert client.post("/map/like", json={"sample": True, "id": 99999}).status_code == 400

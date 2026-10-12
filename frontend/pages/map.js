@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import Head from "next/head";
 
 import PageShell from "@/components/layout/PageShell";
-import { buildMap, getImport, getMapEstimate, importLibrary, searchSound } from "@/lib/api";
+import { buildMap, getImport, getMapEstimate, importLibrary, likeSongs, searchSound } from "@/lib/api";
 import { colorFor } from "@/components/map/colors";
 import ImportProgress, { BuildProgress } from "@/components/map/ImportProgress";
 
@@ -70,6 +70,7 @@ export default function MapPage() {
   const [error, setError] = useState(null);
   const [source, setSource] = useState({ sample: true });
   const [weights, setWeights] = useState({ key: 1, tempo: 1, genre: 1, mood: 1, artist: 0.5, sound: 1 });
+  const mapWeightsRef = useRef(weights); // the weights the current map was drawn with
   const [query, setQuery] = useState("");
   const [found, setFound] = useState(null); // { query, results: [{ id, score }] }
   const [searching, setSearching] = useState(false);
@@ -91,6 +92,7 @@ export default function MapPage() {
     if (tracks) getMapEstimate(tracks).then((e) => req === requestRef.current && setBuildEstimate(e)).catch(() => {});
     try {
       const res = await buildMap({ ...src, weights: w });
+      mapWeightsRef.current = w;
       if (req !== requestRef.current) return; // a newer map was requested meanwhile
       setData(res);
       setFound(null);
@@ -154,6 +156,7 @@ export default function MapPage() {
       setLastWarning(job.warning || null);
       requestRef.current += 1; // anything still loading is now stale
       setData(job.result);
+      mapWeightsRef.current = {}; // imports are drawn with the default weights
       setFound(null);
       setSelectedId(null);
       setClusterFocus(null);
@@ -213,6 +216,18 @@ export default function MapPage() {
   }, [data, selectedId, clusterFocus, tab, found]);
 
   const selected = selectedId != null ? byId[selectedId] : null;
+
+  // "Songs you may like" for the clicked track, from the same library
+  const [likes, setLikes] = useState(null); // { id, basis, results } | { id, error }
+  useEffect(() => {
+    if (selectedId == null || !data) { setLikes(null); return; }
+    let stale = false;
+    setLikes({ id: selectedId, loading: true });
+    likeSongs({ ...source, id: selectedId, weights: mapWeightsRef.current })
+      .then((r) => { if (!stale) setLikes(r); })
+      .catch((e) => { if (!stale) setLikes({ id: selectedId, error: e.message || String(e) }); });
+    return () => { stale = true; };
+  }, [selectedId, data, source]);
   const selectedLinks = useMemo(() => {
     if (!data || selectedId == null) return [];
     return data.edges
@@ -400,6 +415,37 @@ export default function MapPage() {
           </div>
 
           <div className="max-h-[52vh] flex-1 space-y-3 overflow-y-auto p-4">
+            {selected && likes?.id === selectedId && (
+              <div className="rounded-xl border border-sky-300/15 bg-sky-300/[0.03] p-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-[11px] uppercase tracking-wider text-sky-200/80">If you like {selected.title}</span>
+                  <button onClick={() => setSelectedId(null)} className="text-[11px] text-gray-500 hover:text-white">Close</button>
+                </div>
+                {likes.loading && <p className="mt-2 text-xs text-gray-500">Finding songs you may like…</p>}
+                {likes.error && <p className="mt-2 text-xs text-rose-300">{likes.error}</p>}
+                {likes.results && (
+                  <>
+                    <p className="mt-1 text-[11px] leading-5 text-gray-500">
+                      {likes.basis === "sound"
+                        ? "From your library, mostly by how they sound."
+                        : "From your library, by key, tempo, genre and mood. Import with the CLAP service running to match by sound too."}
+                    </p>
+                    <div className="mt-2 space-y-2.5">
+                      {likes.results.map((r) => (
+                        <div key={r.id}>
+                          <TrackLine t={byId[r.id]} onClick={() => setSelectedId(r.id)} />
+                          {(r.reasons?.length > 0 || r.rarely_played) && (
+                            <div className="ml-4 text-[11px] text-gray-500">
+                              {[r.rarely_played && "you rarely play this", ...(r.reasons || []).slice(0, 2)].filter(Boolean).join(" · ")}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {tab === "clusters" && data?.clusters.map((c) => (
               <button
                 key={c.id}

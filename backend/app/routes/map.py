@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from app.core.music_map import MapOptions, build_map, estimate_build_seconds
+from app.core.music_map import MapOptions, build_map, similar_tracks, estimate_build_seconds
 
 router = APIRouter(prefix="/map", tags=["map"])
 
@@ -349,3 +349,29 @@ async def search_sound(req: SearchRequest) -> dict:
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     return {"query": req.query, "results": results}
+
+
+# ---------------------------------------------------------------------------
+# "Songs you may like" for a clicked track
+# ---------------------------------------------------------------------------
+
+class LikeRequest(BaseModel):
+    csv_path: Optional[str] = Field(None, description="The map's library CSV (meta.library_csv or the uploaded path).")
+    sample: bool = False
+    id: int = Field(..., ge=0, description="The clicked track's id from /build.")
+    weights: Dict[str, float] = Field(default_factory=dict, description="The same slider weights used for the map.")
+    limit: int = Field(8, ge=1, le=30)
+
+
+@router.post("/like")
+async def like(req: LikeRequest) -> dict:
+    """Songs from the same library that someone who likes this track may like."""
+    path = SAMPLE_CSV if req.sample else Path(req.csv_path or "")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"CSV file not found: {path}")
+    df = pd.read_csv(path)
+    opts = MapOptions(weights={k: max(0.0, min(2.0, float(v))) for k, v in req.weights.items()})
+    try:
+        return await run_in_threadpool(similar_tracks, df, req.id, opts, req.limit)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
