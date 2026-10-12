@@ -133,7 +133,8 @@ export default function AudioCard({
             <span className="block text-sm font-medium text-gray-300">Voice as its own melody</span>
             <span className="block text-[11px] text-gray-500">
               Puts the singer on a clean "Lead vocal" track, one note at a time. With General, the voice is
-              separated first so it can&apos;t become instrument notes (adds about a minute).
+              separated first so it can&apos;t become instrument notes (adds about a minute). With Full band, the
+              model&apos;s own voice notes stay too as &quot;Song sound (as heard)&quot;, which often sounds closer to the song.
             </span>
           </span>
         </label>

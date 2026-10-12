@@ -58,7 +58,8 @@ def test_sung_lead_vocal_replaces_voice_with_game(tmp_path, monkeypatch):
     out, info = vocals.sung_lead_vocal(_band_midi(tmp_path / "band.mid"), tmp_path / "song.wav")
 
     pm = pretty_midi.PrettyMIDI(str(out))
-    assert [i.name for i in pm.instruments] == ["Lead vocal", "electric_bass"]
+    assert [i.name for i in pm.instruments] == ["Lead vocal", vocals.AS_HEARD, "electric_bass"]
+    assert pm.instruments[1].program == 52  # the model's voice notes kept as heard
     assert [n.pitch for n in pm.instruments[0].notes] == [64, 64]  # repeats kept apart, click gone
     assert info["vocal_engine"] == "GAME" and info["vocal_stem"].endswith("v.wav")
 
@@ -75,7 +76,7 @@ def test_sung_lead_vocal_falls_back_when_game_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(game_client, "transcribe_singing", boom)
     out, info = vocals.sung_lead_vocal(_band_midi(tmp_path / "band.mid"), tmp_path / "song.wav")
     names = [i.name for i in pretty_midi.PrettyMIDI(str(out)).instruments]
-    assert "Lead vocal" in names and "voice" not in names
+    assert "Lead vocal" in names and vocals.AS_HEARD in names and "voice" not in names
     assert "vocal_engine" not in info
 
 

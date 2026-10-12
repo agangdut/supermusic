@@ -165,6 +165,21 @@ def transcribe_vocal_aware(audio_path: str | Path, engine: Callable[[Path], Path
     return midi_path, info
 
 
+AS_HEARD = "Song sound (as heard)"
+
+
+def as_heard_track(voice: list):
+    """The model's own voice track(s), kept as one track next to the Lead vocal.
+    On rap the model often puts the beat and sample into its "voice" track: useless
+    as a melody (2.4% melody match on WHO DECIDES WAR, vs 57% for the Lead vocal),
+    but it sounds the most like the song. Mute it or the Lead vocal in the player."""
+    import pretty_midi
+
+    track = pretty_midi.Instrument(program=voice[0].program, name=AS_HEARD)
+    track.notes = sorted((n for i in voice for n in i.notes), key=lambda n: (n.start, n.pitch))
+    return track
+
+
 def lead_vocal_track(midi_path: str | Path) -> Tuple[Path, Dict]:
     """For multi-instrument output (YourMT3+): fold every singing-voice track into
     one clean, monophonic "Lead vocal" melody. No separation needed: in our tests
@@ -178,7 +193,7 @@ def lead_vocal_track(midi_path: str | Path) -> Tuple[Path, Dict]:
         return Path(midi_path), {"vocals": "none detected"}
     lead = pretty_midi.Instrument(program=VOCAL_PROGRAM, name="Lead vocal")
     lead.notes = clean_melody([n for i in voice for n in i.notes])
-    pm.instruments = [lead] + [i for i in pm.instruments if i not in voice]
+    pm.instruments = [lead, as_heard_track(voice)] + [i for i in pm.instruments if i not in voice]
     out = Path(midi_path).with_name(Path(midi_path).stem + "_lead.mid")
     pm.write(str(out))
     return out, {"vocal_notes": len(lead.notes)}
@@ -214,7 +229,7 @@ def sung_lead_vocal(midi_path: str | Path, audio_path: str | Path) -> Tuple[Path
     voice = [i for i in pm.instruments if not i.is_drum and any(w in i.name.lower() for w in ("sing", "voice", "vocal"))]
     lead = pretty_midi.Instrument(program=VOCAL_PROGRAM, name="Lead vocal")
     lead.notes = [pretty_midi.Note(velocity=90, pitch=n.pitch, start=n.start, end=n.end) for n in notes]
-    pm.instruments = [lead] + [i for i in pm.instruments if i not in voice]
+    pm.instruments = [lead] + ([as_heard_track(voice)] if voice else []) + [i for i in pm.instruments if i not in voice]
     out = Path(midi_path).with_name(Path(midi_path).stem + "_lead.mid")
     pm.write(str(out))
     return out, {"vocal_notes": len(lead.notes), "vocal_engine": "GAME", "vocal_share": round(share, 3),

@@ -125,6 +125,8 @@ def load(midi: Path, shift: float, seconds: float):
     pm = pretty_midi.PrettyMIDI(str(midi))
     pitched, drums, vocal = [], [], []
     for inst in pm.instruments:
+        if inst.name == "Song sound (as heard)":  # copy of the model's raw voice track; would count notes twice
+            continue
         for n in inst.notes:
             t = n.start - shift
             if 0 <= t < seconds:
