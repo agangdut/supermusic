@@ -94,3 +94,54 @@ def transcribe_muscriptor(audio_path: str | Path, out_dir: Path | None = None, i
         report_detail("Shaping the dynamics to follow the song…")
         humanize(final, audio_path)
     return final
+
+
+REF_URL = os.getenv("MUSCRIPTOR_REF_URL", "http://muscriptor_ref:8222")
+
+
+def transcribe_muscriptor_ref(audio_path: str | Path, out_dir: Path | None = None,
+                              detect_tempo: bool = True) -> Path:
+    """Run the official MuScriptor server (the `muscriptor_ref` service) on the same audio,
+    for checking our wrapper against it. Not used by the app.
+
+    Its MIDI has every note pushed later by a whole number of bars so that bar 1 lands on
+    the first downbeat (it records the amount in a marker). That shift is taken back out
+    here so the notes line up with the audio again. Its other timing fix, moving every
+    note earlier by the model's small measured lag (up to ~25 ms), is kept; pass
+    `detect_tempo=False` to turn that off too and get the model's raw note times."""
+    import mido
+    import pretty_midi
+
+    audio_path = Path(audio_path)
+    out_dir = (out_dir or (settings.PROCESSED_DIR / "midi")) / uuid.uuid4().hex
+    out_dir.mkdir(parents=True, exist_ok=True)
+    boundary = uuid.uuid4().hex
+    parts = [f'--{boundary}\r\nContent-Disposition: form-data; name="detect_tempo"\r\n\r\n'
+             f'{"best-effort" if detect_tempo else "false"}\r\n'.encode(),
+             f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{audio_path.name}"\r\n'
+             f'Content-Type: application/octet-stream\r\n\r\n'.encode(),
+             audio_path.read_bytes(), f"\r\n--{boundary}--\r\n".encode()]
+    req = urllib.request.Request(f"{REF_URL}/transcribe/midi", data=b"".join(parts), method="POST",
+                                 headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+    try:
+        with urllib.request.urlopen(req, timeout=3 * 3600) as r:
+            midi_bytes = r.read()
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"Official MuScriptor error {e.code}: {e.read()[:300].decode(errors='replace')}")
+    except urllib.error.URLError:
+        raise RuntimeError("The official MuScriptor service isn't running. Start it with: "
+                           "docker compose --profile ref up -d muscriptor_ref")
+    raw = out_dir / f"{audio_path.stem}.official.mid"  # exactly what the server sent
+    raw.write_bytes(midi_bytes)
+
+    shift = 0.0
+    for msg in mido.MidiFile(str(raw)).tracks[0]:
+        if msg.type == "marker" and msg.text.startswith("muscriptor:bar_offset="):
+            shift = float(msg.text.split("=", 1)[1])
+    pm = pretty_midi.PrettyMIDI(str(raw))
+    for inst in pm.instruments:
+        for n in inst.notes:
+            n.start, n.end = max(0.0, n.start - shift), max(0.0, n.end - shift)
+    final = out_dir / f"{audio_path.stem}.mid"
+    pm.write(str(final))
+    return final

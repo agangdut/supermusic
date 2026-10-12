@@ -22,6 +22,7 @@ Verified against the running Docker stack with real audio (October 2026):
 ## 🎹 MIDI accuracy, next steps
 
 - [ ] Run the GAME vocal benchmark (`scripts/eval_pop.py --methods muscriptor_vocal muscriptor_game`) and keep GAME only if it wins
+- [ ] Compare our MuScriptor with the official server (`eval_pop.py --tag official --methods muscriptor muscriptor_exact muscriptor_ref muscriptor_ref_raw`) and adopt its timing fix if it helps
 - [ ] Run the MuScriptor experiments: fast mode, beam search, per-stem (`muscriptor_fast`, `muscriptor_beam`, `muscriptor_stems`)
 - [ ] Test MuScriptor on solo piano (MAESTRO) and classical (MusicNet); if it matches the Piano model, Auto gets simpler
 - [ ] Add AMT-APC next to Pop2Piano as a second Piano cover engine

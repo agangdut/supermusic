@@ -32,6 +32,7 @@ With Docker, put settings in a `.env` file next to `docker-compose.yml` (start f
 |---|---|---|
 | `YOURMT3_URL` | `http://yourmt3:8100` | Where the backend finds the Full band transcriber |
 | `MUSCRIPTOR_URL` | `http://muscriptor:8200` | Where the backend finds MuScriptor, the default Full band transcriber |
+| `MUSCRIPTOR_REF_URL` | `http://muscriptor_ref:8222` | The official MuScriptor server, only for comparing it with ours (`docker compose --profile ref up -d muscriptor_ref`, see transcription-accuracy.md) |
 | `HF_TOKEN` | (empty) | Hugging Face read token for MuScriptor's weights. Accept the licence on [muscriptor-medium](https://huggingface.co/MuScriptor/muscriptor-medium) first. Non-commercial use only (CC BY-NC 4.0) |
 | `MUSCRIPTOR_MODEL` | `medium` | `small`, `medium` or `large` (large needs more than the RTX 2060's 6 GB) |
 | `MUSCRIPTOR_FAST` | `1` | Transcribes 4 five-second sections at once. On 9 pop clips it was as accurate as one at a time (pitched F1 0.452 vs 0.436) and about 30% faster. `0` goes back to one at a time |

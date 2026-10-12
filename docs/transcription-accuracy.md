@@ -74,6 +74,36 @@ The tests above are piano and classical music. [MulTTiPop](https://huggingface.c
 - **General isn't meant for full mixes.** It catches 12% of the notes and writes no drums.
 - Auto now uses MuScriptor for everything except solo piano. MuScriptor hasn't been tested on MAESTRO or MusicNet yet, so solo piano keeps the Piano model.
 
+### Our MuScriptor vs the official one
+
+Our `muscriptor` service wraps the PyPI package, not the authors' own server. To check that the wrapper isn't costing accuracy, the official server from [github.com/muscriptor/muscriptor](https://github.com/muscriptor/muscriptor) runs as its own container, `muscriptor_ref`, built straight from their repo (pinned to commit `7f213af`, September 2026), and `eval_pop.py` can score both on the same clips.
+
+What is the same: the model code and weights. The repo's model and decoding code is identical to PyPI `muscriptor==0.3.0`, which our service installs, and both download the same `muscriptor-medium` weights (shared through `data/models/hf`). Both read the audio as 16 kHz mono and cut it into 5-second sections.
+
+Where ours differs:
+
+| | Official server | Ours |
+|---|---|---|
+| Decoding | One section at a time, each told which notes are still held from the last (`prelude_forcing`) | Fast mode by default (`MUSCRIPTOR_FAST=1`): 4 sections at once, no hand-over of held notes. Roughly 3x faster, slightly worse joins. Set `MUSCRIPTOR_FAST=0` for the official behaviour |
+| Note timing | Finds the beat (beat_this) and moves every note earlier by the model's measured lag, up to about 25 ms | Raw model times, no lag correction. With a 50 ms scoring window, 25 ms matters |
+| MIDI file | Pushes everything later by whole bars so bar 1 starts on the first downbeat, at the detected tempo, velocity 100, overlapping notes trimmed | Notes at the times heard, velocity 90, no trimming. `eval_pop` takes the official bar shift back out before scoring |
+| Audio decoding | Its own resampler | ffmpeg (converts any format first) |
+| PyTorch | 2.13, CUDA 13 (needs an NVIDIA driver from mid 2025 or newer) | 2.5.1, CUDA 12.4 |
+| After transcription (app only, not in the benchmark) | Nothing | Dynamics shaped to follow the song, piano pedal, repeated notes split apart, GAME replaces the Lead vocal |
+
+The benchmark above (pitched F1 0.445) ran before fast mode became the default, so it measured the official decoding.
+
+Four methods separate those differences:
+
+| Method | What it runs |
+|---|---|
+| `muscriptor` | Our service as the app runs it (fast mode) |
+| `muscriptor_exact` | Our service with fast mode off: the official decoding |
+| `muscriptor_ref` | The official server, with its lag correction |
+| `muscriptor_ref_raw` | The official server without the lag correction (`detect_tempo=false`) |
+
+`muscriptor_exact` against `muscriptor_ref_raw` should be nearly identical; if not, something in the wrapper is off. `muscriptor_ref` against `muscriptor_ref_raw` shows what the lag correction is worth, and `muscriptor` against `muscriptor_exact` what fast mode costs. For one of your own songs, `scripts/compare_muscriptor.py` writes our two MIDIs and the official one side by side and prints how far they agree.
+
 ## Voices
 
 A transcriber hears a singer as just another instrument. Two tests show where that goes wrong.
@@ -181,4 +211,12 @@ For the pop test, first fetch the clips (needs YouTube access), then score:
 ```bash
 docker compose exec backend python scripts/build_pop_benchmark.py --split dev
 docker compose exec backend python scripts/eval_pop.py --split dev --methods general multi muscriptor
+```
+
+To compare our MuScriptor with the official server (the first build downloads a few GB):
+
+```bash
+docker compose --profile ref -f docker-compose.yml -f docker-compose.gpu.yml up -d --build muscriptor_ref
+docker compose exec backend python scripts/eval_pop.py --limit 40 --tag official --methods muscriptor muscriptor_exact muscriptor_ref muscriptor_ref_raw
+docker compose exec backend python scripts/compare_muscriptor.py data/uploads/your-song.mp3
 ```

@@ -13,6 +13,7 @@ services:
       - TORCH_HOME=/app/data/models/torch
       - YOURMT3_URL=http://yourmt3:8100
       - MUSCRIPTOR_URL=http://muscriptor:8200
+      - MUSCRIPTOR_REF_URL=http://muscriptor_ref:8222
       - CLAP_URL=http://clap:8300
       - GAME_URL=http://game:8300
     volumes:
@@ -42,6 +43,23 @@ services:
       - HF_HOME=/app/data/models/hf
       - MUSCRIPTOR_MODEL=${MUSCRIPTOR_MODEL:-medium}
       - MUSCRIPTOR_FAST=${MUSCRIPTOR_FAST:-1}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  # The official MuScriptor server, built straight from Kyutai/Mirelo's repo, so
+  # our wrapper (the `muscriptor` service above) can be checked against it. Only
+  # starts when asked for:  docker compose --profile ref up -d muscriptor_ref
+  # Shares the downloaded weights with `muscriptor`. Its own web UI: http://localhost:8222
+  muscriptor_ref:
+    profiles: ["ref"]
+    build: https://github.com/muscriptor/muscriptor.git#7f213afecf23bd6a1b8672aa223690ee9807cefb
+    command: ["--port", "8222", "--model", "${MUSCRIPTOR_MODEL:-medium}"]
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      - HF_HOME=/app/data/models/hf
+    ports:
+      - "8222:8222"
     volumes:
       - ./data:/app/data
     restart: unless-stopped
