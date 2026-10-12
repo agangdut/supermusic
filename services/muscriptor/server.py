@@ -66,9 +66,26 @@ def write_midi(events, path: Path) -> int:
         tracks[start.instrument].notes.append(pretty_midi.Note(90, start.pitch, start.start_time, end))
     pm.instruments = [t for t in tracks.values() if t.notes]
     for t in pm.instruments:
-        t.notes.sort(key=lambda n: (n.start, n.pitch))
+        t.notes = _trim_overlaps(t.notes)
     pm.write(str(path))
     return sum(len(t.notes) for t in pm.instruments)
+
+
+def _trim_overlaps(notes: list) -> list:
+    """Same clean-up as the official MIDI writer (trim_overlapping_notes): a note that is
+    still sounding when the same pitch starts again ends there, and a note left with no
+    length (the model wrote the same note twice at one moment) is dropped."""
+    by_pitch: dict = {}
+    for n in notes:
+        by_pitch.setdefault(n.pitch, []).append(n)
+    kept = []
+    for same in by_pitch.values():
+        same.sort(key=lambda n: n.start)
+        for a, b in zip(same, same[1:]):
+            if a.end > b.start:
+                a.end = b.start
+        kept += [n for n in same if n.start < n.end]
+    return sorted(kept, key=lambda n: (n.start, n.pitch))
 
 
 class Req(BaseModel):

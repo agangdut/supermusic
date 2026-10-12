@@ -102,6 +102,20 @@ Four methods separate those differences:
 | `muscriptor_ref` | The official server, with its lag correction |
 | `muscriptor_ref_raw` | The official server without the lag correction (`detect_tempo=false`) |
 
+**Result** (first 40 MulTTiPop dev clips, October 2026):
+
+| Method | Pitched P | Pitched R | Pitched F1 | Drums F1 | Overall F1 | Vocal F1 | Avg time |
+|---|---|---|---|---|---|---|---|
+| `muscriptor` (ours, fast) | 0.481 | 0.405 | 0.439 | 0.464 | 0.445 | 0.193 | 10.7s |
+| `muscriptor_exact` (ours) | 0.476 | 0.415 | 0.444 | 0.480 | 0.452 | 0.179 | 14.9s |
+| `muscriptor_ref` (official) | 0.484 | 0.409 | 0.443 | 0.495 | 0.455 | 0.190 | 14.3s |
+| `muscriptor_ref_raw` | 0.483 | 0.408 | 0.443 | 0.495 | 0.455 | 0.190 | 12.5s |
+
+- **Our wrapper matches the official server on pitched notes** (0.444 vs 0.443). Same model, same result.
+- **The official timing fix changes nothing here**: with and without it score the same.
+- **Drums were 0.015 lower in ours.** The official MIDI writer drops a note written twice at the same moment and trims overlapping repeats; ours didn't. Ours now does the same (re-test pending).
+- **Fast mode costs very little**: overall 0.445 vs 0.452, for about 30% less time. It stays the default.
+
 `muscriptor_exact` against `muscriptor_ref_raw` should be nearly identical; if not, something in the wrapper is off. `muscriptor_ref` against `muscriptor_ref_raw` shows what the lag correction is worth, and `muscriptor` against `muscriptor_exact` what fast mode costs. For one of your own songs, `scripts/compare_muscriptor.py` writes our two MIDIs and the official one side by side and prints how far they agree.
 
 ## Voices
