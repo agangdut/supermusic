@@ -14,6 +14,10 @@ is laid over that shape (see backend/app/core/melody_match.py):
     docker compose exec backend python scripts/compare_melody.py data/raw/songs
     docker compose exec backend python scripts/compare_melody.py song.mp3 --modes general,vocals_stem,multi
     docker compose exec backend python scripts/compare_melody.py data/raw/songs --modes general,muscriptor,game
+    docker compose exec backend python scripts/compare_melody.py song.mp3 --midi a.mid b.mid
+
+--midi scores MIDI files you already have (from SuperMusic or any other tool)
+against the song instead of transcribing it again.
 
 Modes: general (voice separated, then Basic Pitch), general_raw (Basic Pitch on
 the full mix), vocals_stem (Stems mode with only the vocals picked), stems (all
@@ -74,6 +78,7 @@ def main() -> None:
     ap.add_argument("inputs", nargs="+", help="Audio files or folders of them")
     ap.add_argument("--modes", default="general,vocals_stem,multi,cover")
     ap.add_argument("--limit", type=int, default=0, help="Only the first N songs")
+    ap.add_argument("--midi", nargs="+", type=Path, help="Score these MIDI files instead of running modes")
     args = ap.parse_args()
 
     songs = []
@@ -81,7 +86,8 @@ def main() -> None:
         songs += sorted(p for p in item.rglob("*") if p.suffix.lower() in AUDIO) if item.is_dir() else [item]
     if args.limit:
         songs = songs[: args.limit]
-    modes = [m.strip() for m in args.modes.split(",") if m.strip()]
+    given = {p.stem: p for p in args.midi or []}
+    modes = list(given) or [m.strip() for m in args.modes.split(",") if m.strip()]
     out_dir = settings.PROCESSED_DIR / "melody_compare"
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -97,8 +103,11 @@ def main() -> None:
         for mode in modes:
             t = time.time()
             try:
-                midi = run_mode(mode, song)
-                shutil.copy(midi, out_dir / f"{song.stem} - {mode}.mid")
+                if mode in given:
+                    midi = given[mode]
+                else:
+                    midi = run_mode(mode, song)
+                    shutil.copy(midi, out_dir / f"{song.stem} - {mode}.mid")
                 s = melody_match(midi, vocals, sung=sung)
             except Exception as e:  # keep going: one broken mode shouldn't stop the run
                 print(f"| {song.stem} | {mode} | error: {str(e).splitlines()[0][:80]} | | | | |", flush=True)
