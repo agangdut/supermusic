@@ -319,7 +319,7 @@ flowchart LR
 
 Things worth knowing:
 
-- **Sections and "prelude".** The song is cut into 5-second sections. Each section's decoder is first told which notes are still sounding from the previous one, so a held chord isn't cut at the boundary. `MUSCRIPTOR_FAST=1` instead runs 4 sections at once on the GPU without that hand-off: about 3× faster, with rougher joins.
+- **Sections and "prelude".** The song is cut into 5-second sections. Each section's decoder is first told which notes are still sounding from the previous one, so a held chord isn't cut at the boundary. `MUSCRIPTOR_FAST=1` instead runs 4 sections at once on the GPU without that hand-off: about 30% faster, but every held note stops at each 5-second join, which you hear as a hiccup. It is off by default.
 - **Beam search.** By default the decoder takes the single most likely token each step (**greedy**). Beam search keeps the best few partial sequences and picks the best whole one at the end: slower, sometimes more accurate. `scripts/eval_pop.py` can compare both.
 - **Post-processing in our code.** MuScriptor writes notes at flat loudness, so [`core/humanize.py`](../backend/app/core/humanize.py) gives them dynamics that follow the song's own loudness, and adds sustain pedal only on piano tracks.
 

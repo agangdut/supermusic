@@ -98,8 +98,10 @@ class Req(BaseModel):
 
 # Speed/quality trade-off. Off (default): 5-second sections are transcribed one after
 # another, each told which notes are still held from the last one. On: 4 sections at a
-# time on the GPU, roughly 3x faster, with slightly worse joins between sections.
-FAST = os.getenv("MUSCRIPTOR_FAST", "1") == "1"
+# time on the GPU, about 30% faster, but every note held across a join is cut off there:
+# on "Free Game" 200 notes stopped exactly on a 5-second mark, an audible hiccup every
+# 5 seconds that onset-only benchmarks don't see.
+FAST = os.getenv("MUSCRIPTOR_FAST", "0") == "1"
 
 _jobs: dict = {}
 _gpu = threading.Lock()  # one song at a time on the GPU; others wait their turn

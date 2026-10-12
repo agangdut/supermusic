@@ -84,7 +84,7 @@ Where ours differs:
 
 | | Official server | Ours |
 |---|---|---|
-| Decoding | One section at a time, each told which notes are still held from the last (`prelude_forcing`) | Fast mode by default (`MUSCRIPTOR_FAST=1`): 4 sections at once, no hand-over of held notes. Roughly 3x faster, slightly worse joins. Set `MUSCRIPTOR_FAST=0` for the official behaviour |
+| Decoding | One section at a time, each told which notes are still held from the last (`prelude_forcing`) | Same by default. `MUSCRIPTOR_FAST=1` decodes 4 sections at once with no hand-over of held notes: about 30% faster, but held notes are cut at every 5-second join |
 | Note timing | Finds the beat (beat_this) and moves every note earlier by the model's measured lag, up to about 25 ms | Raw model times, no lag correction. With a 50 ms scoring window, 25 ms matters |
 | MIDI file | Pushes everything later by whole bars so bar 1 starts on the first downbeat, at the detected tempo, velocity 100, overlapping notes trimmed | Notes at the times heard, velocity 90, no trimming. `eval_pop` takes the official bar shift back out before scoring |
 | Audio decoding | Its own resampler | ffmpeg (converts any format first) |
@@ -114,7 +114,7 @@ Four methods separate those differences:
 - **Our wrapper matches the official server on pitched notes** (0.444 vs 0.443). Same model, same result.
 - **The official timing fix changes nothing here**: with and without it score the same.
 - **Drums were 0.015 lower in ours.** The official MIDI writer drops a note written twice at the same moment and trims overlapping repeats; ours didn't. Ours now does the same (re-test pending).
-- **Fast mode costs very little**: overall 0.445 vs 0.452, for about 30% less time. It stays the default.
+- **Fast mode costs very little on this score** (overall 0.445 vs 0.452, for about 30% less time), but the score only checks where notes start. By ear it was worse: every note held across a 5-second join stops there (200 notes on Meek Mill "Free Game"), a hiccup every 5 seconds. Since 2026-10-12 fast mode is off by default.
 
 `muscriptor_exact` against `muscriptor_ref_raw` should be nearly identical; if not, something in the wrapper is off. `muscriptor_ref` against `muscriptor_ref_raw` shows what the lag correction is worth, and `muscriptor` against `muscriptor_exact` what fast mode costs. For one of your own songs, `scripts/compare_muscriptor.py` writes our two MIDIs and the official one side by side and prints how far they agree.
 

@@ -42,7 +42,7 @@ services:
       - HF_TOKEN=${HF_TOKEN:-}
       - HF_HOME=/app/data/models/hf
       - MUSCRIPTOR_MODEL=${MUSCRIPTOR_MODEL:-medium}
-      - MUSCRIPTOR_FAST=${MUSCRIPTOR_FAST:-1}
+      - MUSCRIPTOR_FAST=${MUSCRIPTOR_FAST:-0}
     volumes:
       - ./data:/app/data
     restart: unless-stopped
