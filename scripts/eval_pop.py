@@ -13,8 +13,8 @@ built by scripts/build_pop_benchmark.py.
 
 The last one checks our MuScriptor wrapper against the official server (start it first with
 `docker compose --profile ref up -d muscriptor_ref`; see "Our MuScriptor vs the official one" in docs/transcription-accuracy.md):
-  muscriptor          our service as the app runs it (fast mode unless MUSCRIPTOR_FAST=0)
-  muscriptor_exact    our service with fast mode off, i.e. the official decoding settings
+  muscriptor          our service as the app runs it (fast mode only if MUSCRIPTOR_FAST=1)
+  muscriptor_exact    our service with fast mode off, i.e. the official decoding settings (now the default too)
   muscriptor_ref      the official server, with its timing fix (notes moved earlier by the model's lag)
   muscriptor_ref_raw  the official server without that fix
 

@@ -97,7 +97,7 @@ Four methods separate those differences:
 
 | Method | What it runs |
 |---|---|
-| `muscriptor` | Our service as the app runs it (fast mode) |
+| `muscriptor` | Our service as the app runs it (fast mode off since 2026-10-12, so now the same as `muscriptor_exact` unless `MUSCRIPTOR_FAST=1`) |
 | `muscriptor_exact` | Our service with fast mode off: the official decoding |
 | `muscriptor_ref` | The official server, with its lag correction |
 | `muscriptor_ref_raw` | The official server without the lag correction (`detect_tempo=false`) |
