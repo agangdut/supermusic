@@ -1,6 +1,7 @@
 # CLAP audio/text embeddings (LAION clap-htsat-unfused) for the Music Map's "sound" feature
 # and describe-a-vibe search. Small model: runs fine on the CPU, faster on the GPU.
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+# 2.6+ is required: transformers refuses to load .bin checkpoints with older torch (CVE-2025-32434)
+FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libsndfile1 && rm -rf /var/lib/apt/lists/*
 
