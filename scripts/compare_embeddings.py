@@ -7,7 +7,7 @@ song and compares them:
   map   the Music Map's audio-derived features (key on the Camelot wheel,
         tempo, energy, brightness), built with the same code the map uses
   mert  MERT-v1-95M, a self-supervised music model, averaged over time
-  clap  LAION CLAP (music checkpoint), an audio-text model, averaged over time
+  clap  LAION CLAP (clap-htsat-unfused), an audio-text model, averaged over time
 
 "Averaged over time" follows the pooled-descriptor idea from
 "Diffusable Latents from Structure-Agnostic Distillation" (2026): one vector
@@ -197,7 +197,7 @@ def _tensor(out):
 class Clap:
     sr = 48000
 
-    def __init__(self, device: str, name: str = "laion/larger_clap_music"):
+    def __init__(self, device: str, name: str = "laion/clap-htsat-unfused"):
         import torch
         from transformers import ClapModel, ClapProcessor
 
@@ -317,8 +317,9 @@ def main() -> None:
     ap.add_argument("--name", default=None)
     ap.add_argument("--device", default=None)
     ap.add_argument("--skip", nargs="*", default=[], choices=["mert", "clap"])
-    ap.add_argument("--clap-model", default="laion/larger_clap_music",
-                    help="e.g. laion/clap-htsat-unfused, laion/larger_clap_general")
+    # larger_clap_music gave the same songs for every text query on 2026-10-11; see docs/embedding-comparison.md
+    ap.add_argument("--clap-model", default="laion/clap-htsat-unfused",
+                    help="e.g. laion/larger_clap_music, laion/larger_clap_general")
     args = ap.parse_args()
 
     name = args.name or ("deezer_charts" if args.deezer else args.audio_dir.name)
