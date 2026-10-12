@@ -137,6 +137,15 @@ The MIDI's melody is its "Lead vocal" track, or else the highest note playing at
 - **API:** `POST /midi/melody-match` with `midi_path` and either `vocals_path` or `audio_path` (the voice is separated first).
 - **Comparing modes on your songs:** `docker compose exec backend python scripts/compare_melody.py data/raw/songs --limit 10`
 
+First results on two songs (October 2026):
+
+| Song | General | Stems (Vocals only) |
+|---|---|---|
+| Alessia Cara – Here | 48.2% | 48.2% |
+| Allan Rayman – Tennessee | 40.8% | 43.1% |
+
+Both modes run Basic Pitch on the same Demucs vocal stem, so they land within a few points of each other: just under half the sung time gets the right note. Full band with and without GAME (`--modes muscriptor,game`) hasn't been compared this way yet.
+
 It only judges the melody, not chords, bass or drums. Rap has little steady pitch, so scores there mean less. Backing vocals and harmonies that leak into the vocal stem can pull the traced pitch off the lead line.
 
 ## How Auto decides

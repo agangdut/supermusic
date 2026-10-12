@@ -13,10 +13,12 @@ is laid over that shape (see backend/app/core/melody_match.py):
 
     docker compose exec backend python scripts/compare_melody.py data/raw/songs
     docker compose exec backend python scripts/compare_melody.py song.mp3 --modes general,vocals_stem,multi
+    docker compose exec backend python scripts/compare_melody.py data/raw/songs --modes general,muscriptor,game
 
 Modes: general (voice separated, then Basic Pitch), general_raw (Basic Pitch on
 the full mix), vocals_stem (Stems mode with only the vocals picked), stems (all
-six stems), multi (YourMT3+; needs the yourmt3 service), cover (Pop2Piano),
+six stems), multi (YourMT3+; needs the yourmt3 service), muscriptor (Full band,
+MuScriptor's own voice track), game (Full band with GAME singing the Lead vocal), cover (Pop2Piano),
 auto. Results print as a Markdown table; MIDI files are kept in
 data/processed/melody_compare/.
 """
@@ -53,6 +55,11 @@ def run_mode(mode: str, audio: Path) -> Path:
         from app.core.vocals import lead_vocal_track
         from app.core.yourmt3_client import transcribe_multi
         return lead_vocal_track(transcribe_multi(audio))[0]
+    if mode in ("muscriptor", "game"):  # Full band: MuScriptor's own voice, or GAME on the vocal stem
+        from app.core.muscriptor_client import transcribe_muscriptor
+        from app.core.vocals import lead_vocal_track, sung_lead_vocal
+        raw = transcribe_muscriptor(audio)
+        return (sung_lead_vocal(raw, audio) if mode == "game" else lead_vocal_track(raw))[0]
     if mode == "cover":
         from app.core.piano_cover import piano_cover
         return piano_cover(audio)
