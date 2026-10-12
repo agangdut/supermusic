@@ -317,8 +317,7 @@ def _pick_hit(hits: List[dict], artist: str, title: str) -> Optional[dict]:
 
 def lookup(artist: str, title: str, analyse: bool = True) -> dict:
     """Genre, year (and preview features) for one song, cached on disk."""
-    k = song_key(artist, title)
-    cache = _cache_dir() / (re.sub(r"[^a-z0-9|]+", "_", k)[:150] + ".json")
+    cache = _song_cache(artist, title)
     if cache.exists():
         info = json.loads(cache.read_text())
     else:
@@ -360,21 +359,58 @@ def lookup(artist: str, title: str, analyse: bool = True) -> dict:
     return info
 
 
+def _song_cache(artist: str, title: str) -> Path:
+    return _cache_dir() / (re.sub(r"[^a-z0-9|]+", "_", song_key(artist, title))[:150] + ".json")
+
+
+def is_cached(artist: str, title: str) -> bool:
+    """True if looking this song up needs no network request (it was looked up before)."""
+    return _song_cache(artist, title).exists() and genres.is_cached(artist)
+
+
 def enrich(df: pd.DataFrame, limit: int = 1500, analyse: bool = True,
-           progress: Optional[Callable[[int, int], None]] = None) -> Tuple[pd.DataFrame, int]:
-    """Fill missing genre/year/bpm/key/energy for up to `limit` songs, most-played first."""
+           progress: Optional[Callable[[int, int], None]] = None,
+           on_song: Optional[Callable[[dict], None]] = None,
+           on_start: Optional[Callable[[dict], None]] = None,
+           give_up_after: int = 8) -> Tuple[pd.DataFrame, int]:
+    """Fill missing genre/year/bpm/key/energy for up to `limit` songs, most-played first.
+
+    `on_start` gets {"needed", "todo", "cached"} before the first lookup: songs missing
+    something, songs that will be looked up (at most `limit`), and how many of those were
+    looked up before. `on_song` gets one dict per song: {"cached", "found", "error", "seconds"}. If the
+    first `give_up_after` lookups all fail with network errors, the rest are skipped
+    (the services can't be reached) and `on_song` gets {"gave_up": True}."""
     df = df.copy()
+    for f in ["genre", "key"]:  # all-empty columns are float; let them hold text
+        df[f] = df[f].astype(object)
     order = df["play_count"].fillna(0).sort_values(ascending=False).index if df["play_count"].notna().any() else df.index
-    todo = [i for i in order if pd.isna(df.at[i, "genre"]) or pd.isna(df.at[i, "bpm"])][:limit]
-    found = 0
+    needed = [i for i in order if pd.isna(df.at[i, "genre"]) or pd.isna(df.at[i, "bpm"])]
+    todo = needed[:limit]
+    if on_start:
+        on_start({"needed": len(needed), "todo": len(todo),
+                  "cached": sum(is_cached(str(df.at[i, "artist"] or ""), str(df.at[i, "title"])) for i in todo)})
+    found = errors = successes = 0
     for n, i in enumerate(todo, 1):
-        info = lookup(str(df.at[i, "artist"] or ""), str(df.at[i, "title"]), analyse=analyse)
-        if info.get("deezer_id") or info.get("genre"):
-            found += 1
+        artist, title = str(df.at[i, "artist"] or ""), str(df.at[i, "title"])
+        cached = is_cached(artist, title)
+        t0 = time.monotonic()
+        info = lookup(artist, title, analyse=analyse)
+        hit = bool(info.get("deezer_id") or info.get("genre"))
+        found += hit
+        failed = "error" in info and not hit
+        errors += failed
+        successes += not failed
         for f in ["genre", "year", "bpm", "key", "energy", "brightness"]:
             if f in info and pd.isna(df.at[i, f]):
                 df.at[i, f] = info[f]
+        if on_song:
+            on_song({"cached": cached, "found": hit, "error": failed, "seconds": time.monotonic() - t0})
         if progress:
             progress(n, len(todo))
-        time.sleep(0.05)  # stay well under Deezer's 50 requests / 5 s
+        if successes == 0 and errors >= give_up_after:
+            if on_song:
+                on_song({"gave_up": True, "skipped": len(todo) - n})
+            break
+        if not cached:
+            time.sleep(0.05)  # stay well under Deezer's 50 requests / 5 s
     return df, found

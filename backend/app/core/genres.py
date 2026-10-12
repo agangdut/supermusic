@@ -44,7 +44,7 @@ _RULES: List[Tuple[str, str]] = [
               r"brazil|tango|dembow|urbano|flamenco|merengue"),
     ("Afrobeats", r"afro|amapiano|naija|highlife|african"),
     ("Gospel", r"gospel|christian|worship|\bccm\b"),
-    ("R&B", r"r&b|\br ?n ?b\b|r'n'b|rhythm and blues|neo[- ]?soul|quiet storm"),
+    ("R&B", r"r&b|trap ?soul|\br ?n ?b\b|r'n'b|rhythm and blues|neo[- ]?soul|quiet storm"),
     ("Hip-Hop", r"hip[- ]?hop|\brap\b|\brapper|\btrap\b|\bdrill\b|\bgrime\b|boom bap|gangsta|crunk|phonk"),
     ("Metal", r"metal|djent"),
     ("Punk", r"punk|\bemo\b|hardcore|screamo"),
@@ -210,6 +210,15 @@ def _cached(kind: str, key: str, fetch) -> Optional[List[str]]:
         return None  # network trouble: don't cache, try again next time
     p.write_text(json.dumps({"genres": genres}))
     return genres
+
+
+def is_cached(artist: str) -> bool:
+    """True if this artist's genre is already known, so looking it up costs no request."""
+    a = _first_artist(artist)
+    if not a:
+        return True
+    kind = "lastfm_artist" if os.getenv("LASTFM_API_KEY", "").strip() else "musicbrainz"
+    return _cache_path(kind, a).exists()
 
 
 def lookup_genres(artist: str, title: Optional[str] = None,

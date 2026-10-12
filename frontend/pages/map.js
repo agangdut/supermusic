@@ -3,8 +3,9 @@ import dynamic from "next/dynamic";
 import Head from "next/head";
 
 import PageShell from "@/components/layout/PageShell";
-import { buildMap, getImport, importLibrary } from "@/lib/api";
+import { buildMap, getImport, getMapEstimate, importLibrary } from "@/lib/api";
 import { colorFor } from "@/components/map/colors";
+import ImportProgress, { BuildProgress } from "@/components/map/ImportProgress";
 
 const Graph3D = dynamic(() => import("@/components/map/Graph3D"), {
   ssr: false,
@@ -72,10 +73,14 @@ export default function MapPage() {
   const requestRef = useRef(0);
   const startedRef = useRef(false);
 
-  const load = useCallback(async (src, w) => {
+  const [buildEstimate, setBuildEstimate] = useState(null); // seconds, when the track count is known
+
+  const load = useCallback(async (src, w, tracks) => {
     const req = ++requestRef.current;
     setLoading(true);
     setError(null);
+    setBuildEstimate(null);
+    if (tracks) getMapEstimate(tracks).then((e) => req === requestRef.current && setBuildEstimate(e)).catch(() => {});
     try {
       const res = await buildMap({ ...src, weights: w });
       if (req !== requestRef.current) return; // a newer map was requested meanwhile
@@ -100,6 +105,8 @@ export default function MapPage() {
   const [pending, setPending] = useState(null); // files picked, waiting for "Build my map"
   const [enrichOnline, setEnrichOnline] = useState(true);
   const [importJob, setImportJob] = useState(null);
+  const [uploading, setUploading] = useState(0); // number of files being sent
+  const [lastWarning, setLastWarning] = useState(null); // e.g. online lookups were skipped
 
   const onFile = (e) => {
     const files = Array.from(e.target.files || []);
@@ -115,15 +122,27 @@ export default function MapPage() {
     setPending(null);
     setError(null);
     setLoading(true);
+    setUploading(files.length);
+    setLastWarning(null);
     try {
       let job = await importLibrary(files, { enrich: enrichOnline });
+      setUploading(0);
       setImportJob(job);
+      let misses = 0;
       while (job.status === "running") {
         await new Promise((r) => setTimeout(r, 1000));
-        job = await getImport(job.id);
+        try {
+          job = await getImport(job.id);
+          misses = 0;
+        } catch (err) {
+          // A lost import (server restarted) is final; a dropped poll is not
+          if (/no longer running/.test(err.message || "") || ++misses >= 5) throw err;
+          continue;
+        }
         setImportJob(job);
       }
       if (job.status !== "done") throw new Error(job.error || "Import failed");
+      setLastWarning(job.warning || null);
       requestRef.current += 1; // anything still loading is now stale
       setData(job.result);
       setSelectedId(null);
@@ -133,6 +152,7 @@ export default function MapPage() {
     } catch (err) {
       setError(err.message || String(err));
     } finally {
+      setUploading(0);
       setImportJob(null);
       setLoading(false);
     }
@@ -227,7 +247,7 @@ export default function MapPage() {
           <label className="mt-3 flex items-start gap-2 text-xs text-gray-300">
             <input type="checkbox" checked={enrichOnline} onChange={(e) => setEnrichOnline(e.target.checked)} className="mt-0.5 accent-fuchsia-500" />
             <span>
-              Look up genre, tempo, key and energy online. Song titles and artists are sent to Deezer, and each song&apos;s
+              Look up genre, tempo, key and energy online. Song titles and artists are sent to MusicBrainz and Deezer (and Last.fm if a key is set up), and each song&apos;s
               30-second preview is analysed on this computer. Needed for listening histories, which don&apos;t include any of that.
             </span>
           </label>
@@ -238,19 +258,11 @@ export default function MapPage() {
         </div>
       )}
 
-      {importJob && (
-        <div className="mb-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-          <div className="flex justify-between text-xs text-gray-300">
-            <span>{importJob.message}</span>
-            <span className="tabular-nums text-gray-500">{importJob.progress}%</span>
-          </div>
-          <div className="mt-2 h-1.5 rounded-full bg-white/5">
-            <div className="h-1.5 rounded-full bg-gradient-to-r from-fuchsia-500 to-indigo-500 transition-all" style={{ width: `${importJob.progress}%` }} />
-          </div>
-          <div className="mt-2 text-[11px] text-gray-500">
-            {importJob.detected?.map((d) => `${d.file}: ${d.type}, ${d.songs} songs`).join(" · ")}
-          </div>
-        </div>
+      {(uploading > 0 || importJob) && (
+        <ImportProgress job={importJob} uploading={uploading > 0} fileCount={uploading} />
+      )}
+      {importJob === null && !loading && lastWarning && (
+        <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">{lastWarning}</div>
       )}
 
       {error && (
@@ -289,7 +301,7 @@ export default function MapPage() {
               onSelect={(id) => { setSelectedId(id); if (id != null) setClusterFocus(null); }}
             />
           )}
-          {loading && <Centered><span className="animate-pulse">Mapping your library…</span></Centered>}
+          {loading && !importJob && !uploading && <Centered><BuildProgress estimate={buildEstimate} /></Centered>}
 
           {/* Legend */}
           {data && (
@@ -432,7 +444,7 @@ export default function MapPage() {
             <div className="mb-2 flex items-center justify-between">
               <span className="text-[11px] uppercase tracking-wider text-gray-500">Shape the map by</span>
               <button
-                onClick={() => load(source, weights)}
+                onClick={() => load(source, weights, data?.tracks?.length)}
                 disabled={loading}
                 className="rounded-lg bg-white/10 px-2.5 py-1 text-xs text-white hover:bg-white/15 disabled:opacity-40"
               >

@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from app.core.music_map import MapOptions, build_map
+from app.core.music_map import MapOptions, build_map, estimate_build_seconds
 
 router = APIRouter(prefix="/map", tags=["map"])
 
@@ -67,6 +67,7 @@ def warm_up() -> None:
 # ---------------------------------------------------------------------------
 
 import threading  # noqa: E402
+import time  # noqa: E402
 import uuid  # noqa: E402
 from typing import List  # noqa: E402
 
@@ -75,7 +76,142 @@ from fastapi import File, Form, UploadFile  # noqa: E402
 from app.core import library_import  # noqa: E402
 from app.core.config import settings  # noqa: E402
 
-_imports: Dict[str, dict] = {}
+_imports: Dict[str, "ImportJob"] = {}
+
+# Until a few songs have been timed: a new song costs a Deezer search, a preview download and
+# analysis (~1-2 s) plus a MusicBrainz request for a new artist (1 s); a cached one costs ~nothing.
+NEW_SONG_S = 2.0
+CACHED_SONG_S = 0.02
+
+
+class ImportJob:
+    """An import's state, with progress and time left worked out from measured timings.
+
+    The bar is time-based (time spent / (time spent + time left)) rather than "songs
+    done / songs", because a cached song takes milliseconds and a new one a few seconds,
+    and drawing a big map can take longer than all the cached lookups together."""
+
+    def __init__(self, detected: List[dict], enrich: bool):
+        self.id = uuid.uuid4().hex
+        self.detected = detected
+        self.enrich = enrich
+        self.status = "running"
+        self.error: Optional[str] = None
+        self.warning: Optional[str] = None
+        self.result: Optional[dict] = None
+        self.songs = sum(d["songs"] for d in detected)
+        self.started = time.monotonic()
+        self.finished: Optional[float] = None
+        self.step = "merge"
+        self.draw_detail = ""
+        self.lookup = {"needed": 0, "todo": 0, "cached": 0, "done": 0, "done_cached": 0,
+                       "found": 0, "not_found": 0, "failed": 0, "skipped": 0}
+        self.lookup_planned = not enrich
+        self.new_times: List[float] = []
+        self.cached_times: List[float] = []
+        self.draw_started: Optional[float] = None
+        self.draw_estimate = 0.0
+        self.last_progress = 0
+
+    # ---- called from the worker thread ---------------------------------------------
+    def on_start(self, plan: dict) -> None:
+        self.lookup.update(needed=plan["needed"], todo=plan["todo"], cached=plan["cached"],
+                           skipped=plan["needed"] - plan["todo"])
+        self.lookup_planned = True
+
+    def on_song(self, r: dict) -> None:
+        if r.get("gave_up"):
+            self.lookup["skipped"] += r["skipped"]
+            self.lookup["todo"] -= r["skipped"]
+            self.warning = ("Couldn't reach the online music databases, so songs weren't looked up. "
+                            "Check the internet connection and import again.")
+            return
+        lk = self.lookup
+        lk["done"] += 1
+        lk["done_cached"] += r["cached"]
+        lk["failed" if r["error"] else "found" if r["found"] else "not_found"] += 1
+        (self.cached_times if r["cached"] else self.new_times).append(r["seconds"])
+
+    def start_drawing(self, n: int) -> None:
+        self.step = "draw"
+        self.songs = n
+        self.draw_started = time.monotonic()
+        self.draw_estimate = estimate_build_seconds(n)
+
+    # ---- time left -------------------------------------------------------------------
+    @staticmethod
+    def _avg(times: List[float], default: float) -> float:
+        recent = times[-30:]
+        # Blend in the default until there are a few measurements to go on
+        return (sum(recent) + default * max(0, 3 - len(recent))) / max(len(recent), 3)
+
+    def _lookup_left(self) -> float:
+        lk = self.lookup
+        new_left = max(lk["todo"] - lk["cached"] - (lk["done"] - lk["done_cached"]), 0)
+        cached_left = max(lk["cached"] - lk["done_cached"], 0)
+        return new_left * self._avg(self.new_times, NEW_SONG_S) + cached_left * self._avg(self.cached_times, CACHED_SONG_S)
+
+    def time_left(self) -> Optional[float]:
+        now = time.monotonic()
+        if self.step == "draw":
+            left = self.draw_estimate - (now - (self.draw_started or now))
+            return max(left, 0.0)
+        if self.enrich and not self.lookup_planned:
+            return None  # still counting what needs looking up
+        return (self._lookup_left() if self.enrich else 0.0) + estimate_build_seconds(self.songs)
+
+    def view(self) -> dict:
+        now = self.finished or time.monotonic()
+        elapsed = now - self.started
+        left = None if self.status != "running" else self.time_left()
+        if self.status == "done":
+            progress = 100
+        elif left is None:
+            progress = self.last_progress
+        else:
+            # Past the estimate while drawing: creep towards 99% instead of sitting still or lying
+            progress = int(min(99, 100 * elapsed / max(elapsed + left, 1e-6)))
+            if self.step == "draw" and left == 0:
+                progress = 99
+        progress = self.last_progress = max(progress, self.last_progress)
+
+        lk = self.lookup
+        steps = [{"key": "read", "label": "Read your files", "state": "done",
+                  "detail": f"{sum(d['songs'] for d in self.detected):,} songs"}]
+        if self.enrich:
+            if self.step == "merge":
+                state, detail = "active", "Checking which songs need looking up…"
+            elif self.step == "lookup":
+                state = "active"
+                detail = f"{lk['done']:,} of {lk['todo']:,} songs"
+            else:
+                state = "done"
+                detail = f"{lk['found']:,} found, {lk['not_found']:,} not found" + \
+                         (f", {lk['failed']:,} failed" if lk["failed"] else "")
+            steps.append({"key": "lookup", "label": "Look songs up online", "state": state, "detail": detail})
+        draw_state = "done" if self.status == "done" else "active" if self.step == "draw" else "waiting"
+        steps.append({"key": "draw", "label": "Draw your map", "state": draw_state,
+                      "detail": self.draw_detail if draw_state == "active" else
+                      f"{self.songs:,} songs" if draw_state == "done" else ""})
+
+        active = next((s for s in steps if s["state"] == "active"), None)
+        if self.status == "error":
+            message = "Import failed"
+        elif self.status == "done":
+            message = "Done"
+        elif self.step == "lookup":
+            message = f"Looking up songs online… {lk['done']:,} of {lk['todo']:,}"
+        elif self.step == "draw":
+            message = "Drawing your map… almost done" if left == 0 else \
+                f"Drawing your map: {self.draw_detail.lower()}…" if self.draw_detail else "Drawing your map…"
+        else:
+            message = active["detail"] if active else "Working…"
+        return {
+            "id": self.id, "status": self.status, "progress": progress, "message": message,
+            "eta_s": None if left is None else round(left, 1), "elapsed_s": round(elapsed, 1),
+            "steps": steps, "lookup": lk if self.enrich else None, "warning": self.warning,
+            "detected": self.detected, "songs": self.songs, "error": self.error, "result": self.result,
+        }
 
 
 @router.post("/import")
@@ -94,43 +230,59 @@ async def import_library(
         parsed.append(df)
         detected.append({"file": f.filename, "type": label, "songs": int(len(df))})
 
-    job_id = uuid.uuid4().hex
-    job = _imports[job_id] = {"id": job_id, "status": "running", "progress": 0, "detected": detected,
-                              "message": "Merging your files…", "result": None, "error": None}
+    job = ImportJob(detected, enrich)
+    _imports[job.id] = job
 
     def work() -> None:
         try:
             df = library_import.merge(parsed)
-            job["songs"] = int(len(df))
+            job.songs = int(len(df))
             found = None
             if enrich:
-                def tick(n, total):
-                    job["progress"] = round(90 * n / max(total, 1))
-                    job["message"] = f"Looking up songs online… {n} of {total}"
-                df, found = library_import.enrich(df, limit=limit, progress=tick)
+                def on_start(plan):
+                    job.on_start(plan)
+                    job.step = "lookup"
+                df, found = library_import.enrich(df, limit=limit, on_start=on_start, on_song=job.on_song)
             out = settings.PROCESSED_DIR / "library"
             out.mkdir(parents=True, exist_ok=True)
-            csv_path = out / f"library_{job_id[:8]}.csv"
+            csv_path = out / f"library_{job.id[:8]}.csv"
             df.to_csv(csv_path, index=False)
-            job["message"] = "Drawing your map…"
-            job["progress"] = 95
             # Columns nobody filled in would otherwise look like (empty) data
-            result = build_map(df.dropna(axis=1, how="all"), MapOptions())
+            df = df.dropna(axis=1, how="all")
+            job.start_drawing(len(df))
+
+            def step(name):
+                job.draw_detail = name
+
+            result = build_map(df, MapOptions(), progress=step)
             result["meta"]["source"] = ", ".join(d["type"] for d in detected)
             result["meta"]["library_csv"] = str(csv_path)
             if found is not None:
                 result["meta"]["matched_online"] = found
-            job.update(status="done", progress=100, message="Done", result=result)
+            job.result = result
+            job.status = "done"
         except Exception as e:
-            job.update(status="error", error=str(e), message="Import failed")
+            job.error = str(e)
+            job.status = "error"
+        finally:
+            job.finished = time.monotonic()
 
     threading.Thread(target=work, daemon=True).start()
-    return {k: v for k, v in job.items() if k != "result"}
+    return {k: v for k, v in job.view().items() if k != "result"}
 
 
 @router.get("/import/{job_id}")
 def import_status(job_id: str) -> dict:
     job = _imports.get(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Unknown import")
-    return job
+        raise HTTPException(status_code=404, detail="This import is no longer running (the server may have restarted). Please import again.")
+    view = job.view()
+    if view["status"] != "done":
+        view.pop("result")
+    return view
+
+
+@router.get("/estimate")
+def estimate(tracks: int) -> dict:
+    """Roughly how long drawing a map of `tracks` songs takes on this machine."""
+    return {"seconds": round(estimate_build_seconds(max(tracks, 1)), 1)}

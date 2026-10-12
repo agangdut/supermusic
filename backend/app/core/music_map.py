@@ -20,7 +20,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -254,6 +254,8 @@ class _Prepared:
     feature_groups: List[str]
     mood_cols: List[str]
     engagement: Optional[np.ndarray]
+    _lib_genres: Optional[Dict[str, float]] = None  # filled in on first use by _distinctive_style
+    _lib_styles: Optional[Dict[str, float]] = None
 
     def gname(self, g: str) -> str:
         return self.genre_names.get(g, g.title())
@@ -501,6 +503,43 @@ def _bpm_bucket(bpm: float) -> Optional[str]:
     return f"{lo}–{lo + 9} BPM"
 
 
+# Tags too broad to tell one part of a library from another
+_GENERIC_STYLES = {"rap", "hip hop", "hip-hop", "hiphop", "pop", "rock", "r&b", "rnb", "soul", "electronic", "dance"}
+
+
+def _style_fractions(p: _Prepared, idx) -> Dict[str, float]:
+    """Share of the given tracks that carry each detailed tag."""
+    counts: Dict[str, int] = {}
+    for i in idx:
+        for t in set(p.styles[i]):
+            counts[t] = counts.get(t, 0) + 1
+    return {t: c / max(len(idx), 1) for t, c in counts.items()}
+
+
+def _distinctive_style(p: _Prepared, idx: np.ndarray, top_genre: str) -> Optional[str]:
+    """When most of the library shares one broad genre (say Hip-Hop), naming every cluster
+    "Hip-Hop" says nothing. Name it after the detailed tag that sets it apart instead
+    ("West Coast Hip Hop", "Melodic Rap", "Trap Soul")."""
+    if p._lib_genres is None:
+        p._lib_genres = dict(_share([t for gs in p.genres for t in gs]))
+        p._lib_styles = _style_fractions(p, range(len(p.styles)))
+    if p._lib_genres.get(top_genre, 0) < 0.5:
+        return None  # the broad genre already tells clusters apart
+    here = _style_fractions(p, idx)
+    best, best_score = None, 0.0
+    for t, f in here.items():
+        if t in _GENERIC_STYLES or t == top_genre or f < 0.25:
+            continue
+        lift = f / max(p._lib_styles.get(t, f), 1e-9)
+        score = f * lift
+        if (lift >= 1.2 or f >= 0.6) and score > best_score:
+            best, best_score = t, score
+    if not best:
+        return None
+    name = p.style_names.get(best, best)
+    return name if any(c.isupper() for c in name) else name.title().replace("Hip Hop", "Hip-Hop")
+
+
 def _cluster_label(p: _Prepared, idx: np.ndarray) -> Tuple[str, Dict[str, Any]]:
     parts: List[str] = []
     info: Dict[str, Any] = {}
@@ -508,7 +547,15 @@ def _cluster_label(p: _Prepared, idx: np.ndarray) -> Tuple[str, Dict[str, Any]]:
     g = _share([t for i in idx for t in p.genres[i]])
     if g:
         info["top_genres"] = [{"name": p.gname(n), "share": round(s, 2)} for n, s in g[:3]]
-        parts.append(" / ".join(p.gname(n) for n, s in g[:2] if s >= 0.25) or p.gname(g[0][0]))
+        if g[0][1] < 0.35:  # no genre leads; naming one would mislabel most of the cluster
+            label = "Mix of " + ", ".join(p.gname(n) for n, _ in g[:3])
+        else:
+            label = " / ".join(p.gname(n) for n, s in g[:2] if s >= 0.25)
+        style = _distinctive_style(p, idx, g[0][0]) if g[0][1] >= 0.5 else None
+        if style:
+            info["style"] = style
+            label = style
+        parts.append(label)
 
     ks = _share([p.keys[i].camelot for i in idx if p.keys[i]])
     if ks:
@@ -581,17 +628,43 @@ def _pair_reasons(p: _Prepared, i: int, j: int) -> List[str]:
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None) -> Dict[str, Any]:
+# Seconds to draw a map of n tracks ≈ BUILD_COST * n^1.5 (UMAP dominates), measured on a
+# 4-core CPU: 500 tracks 2.4 s, 1,500 tracks 10.8 s, 3,000 tracks 29.6 s. Each finished build
+# re-calibrates it, so estimates follow the machine this actually runs on.
+_build_cost = [1.9e-4]
+_umap_ready = [False]
+UMAP_FIRST_RUN_S = 15.0  # UMAP compiles itself the first time it runs
+
+
+def estimate_build_seconds(n: int) -> float:
+    """How long build_map should take for n tracks on this machine."""
+    est = 0.5 + _build_cost[0] * max(n, 1) ** 1.5
+    if n >= 12 and not _umap_ready[0]:
+        est += UMAP_FIRST_RUN_S
+    return est
+
+
+def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
+              progress: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
+    """`progress`, if given, is called with the name of each step as it starts."""
+    import time
+
     opts = opts or MapOptions()
+    step = progress or (lambda _s: None)
     df = df.dropna(how="all").reset_index(drop=True)
     if len(df) < 3:
         raise ValueError("Need at least 3 tracks to draw a map.")
 
+    t0 = time.monotonic()
+    first_umap = not _umap_ready[0]
+    step("Comparing songs")
     p = _prepare(df, opts)
     x = p.features
     n = len(df)
 
+    step("Placing songs in 3D")
     emb, method = _embed_3d(x)
+    step("Finding clusters")
     labels = _cluster(emb, opts.clusters)
     emb = _spread_clusters(emb, labels)
 
@@ -670,6 +743,7 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None) -> Dict[str, 
             t["plays"] = int(v) if pd.notna(v) else 0
         tracks.append(t)
 
+    step("Finding hidden connections")
     # ---- hidden connections ------------------------------------------------------
     # Tracks in different clusters (usually different genres) that still match
     # musically: same or neighbouring key, same or half/double tempo, similar mood.
@@ -720,6 +794,12 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None) -> Dict[str, 
         insights = _insights(p, eng)
         recommendations = _recommend(p, eng, labels, clusters)
 
+    took = time.monotonic() - t0
+    if method == "umap":
+        _umap_ready[0] = True
+        if n >= 200 and not first_umap:  # small maps are mostly fixed overhead; don't calibrate on them
+            _build_cost[0] = 0.5 * _build_cost[0] + 0.5 * max(took - 0.5, 0.1) / n ** 1.5
+
     return {
         "tracks": tracks,
         "edges": list(edges.values()),
@@ -730,6 +810,7 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None) -> Dict[str, 
         "meta": {
             "count": n,
             "method": method,
+            "seconds": round(took, 1),
             "features_used": p.feature_groups,
             "has_listening_data": eng is not None,
             "columns": {k: v for k, v in p.cols.items() if v},

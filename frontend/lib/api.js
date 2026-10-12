@@ -173,3 +173,9 @@ export async function importLibrary(files, { enrich = true } = {}) {
 export async function getImport(id) {
   return apiFetch(`/map/import/${id}`);
 }
+
+/** GET /map/estimate — seconds the server expects drawing a map of `tracks` songs to take. */
+export async function getMapEstimate(tracks) {
+  const res = await apiFetch(`/map/estimate?tracks=${encodeURIComponent(tracks)}`);
+  return res?.seconds ?? null;
+}
