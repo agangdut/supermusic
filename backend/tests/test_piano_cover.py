@@ -39,7 +39,7 @@ def test_cover_mode_runs_pop2piano_and_can_be_made_playable(tmp_path, monkeypatc
     assert job["status"] == "done", job
     assert calls["composer"] == "composer7"
     assert job["result"]["metrics"]["playability"]["playable_after_pct"] == 100.0
-    assert Path(job["result"]["artifacts"]["midi"]).name.endswith("_cover_playable.mid")
+    assert Path(job["result"]["artifacts"]["midi"]).name.startswith("song (Piano cover, two hands)")
 
 
 def test_cover_mode_rejects_unknown_composer():
