@@ -11,7 +11,7 @@ Papers that shaped SuperMusic, with what each one means for this project. The PD
 
 **MuScriptor: An Open Model for Multi-Instrument Music Transcription** (ISMIR 2026)
 Simon Rouard, Michael Krause, Axel Roebel, Carl-Johann Simon-Gabriel, Alexandre Défossez (Kyutai, Mirelo AI, IRCAM)
-[arXiv:2607.08168](https://arxiv.org/abs/2607.08168) · [code](https://github.com/muscriptor/muscriptor) · [weights](https://huggingface.co/MuScriptor/muscriptor-medium) · **[explained (study guide)](muscriptor.md)**
+[arXiv:2607.08168](https://arxiv.org/abs/2607.08168) · [code](https://github.com/muscriptor/muscriptor) · [weights](https://huggingface.co/MuScriptor/muscriptor-medium) · **[explained (study guide)](muscriptor.md)** ([web version](https://claude.ai/artifact/HnjW95Bn9hS5RWe7Pnojh5), private claude.ai page)
 
 **Summary.** A plain decoder-only transformer that turns a full mix into multi-instrument MIDI. It is pre-trained on 1.45M synthetic MIDI renders, then fine-tuned on 170k real recordings (about 11,000 hours) with aligned notes, then polished with reinforcement learning on 300 high-quality transcriptions. Synthetic data alone isn't enough for real songs; adding real recordings is what makes it work. You can also tell it which instruments are present.
 
