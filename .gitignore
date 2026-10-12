@@ -1,138 +1,93 @@
-# ------------------------
-# 🧠 Core System & Envs
-# ------------------------
-.venv/
-venv/
+# Everything here is made on your machine when you install or run SuperMusic.
+# None of it is needed after a fresh `git clone`.
+
+# --- Secrets and local settings --------------------------------------------
 .env
 .env.*
 !.env.example
+docker-compose.override.yml
+*.pem
+*.key
+*.crt
+
+# --- Python -----------------------------------------------------------------
+.venv*/
+venv/
+env/
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
 *.so
-
-# ------------------------
-# 🧩 Python Project
-# ------------------------
-*.egg
 *.egg-info/
-dist/
-build/
 .eggs/
-*.manifest
-*.spec
-pip-wheel-metadata/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+coverage/
+htmlcov/
+.ipynb_checkpoints/
 *.log
 
-# ------------------------
-# 🧰 Tools & Automation
-# ------------------------
-.just/
-.tox/
-coverage/
-.cache/
-pytest_cache/
-.mypy_cache/
-.dmypy.json
-.pyre/
-.pytest_cache/
-.ipynb_checkpoints/
-
-# ------------------------
-# ⚙️ Node / Frontend
-# ------------------------
-frontend/node_modules/
-frontend/.next/
-frontend/.turbo/
-frontend/.vercel/
-frontend/out/
-frontend/build/
+# --- Node / frontend --------------------------------------------------------
+node_modules/
+.next/
+out/
+.turbo/
+.vercel/
+.netlify/
 frontend/.env.local
-frontend/.env.production
-frontend/.env.development
-
-# ------------------------
-# 📦 Package Managers
-# ------------------------
+frontend/tmp_uploads/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-# frontend/package-lock.json is committed so Docker builds can use npm ci
+# package-lock.json is committed so Docker builds can use npm ci
 yarn.lock
 pnpm-lock.yaml
 
-# ------------------------
-# 🗃️ Project Artifacts
-# ------------------------
-data/**/*.csv
-data/**/*.json
-data/**/*.tsv
-data/**/*.parquet
-data/**/*.h5
-data/**/*.pkl
-data/**/*.zip
-data/**/*.tar
-data/**/*.gz
+# --- Runtime data -----------------------------------------------------------
+# Uploads, results, caches, benchmark datasets and model weights all live in
+# data/ (see data/README.md) and download or regenerate on first use.
+data/*
 !data/README.md
-# Runtime output from the app (uploads, stems, MIDI, downloads)
-data/raw/
-data/interim/
-data/processed/
-data/samples/
-data/artifacts/
-data/models/
+backend/data/
+/static/
+*.db
+*.sqlite
+*.sqlite3
 
-# ------------------------
-# 📊 Static / Build Artifacts
-# ------------------------
-static/generated/
-static/cache/
-*.tmp
-*.bak
-*.swp
+# Audio, MIDI and model files never belong in git
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.ogg
+*.opus
+*.aac
+*.mid
+*.midi
+*.pth
+*.pt
+*.ckpt
+*.onnx
+*.safetensors
+*.bin
 
-# ------------------------
-# 🧪 Docs / Reports
-# ------------------------
-docs/_build/
-docs/.cache/
+# Papers and office files (redistribution rights unclear)
 *.pdf
 *.docx
 *.pptx
 
-# ------------------------
-# 🧑‍💻 IDE / System
-# ------------------------
+# --- Editors and operating systems ------------------------------------------
 .vscode/
 .idea/
+*.iml
+*.swp
+*.tmp
+*.bak
 .DS_Store
 Thumbs.db
-*.iml
-
-# ------------------------
-# 🚀 Deployment
-# ------------------------
-.env.production
-*.pem
-*.crt
-*.key
-.vercel/
-.netlify/
-
-# ------------------------
-# Local upload scratch
-# ------------------------
-frontend/tmp_uploads/
-
-# Local Docker Compose tweaks (e.g. GPU on this machine)
-docker-compose.override.yml
-
-# ------------------------
-# 🎵 Audio & MIDI files (never commit)
-# ------------------------
-*.mp3
-*.mid
-*.midi
-backend/data/
+desktop.ini
