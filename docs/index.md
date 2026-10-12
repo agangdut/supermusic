@@ -12,5 +12,5 @@ Start with the [README](../README.md) for what SuperMusic does, where it stands,
 | 📦 [Training data](training-data.md) | see which datasets and newer models could make MIDI more accurate, and what's been tried |
 | 🔌 [API reference](api.md) | call the backend yourself |
 | ⚙️ [Configuration](configuration.md) | change ports, folders, keys (`HF_TOKEN`, `LASTFM_API_KEY`) or models |
-| 📄 [Research papers](research/README.md) | read the papers behind MuScriptor and the Music Map embedding work, and how each relates to SuperMusic |
+| 📄 [Research papers](research/README.md) | read the papers behind MuScriptor (with a [MuScriptor study guide](research/muscriptor.md)) and the Music Map embedding work, and how each relates to SuperMusic |
 | 🛣️ [Roadmap](roadmap.md) | see what's done and what's next |
