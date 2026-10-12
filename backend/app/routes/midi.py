@@ -8,7 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from ..models.job import Job, JobStatus, JobType
-from ..utils.storage import job_store, save_artifact
+from ..utils.storage import job_store, output_name, save_artifact
 from app.core.humanize import render_audio
 from app.core.melody_match import melody_match
 from app.core.note_cleanup import merge_hat_echoes, separate_repeats
@@ -23,23 +23,14 @@ from app.core.progress import begin, estimate_seconds, plan_later, report, repor
 from app.core.game_client import available as game_available, on_gpu as game_on_gpu
 from app.core.vocals import lead_vocal_track, split_vocals, sung_lead_vocal, transcribe_vocal_aware
 
-try:
-    from app.utils.storage import job_store, save_artifact  # type: ignore
-except Exception:  # pragma: no cover
-    job_store: Dict[str, Job] = {}
-
-    def save_artifact(_job: Job, suggested_name: str, content: bytes) -> str:
-        out_dir = Path("/tmp/supermusic/artifacts")
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / suggested_name
-        out_path.write_bytes(content)
-        return str(out_path)
-
 
 router = APIRouter(prefix="/midi", tags=["midi"])
 
 
 STEM_NAMES = ("vocals", "drums", "bass", "guitar", "piano", "other")
+# The mode names the app shows, used in result file names
+MODE_NAMES = {"auto": "Auto", "basic": "General", "piano": "Piano", "multi": "YourMT3+", "muscriptor": "Full band",
+              "stems": "Stems", "cover": "Piano cover"}
 
 
 class MIDIConvertRequest(BaseModel):
@@ -186,12 +177,15 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
 
             artifacts = {}
             playability = None
+            # Result files are named after the song and the mode: "Artist - Song (Full band).mid"
+            mode = "picked stems" if separated else MODE_NAMES.get(req.model, req.model)
+            label = f"{mode}, two hands" if req.playable else mode
             if req.playable:
                 report("Arranging for two hands…")
                 playable_path, playability = await loop.run_in_executor(
                     None, lambda: make_playable(midi_path, hand_span=req.hand_span)
                 )
-                artifacts["midi_original"] = save_artifact(j, f"{audio_path.stem}.mid", midi_path.read_bytes())
+                artifacts["midi_original"] = save_artifact(j, output_name(audio_path, mode, ".mid"), midi_path.read_bytes())
                 midi_path = playable_path
 
             # How closely the melody follows the singer, when we have the voice on its own
@@ -207,11 +201,11 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
             begin("preview", "Rendering a piano preview…")
             preview = await loop.run_in_executor(None, render_audio, midi_path)
             if preview:
-                artifacts["preview"] = save_artifact(j, preview.name, preview.read_bytes())
+                artifacts["preview"] = save_artifact(j, output_name(audio_path, f"{label}, piano preview", preview.suffix), preview.read_bytes())
 
             # Read MIDI file and save as artifact
             midi_bytes = midi_path.read_bytes()
-            artifact_path = save_artifact(j, midi_path.name if req.playable else f"{audio_path.stem}.mid", midi_bytes)
+            artifact_path = save_artifact(j, output_name(audio_path, label, ".mid"), midi_bytes)
             
             j.mark_success(
                 {

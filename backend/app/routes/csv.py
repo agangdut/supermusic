@@ -12,17 +12,6 @@ from ..utils.storage import job_store, save_artifact
 from app.core.metadata import enrich_track_record
 
 # Optional shared store (fallback if not present)
-try:
-    from app.utils.storage import job_store, save_artifact  # type: ignore
-except Exception:  # pragma: no cover
-    job_store: Dict[str, Job] = {}
-
-    def save_artifact(_job: Job, suggested_name: str, content: bytes) -> str:
-        out_dir = Path("/tmp/supermusic/artifacts")
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / suggested_name
-        out_path.write_bytes(content)
-        return str(out_path)
 
 
 router = APIRouter(prefix="/csv", tags=["csv"])
@@ -75,7 +64,7 @@ async def enrich_csv(req: CSVEnrichmentRequest, bg: BackgroundTasks) -> Job:
             # Read enriched CSV and save as artifact
             enriched_bytes = Path(enriched_path).read_bytes()
             artifact_path = save_artifact(
-                j, f"enriched_{csv_path.stem}.csv", enriched_bytes
+                j, f"{csv_path.stem} (enriched).csv", enriched_bytes
             )
             
             j.mark_success(

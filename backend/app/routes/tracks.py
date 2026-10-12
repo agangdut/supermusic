@@ -8,20 +8,8 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field, AnyUrl
 
 from ..models.job import Job, JobType
-from ..utils.storage import job_store, save_artifact
+from ..utils.storage import job_store, output_name, save_artifact
 from app.core.downloader import download_audio
-
-try:
-    from app.utils.storage import job_store, save_artifact  # type: ignore
-except Exception:  # pragma: no cover
-    job_store: Dict[str, Job] = {}
-
-    def save_artifact(_job: Job, suggested_name: str, content: bytes) -> str:
-        out_dir = Path("/tmp/supermusic/artifacts")
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / suggested_name
-        out_path.write_bytes(content)
-        return str(out_path)
 
 
 router = APIRouter(prefix="/tracks", tags=["tracks"])
@@ -59,7 +47,7 @@ async def download_track(req: TrackDownloadRequest, bg: BackgroundTasks) -> Job:
             
             # Read audio file and save as artifact
             audio_bytes = Path(audio_path).read_bytes()
-            artifact_name = f"{req.title_hint or Path(audio_path).stem}_download{Path(audio_path).suffix}"
+            artifact_name = output_name(req.title_hint or Path(audio_path).stem, "", Path(audio_path).suffix)
             artifact_path = save_artifact(j, artifact_name, audio_bytes)
             
             # Get file size for metrics

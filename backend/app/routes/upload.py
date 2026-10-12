@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -32,17 +33,17 @@ def _save_upload(file: UploadFile, allowed_extensions: set[str], subdir: str = "
     upload_path = UPLOAD_DIR / subdir
     upload_path.mkdir(parents=True, exist_ok=True)
     
-    # Generate safe filename
-    safe_name = "".join(c for c in (file.filename or "file") if c.isalnum() or c in "._-")
-    if not safe_name:
+    # Keep the name readable ("Artist - Song.mp3"); only drop what a file system can't hold
+    safe_name = Path(re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", Path(file.filename or "").name)).name.strip().strip(".")
+    if not Path(safe_name).stem:
         safe_name = f"upload{ext}"
-    
+
     file_path = upload_path / safe_name
-    # Handle duplicates: name.mp3, name_1.mp3, name_2.mp3, ...
+    # Handle duplicates: name.mp3, name (2).mp3, name (3).mp3, ...
     stem = file_path.stem
-    counter = 1
+    counter = 2
     while file_path.exists():
-        file_path = upload_path / f"{stem}_{counter}{ext}"
+        file_path = upload_path / f"{stem} ({counter}){ext}"
         counter += 1
     
     with open(file_path, "wb") as f:

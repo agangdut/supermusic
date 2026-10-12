@@ -8,7 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
 from ..models.job import Job, JobType
-from ..utils.storage import job_store, save_artifact
+from ..utils.storage import job_store, output_name, save_artifact
 from app.core.csv_enrichment import enrich_csv_file
 from app.core.transcription import transcribe_to_midi
 from app.core.separator import separate_stems
@@ -58,7 +58,7 @@ async def batch_process(req: BatchProcessRequest, bg: BackgroundTasks) -> Job:
                         )
                         midi_bytes = midi_path.read_bytes()
                         artifact_path = save_artifact(
-                            j, f"{audio_file.stem}_{idx}.mid", midi_bytes
+                            j, output_name(audio_file, "General", ".mid"), midi_bytes
                         )
                         file_results["artifacts"]["midi"] = artifact_path
                     
@@ -71,7 +71,7 @@ async def batch_process(req: BatchProcessRequest, bg: BackgroundTasks) -> Job:
                         for stem_name, stem_path in stems_dict.items():
                             stem_bytes = Path(stem_path).read_bytes()
                             artifact_path = save_artifact(
-                                j, f"{audio_file.stem}_{stem_name}_{idx}.wav", stem_bytes
+                                j, output_name(audio_file, stem_name, ".wav"), stem_bytes
                             )
                             file_results["artifacts"][stem_name] = artifact_path
                     
@@ -89,7 +89,7 @@ async def batch_process(req: BatchProcessRequest, bg: BackgroundTasks) -> Job:
                             if artifact_file.exists():
                                 zip_file.write(artifact_path, artifact_file.name)
             
-            zip_path = save_artifact(j, "batch_results.zip", zip_buffer.getvalue())
+            zip_path = save_artifact(j, "SuperMusic batch results.zip", zip_buffer.getvalue())
             
             j.mark_success(
                 {

@@ -14,14 +14,14 @@ Long tasks don't block the request. You **start** a job and get back a job objec
   "message": "MIDI conversion complete",
   "progress": 80,
   "result": {
-    "artifacts": { "midi": "/app/data/artifacts/c323309a-…_sample.mid" },
+    "artifacts": { "midi": "/app/data/artifacts/sample (General).mid" },
     "metrics": { "duration_s": 70.8, "model": "basic" }
   },
   "error_detail": null
 }
 ```
 
-`status` is one of `queued`, `running`, `done` or `error`. Each artifact path ends in a file name you can download from `/artifacts/{file name}`.
+`status` is one of `queued`, `running`, `done` or `error`. Each artifact path ends in a file name you can download from `/artifacts/{file name}` (URL-encode the spaces). Files are named after the song and what they are, e.g. `Artist - Song (Full band).mid`, `Artist - Song (Full band, two hands).mid`, `Artist - Song (vocals).wav`. Words like "(Official Music Video)" are dropped from the upload's name, and a second run of the same song gets `(2)` on the end.
 
 > ⚠️ Jobs are kept in memory, so restarting the backend forgets them. The files stay in `data/artifacts`.
 

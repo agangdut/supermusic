@@ -8,21 +8,9 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
 from ..models.job import Job, JobType
-from ..utils.storage import job_store, save_artifact
+from ..utils.storage import job_store, output_name, save_artifact
 from app.core.separator import separate_stems as run_separation
 from app.core.progress import estimate_seconds, report, reporting, run_with_context
-
-try:
-    from app.utils.storage import job_store, save_artifact  # type: ignore
-except Exception:  # pragma: no cover
-    job_store: Dict[str, Job] = {}
-
-    def save_artifact(_job: Job, suggested_name: str, content: bytes) -> str:
-        out_dir = Path("/tmp/supermusic/artifacts")
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / suggested_name
-        out_path.write_bytes(content)
-        return str(out_path)
 
 
 router = APIRouter(prefix="/stems", tags=["stems"])
@@ -68,7 +56,7 @@ async def separate_stems(req: StemSeparationRequest, bg: BackgroundTasks) -> Job
             for stem_name, stem_path in stems_dict.items():
                 stem_bytes = Path(stem_path).read_bytes()
                 artifact_path = save_artifact(
-                    j, f"{audio_path.stem}_{stem_name}.wav", stem_bytes
+                    j, output_name(audio_path, stem_name, ".wav"), stem_bytes
                 )
                 artifacts[stem_name] = artifact_path
             

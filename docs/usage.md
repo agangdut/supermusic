@@ -72,10 +72,10 @@ curl -X POST http://localhost:8000/midi/convert \
 
 # 3. Check on it until status is "done"
 curl http://localhost:8000/midi/jobs/c323309a-…
-# → {"status": "done", "result": {"artifacts": {"midi": "/app/data/artifacts/c323309a-…_song.mid"}}}
+# → {"status": "done", "result": {"artifacts": {"midi": "/app/data/artifacts/song (Auto).mid"}}}
 
 # 4. Download the result (use the file name from the artifact path)
-curl -O http://localhost:8000/artifacts/c323309a-…_song.mid
+curl -o "song (Auto).mid" "http://localhost:8000/artifacts/song%20(Auto).mid"
 ```
 
 Download straight from a link (there is no screen for this in the UI yet):
