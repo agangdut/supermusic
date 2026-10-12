@@ -17,7 +17,8 @@ export default function StatusCard({ runningCount }) {
       }
     >
       <p className="text-sm text-gray-400 leading-snug">
-        We automatically poll running jobs every 2s.
+        We check running jobs every 2s. You can switch to Music Map and back:
+        jobs keep running and results stay here, even after a page refresh.
       </p>
     </ThemedCard>
   );

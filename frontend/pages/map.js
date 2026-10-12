@@ -3,6 +3,7 @@ import dynamic from "next/dynamic";
 import Head from "next/head";
 
 import PageShell from "@/components/layout/PageShell";
+import { setBackgroundWork } from "@/lib/backgroundWork";
 import { buildMap, getImport, getMapEstimate, importLibrary, likeSongs, searchSound } from "@/lib/api";
 import { colorFor } from "@/components/map/colors";
 import ImportProgress, { BuildProgress } from "@/components/map/ImportProgress";
@@ -118,6 +119,10 @@ export default function MapPage() {
   const [importJob, setImportJob] = useState(null);
   const [uploading, setUploading] = useState(0); // number of files being sent
   const [lastWarning, setLastWarning] = useState(null); // e.g. online lookups were skipped
+
+  // Tell the "safe to switch" notice while an import runs
+  const importing = uploading > 0 || !!importJob;
+  useEffect(() => { setBackgroundWork("mapImport", importing ? 1 : 0); }, [importing]);
 
   const onFile = (e) => {
     const files = Array.from(e.target.files || []);

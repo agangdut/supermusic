@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, API_BASE } from "@/utils/fetcher";
+import { setBackgroundWork } from "@/lib/backgroundWork";
 import { midiConvert, stemsSeparate, csvEnrich, getJob, areaForJobType, normalizeJobArtifacts } from "@/lib/api";
 
 // Map backend status to frontend status
@@ -35,6 +36,8 @@ const midiResult = (result) => ({
   melody: result?.metrics?.melody,
 });
 
+const STORAGE_KEY = "supermusic.workspace";
+
 export default function useUploadJobs() {
   const [audioFile, setAudioFile] = useState(null);
   const [csvFile, setCsvFile] = useState(null);
@@ -54,6 +57,32 @@ export default function useUploadJobs() {
     () => jobs.filter((j) => !isTerminal(j.status)).length,
     [jobs]
   );
+
+  // Tell the "safe to switch" notice how many jobs are running
+  useEffect(() => { setBackgroundWork("jobs", runningCount); }, [runningCount]);
+
+  // Remember jobs and results in the browser, so a page refresh doesn't clear them.
+  // Running jobs pick up polling again; ones that never got a server id are dropped.
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+      if (saved) {
+        setJobs((saved.jobs || []).filter((j) => j.job_type || isTerminal(j.status)));
+        setLatestMidi(saved.latestMidi || null);
+        setLatestStems(saved.latestStems || null);
+        setLatestStemsJobId(saved.latestStemsJobId || null);
+        setLatestCsv(saved.latestCsv || null);
+      }
+    } catch { /* storage blocked or corrupt: start fresh */ }
+    setRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!restored) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ jobs, latestMidi, latestStems, latestStemsJobId, latestCsv }));
+    } catch { /* storage full or blocked: not critical */ }
+  }, [restored, jobs, latestMidi, latestStems, latestStemsJobId, latestCsv]);
 
   // toast helper
   const notify = useCallback((msg, kind = "info") => {

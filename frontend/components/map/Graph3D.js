@@ -78,7 +78,11 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
   // Fit the canvas to its container
   useEffect(() => {
     if (!wrapRef.current) return;
-    const ro = new ResizeObserver(([e]) => setSize({ width: e.contentRect.width, height: e.contentRect.height }));
+    // Skip 0x0 sizes: the map page is hidden (not unmounted) while you're on another tab
+    const ro = new ResizeObserver(([e]) => {
+      const { width, height } = e.contentRect;
+      if (width && height) setSize({ width, height });
+    });
     ro.observe(wrapRef.current);
     return () => ro.disconnect();
   }, []);
