@@ -4,6 +4,9 @@ backend can turn an isolated vocal (a Demucs vocal stem) into a melody.
 
 POST /transcribe {"audio_path": "/app/data/...vocals.wav", "out_dir": "/app/data/..."}
   -> {"midi_path": "...", "notes": 123, "seconds": 4.2, "device": "cuda"}
+POST /separate {"audio_path": "/app/data/...song.mp3", "out_dir": "/app/data/..."}
+  -> {"vocals": ".../vocals.wav", "no_vocals": ".../no_vocals.wav", "seconds": 6.1, "device": "cuda"}
+  Demucs (htdemucs, voice vs the rest) on this container's GPU.
 """
 from __future__ import annotations
 
@@ -54,6 +57,23 @@ class Req(BaseModel):
 @app.get("/health")
 def health():
     return {"device": DEVICE, "model": SIZE, "downloaded": (MODELS / f"GAME-1.0-{SIZE}" / "model.pt").exists()}
+
+
+@app.post("/separate")
+def separate(req: Req):
+    audio = Path(req.audio_path)
+    if not audio.exists():
+        raise HTTPException(404, f"Audio not found: {audio}")
+    t = time.time()
+    with _lock:  # one GPU job at a time
+        proc = subprocess.run(
+            [sys.executable, "-m", "demucs.separate", "-n", "htdemucs", "--two-stems", "vocals", "-d", DEVICE,
+             "-o", req.out_dir, str(audio)], capture_output=True, text=True)
+    folder = Path(req.out_dir) / "htdemucs" / audio.stem
+    if proc.returncode != 0 or not (folder / "vocals.wav").exists():
+        raise HTTPException(500, f"Demucs failed: {(proc.stderr or proc.stdout)[-800:]}")
+    return {"vocals": str(folder / "vocals.wav"), "no_vocals": str(folder / "no_vocals.wav"),
+            "seconds": round(time.time() - t, 1), "device": DEVICE}
 
 
 @app.post("/transcribe")

@@ -63,16 +63,18 @@ def report_detail(stage: str, fraction: Optional[float] = None, remaining_s: Opt
 
 # Steps that run after the main transcription, in seconds per second of audio
 # (+ fixed). Measured roughly on a 4-core CPU; the backend has no GPU.
-LATER_SPEED = {"separate_vocals": 0.45, "game": 0.1, "melody": 0.25, "preview": 0.05}
+LATER_SPEED = {"separate_vocals": 0.45, "game": 0.1, "melody": 0.06, "preview": 0.05}
+GPU_SPLIT_SPEED = 0.08  # Demucs on the GAME container's GPU instead of the backend's CPU
 LATER_FIXED = {"separate_vocals": 5.0, "game": 5.0, "melody": 2.0, "preview": 3.0}
 
 
-def plan_later(job, duration_s: Optional[float], steps) -> float:
+def plan_later(job, duration_s: Optional[float], steps, gpu_split: bool = False) -> float:
     """Remember which steps follow the main one, so time-left counts them. Returns their total."""
     if not duration_s:
         job.later_steps = {}
         return 0.0
-    job.later_steps = {s: round(LATER_SPEED[s] * duration_s + LATER_FIXED[s], 1) for s in steps}
+    speed = {**LATER_SPEED, **({"separate_vocals": GPU_SPLIT_SPEED} if gpu_split else {})}
+    job.later_steps = {s: round(speed[s] * duration_s + LATER_FIXED[s], 1) for s in steps}
     return sum(job.later_steps.values())
 
 

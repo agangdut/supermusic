@@ -41,7 +41,7 @@ services:
       - HF_TOKEN=${HF_TOKEN:-}
       - HF_HOME=/app/data/models/hf
       - MUSCRIPTOR_MODEL=${MUSCRIPTOR_MODEL:-medium}
-      - MUSCRIPTOR_FAST=${MUSCRIPTOR_FAST:-0}
+      - MUSCRIPTOR_FAST=${MUSCRIPTOR_FAST:-1}
     volumes:
       - ./data:/app/data
     restart: unless-stopped
@@ -52,6 +52,7 @@ services:
     build: ./services/game
     environment:
       - GAME_MODEL=${GAME_MODEL:-medium}
+      - TORCH_HOME=/app/data/models/torch   # shares the Demucs weights with the backend
     volumes:
       - ./data:/app/data
     restart: unless-stopped

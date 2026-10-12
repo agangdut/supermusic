@@ -34,13 +34,13 @@ With Docker, put settings in a `.env` file next to `docker-compose.yml` (start f
 | `MUSCRIPTOR_URL` | `http://muscriptor:8200` | Where the backend finds MuScriptor, the default Full band transcriber |
 | `HF_TOKEN` | (empty) | Hugging Face read token for MuScriptor's weights. Accept the licence on [muscriptor-medium](https://huggingface.co/MuScriptor/muscriptor-medium) first. Non-commercial use only (CC BY-NC 4.0) |
 | `MUSCRIPTOR_MODEL` | `medium` | `small`, `medium` or `large` (large needs more than the RTX 2060's 6 GB) |
-| `MUSCRIPTOR_FAST` | `0` | `1` transcribes 4 five-second sections at once: roughly 3x faster, slightly rougher where sections join (not yet measured) |
+| `MUSCRIPTOR_FAST` | `1` | Transcribes 4 five-second sections at once. On 9 pop clips it was as accurate as one at a time (pitched F1 0.452 vs 0.436) and about 30% faster. `0` goes back to one at a time |
 | `CLAP_URL` | `http://clap:8300` | Where the backend finds the CLAP service that gives songs a "sound" description for the Music Map |
 | `CLAP_MODEL` | `laion/clap-htsat-unfused` | CLAP checkpoint. `laion/larger_clap_music` gave the same songs for every search in our test, so it isn't recommended |
 | `GAME_URL` | `http://game:8300` | Where the backend finds the GAME singing transcriber. If it isn't reachable, Full band and Auto use MuScriptor's own voice track |
 | `GAME_MODEL` | `medium` | `small`, `medium` or `large` GAME weights (non-commercial licence, downloaded on first use) |
 
-The `muscriptor`, `yourmt3` and `game` containers run on CPU unless you add `docker-compose.gpu.yml` (NVIDIA only). Their weights download once into `data/models/` (YourMT3+'s is 562 MB). If a service isn't reachable, the backend falls back: Auto goes MuScriptor → YourMT3+ → Stems/General, and the Lead vocal uses the band model's own voice track without GAME. To make the GPU the default on your machine, copy `docker-compose.gpu.yml` to `docker-compose.override.yml`; Compose loads that automatically, and git ignores it.
+The `muscriptor`, `yourmt3` and `game` containers run on CPU unless you add `docker-compose.gpu.yml` (NVIDIA only). Their weights download once into `data/models/` (YourMT3+'s is 562 MB). If a service isn't reachable, the backend falls back: Auto goes MuScriptor → YourMT3+ → Stems/General, and the Lead vocal uses the band model's own voice track without GAME. When GAME is on the GPU it also does the backend's voice separation (Demucs), which is several times faster than on the backend's CPU. To make the GPU the default on your machine, copy `docker-compose.gpu.yml` to `docker-compose.override.yml`; Compose loads that automatically, and git ignores it.
 
 ## Frontend
 

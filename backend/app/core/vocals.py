@@ -44,8 +44,18 @@ def split_vocals(audio_path: str | Path) -> Tuple[Path, Path, float]:
     """Returns (vocals.wav, no_vocals.wav, vocal share of the total energy)."""
     from app.core.smart_transcription import _energy
 
-    stems = separate_stems(audio_path, _work_dir(), model="htdemucs", two_stems="vocals")
-    v, a = Path(stems["vocals"]), Path(stems["no_vocals"])
+    from app.core import game_client
+
+    out = _work_dir()
+    v = a = None
+    if game_client.on_gpu():  # several times faster than Demucs on the backend's CPU
+        try:
+            v, a = game_client.separate_vocals(audio_path, out)
+        except RuntimeError:
+            v = a = None
+    if v is None:
+        stems = separate_stems(audio_path, out, model="htdemucs", two_stems="vocals")
+        v, a = Path(stems["vocals"]), Path(stems["no_vocals"])
     ev, ea = _energy(v), _energy(a)
     return v, a, ev / ((ev + ea) or 1.0)
 

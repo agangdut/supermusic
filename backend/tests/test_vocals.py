@@ -77,3 +77,18 @@ def test_sung_lead_vocal_falls_back_when_game_fails(tmp_path, monkeypatch):
     names = [i.name for i in pretty_midi.PrettyMIDI(str(out)).instruments]
     assert "Lead vocal" in names and "voice" not in names
     assert "vocal_engine" not in info
+
+
+def test_split_vocals_uses_the_gpu_service_when_it_has_one(tmp_path, monkeypatch):
+    import numpy as np
+    import soundfile as sf
+
+    from app.core import game_client, vocals
+
+    for name, amp in (("v.wav", 0.5), ("a.wav", 0.5)):
+        sf.write(tmp_path / name, amp * np.ones(1000), 16000)
+    monkeypatch.setattr(game_client, "on_gpu", lambda: True)
+    monkeypatch.setattr(game_client, "separate_vocals", lambda a, out: (tmp_path / "v.wav", tmp_path / "a.wav"))
+    monkeypatch.setattr(vocals, "separate_stems", lambda *a, **k: (_ for _ in ()).throw(AssertionError("CPU Demucs ran")))
+    v, a, share = vocals.split_vocals(tmp_path / "song.wav")
+    assert v.name == "v.wav" and abs(share - 0.5) < 0.01

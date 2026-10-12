@@ -20,7 +20,7 @@ from app.core.transcription import transcribe_to_midi
 from app.core.yourmt3_client import transcribe_multi
 from app.core.muscriptor_client import transcribe_muscriptor
 from app.core.progress import begin, estimate_seconds, plan_later, report, reporting, run_with_context
-from app.core.game_client import available as game_available
+from app.core.game_client import available as game_available, on_gpu as game_on_gpu
 from app.core.vocals import lead_vocal_track, split_vocals, sung_lead_vocal, transcribe_vocal_aware
 
 try:
@@ -137,7 +137,7 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
             stems_used = req.stems or (separated[1] if separated else STEM_NAMES)
             measured = sung or (req.vocal_track and req.model == "basic") or (req.model == "stems" and "vocals" in stems_used)
             later = plan_later(j, duration_s, (["separate_vocals", "game"] if sung else [])
-                               + (["melody"] if measured else []) + ["preview"])
+                               + (["melody"] if measured else []) + ["preview"], gpu_split=sung and game_on_gpu())
             if j.eta_s:
                 j.eta_s = round(j.eta_s + later, 1)
             j.progress = 5

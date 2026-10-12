@@ -49,6 +49,7 @@ def sung_pitch(vocals_path: str | Path) -> np.ndarray:
     f0, voiced, _ = librosa.pyin(
         y, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C6"),
         sr=SR, frame_length=2048, hop_length=HOP,
+        resolution=0.2,  # 1/5-semitone steps: plenty for half-semitone matching, ~5x faster than the default
     )
     # pYIN hears faint bleed from other instruments as "voiced"; ignore near-silence
     rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=HOP)[0][: len(f0)]

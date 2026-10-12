@@ -36,10 +36,10 @@ def test_time_left_counts_steps_after_transcription():
 
     job = J()
     later = plan_later(job, 100, ["separate_vocals", "game", "melody", "preview"])
-    assert later == 50 + 15 + 27 + 8
+    assert later == 50 + 15 + 8 + 8
     with reporting(job):
         report_detail("MuScriptor: section 9 of 10", 0.9, remaining_s=10)
         assert 100 + 10 + later <= job.eta_s <= 100 + 10 + later + 6  # not just MuScriptor's own 10 s
         begin("melody", "Checking the melody…")  # GAME steps skipped or done: only melody + preview left
-        assert 100 + 27 + 8 - 1 <= job.eta_s <= 100 + 27 + 8 + 1
+        assert 100 + 8 + 8 - 1 <= job.eta_s <= 100 + 8 + 8 + 1
         assert job.later_steps == {"preview": 8}
