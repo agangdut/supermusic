@@ -45,12 +45,19 @@ class LiveStatus:
     """Stands in for a web job so the engines' progress messages show in the terminal,
     e.g. "MuScriptor: section 3 of 5" or "waiting for another song to finish"."""
 
+    def __init__(self):
+        from datetime import datetime
+
+        self.progress, self.stages, self.eta_s, self.started_at = 0, [], None, datetime.utcnow()
+
     def __setattr__(self, key, value):
         if key == "message" and value != getattr(self, "message", None):
             print(f"\r    {str(value)[:110]:<110}", end="", flush=True)
         object.__setattr__(self, key, value)
 
 
+METHODS = ["general", "stems", "multi", "auto", "piano", "muscriptor", "muscriptor_fast", "muscriptor_beam",
+           "muscriptor_stems", "muscriptor_vocal", "muscriptor_game"]
 _raw: dict = {}
 
 
@@ -133,7 +140,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", choices=["dev", "test"], default="dev")
     ap.add_argument("--root", default=str(ROOT / "data/raw/multtipop"))
-    ap.add_argument("--methods", nargs="+", default=["general", "multi", "muscriptor", "stems"])
+    ap.add_argument("--methods", nargs="+", default=["general", "multi", "muscriptor", "stems"], choices=METHODS)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--tag", default="", help="added to the result file names, so experiments don't overwrite each other")
     ap.add_argument("--out", default=str(ROOT / "data/processed/eval"))
