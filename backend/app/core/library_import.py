@@ -19,9 +19,10 @@ Several files can be combined: rows for the same song (matched on artist
 and title) are merged, play and skip counts are summed, and features are
 filled from whichever file has them.
 
-Optionally, `enrich()` looks each song up on Deezer's public API (no key
-needed) for genre and release year, and analyses its 30-second preview
-locally for tempo, key, energy and brightness, so listening histories that
+Optionally, `enrich()` looks each song up online: genre from listener tags
+(Last.fm if LASTFM_API_KEY is set, otherwise MusicBrainz; see genres.py),
+release year from Deezer's public API (no key needed), and analyses its
+30-second preview locally for tempo, key, energy and brightness, so listening histories that
 have no audio features still make a meaningful map.
 """
 from __future__ import annotations
@@ -38,6 +39,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from app.core import genres
 from app.core.config import settings
 
 SKIP_MS = 30_000  # a play shorter than 30 s counts as a skip (Spotify's own rule)
@@ -233,7 +235,8 @@ def merge(frames: List[pd.DataFrame]) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def _cache_dir() -> Path:
-    d = settings.DATA_DIR / "cache" / "deezer"
+    # v2: older entries could belong to a different artist's song with a similar title
+    d = settings.DATA_DIR / "cache" / "deezer_v2"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -297,40 +300,63 @@ def analyse_audio(y: np.ndarray, sr: int) -> dict:
     }
 
 
+def _title_matches(want: str, got: str) -> bool:
+    a, b = song_key("", want).split("|")[1], song_key("", got).split("|")[1]
+    return bool(a) and bool(b) and (a == b or a.startswith(b) or b.startswith(a))
+
+
+def _pick_hit(hits: List[dict], artist: str, title: str) -> Optional[dict]:
+    """The search hit for this song by this artist, or None.
+
+    Deezer's search happily returns a different artist's song with a
+    similar title; taking it anyway gave songs someone else's genre."""
+    by_artist = [h for h in hits if genres.same_artist(h.get("artist", {}).get("name", ""), artist)]
+    return next((h for h in by_artist if _title_matches(title, h.get("title", ""))), None) or \
+        next((h for h in by_artist if _title_matches(title, h.get("title_short", ""))), None)
+
+
 def lookup(artist: str, title: str, analyse: bool = True) -> dict:
     """Genre, year (and preview features) for one song, cached on disk."""
     k = song_key(artist, title)
     cache = _cache_dir() / (re.sub(r"[^a-z0-9|]+", "_", k)[:150] + ".json")
     if cache.exists():
-        return json.loads(cache.read_text())
-    info: dict = {}
-    try:
-        q = urllib.parse.quote(f"{artist} {title}")
-        hits = _get(f"https://api.deezer.com/search?q={q}&limit=5").get("data", [])
-        want = song_key(artist, title)
-        hit = next((h for h in hits if song_key(h["artist"]["name"], h["title"]) == want), hits[0] if hits else None)
-        if hit:
-            info["deezer_id"] = hit["id"]
-            album = _get(f"https://api.deezer.com/album/{hit['album']['id']}")
-            genres = [g["name"] for g in album.get("genres", {}).get("data", [])]
-            if genres:
-                info["genre"] = ";".join(genres)
-            if album.get("release_date"):
-                info["year"] = int(album["release_date"][:4])
-            track = _get(f"https://api.deezer.com/track/{hit['id']}")
-            if track.get("bpm"):
-                info["bpm"] = track["bpm"]
-            if analyse and hit.get("preview"):
-                try:
-                    with urllib.request.urlopen(hit["preview"], timeout=20) as r:
-                        feats = analyse_preview(r.read())
-                    info = {**feats, **info}  # Deezer's own BPM wins when it has one
-                except Exception as e:
-                    info["preview_error"] = str(e)[:120]
-    except Exception as e:  # network trouble shouldn't kill the import
-        info["error"] = str(e)[:120]
-    if "error" not in info:
-        cache.write_text(json.dumps(info))
+        info = json.loads(cache.read_text())
+    else:
+        info = {}
+        try:
+            q = urllib.parse.quote(f'artist:"{artist}" track:"{title}"')
+            hits = _get(f"https://api.deezer.com/search?q={q}&limit=10").get("data", [])
+            hit = _pick_hit(hits, artist, title)
+            if not hit:  # the strict query misses some spellings; try a loose one
+                q = urllib.parse.quote(f"{artist} {title}")
+                hit = _pick_hit(_get(f"https://api.deezer.com/search?q={q}&limit=10").get("data", []), artist, title)
+            if hit:
+                info["deezer_id"] = hit["id"]
+                album = _get(f"https://api.deezer.com/album/{hit['album']['id']}")
+                info["deezer_genres"] = [g["name"] for g in album.get("genres", {}).get("data", [])]
+                if album.get("release_date"):
+                    info["year"] = int(album["release_date"][:4])
+                track = _get(f"https://api.deezer.com/track/{hit['id']}")
+                if track.get("bpm"):
+                    info["bpm"] = track["bpm"]
+                if analyse and hit.get("preview"):
+                    try:
+                        with urllib.request.urlopen(hit["preview"], timeout=20) as r:
+                            feats = analyse_preview(r.read())
+                        info = {**feats, **info}  # Deezer's own BPM wins when it has one
+                    except Exception as e:
+                        info["preview_error"] = str(e)[:120]
+        except Exception as e:  # network trouble shouldn't kill the import
+            info["error"] = str(e)[:120]
+        if "error" not in info:
+            cache.write_text(json.dumps(info))
+    # Genre comes from listener tags (Last.fm / MusicBrainz) first, Deezer's album genre last.
+    # Older cache files stored Deezer's raw genre as "genre"; it is ignored now.
+    info = {k: v for k, v in info.items() if k != "genre"}
+    found, source = genres.lookup_genres(artist, title, info.get("deezer_genres"))
+    if found:
+        info["genre"] = ";".join(found)
+        info["genre_source"] = source
     return info
 
 
@@ -343,7 +369,7 @@ def enrich(df: pd.DataFrame, limit: int = 1500, analyse: bool = True,
     found = 0
     for n, i in enumerate(todo, 1):
         info = lookup(str(df.at[i, "artist"] or ""), str(df.at[i, "title"]), analyse=analyse)
-        if info.get("deezer_id"):
+        if info.get("deezer_id") or info.get("genre"):
             found += 1
         for f in ["genre", "year", "bpm", "key", "energy", "brightness"]:
             if f in info and pd.isna(df.at[i, f]):

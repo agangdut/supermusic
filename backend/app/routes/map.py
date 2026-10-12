@@ -81,7 +81,7 @@ _imports: Dict[str, dict] = {}
 @router.post("/import")
 async def import_library(
     files: List[UploadFile] = File(..., description="Spotify / Apple Music exports or CSVs; several at once is fine."),
-    enrich: bool = Form(True, description="Look songs up on Deezer and analyse 30 s previews for genre/tempo/key/energy."),
+    enrich: bool = Form(True, description="Look songs up online (genre from Last.fm/MusicBrainz tags, year from Deezer) and analyse 30 s previews for tempo/key/energy."),
     limit: int = Form(1500, ge=1, le=5000),
 ) -> dict:
     parsed, detected = [], []
