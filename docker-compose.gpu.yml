@@ -20,15 +20,6 @@ services:
               count: 1
               capabilities: [gpu]
 
-  muscriptor_ref:
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
   game:
     deploy:
       resources:

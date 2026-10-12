@@ -8,15 +8,11 @@ built by scripts/build_pop_benchmark.py.
         --methods muscriptor muscriptor_fast muscriptor_beam muscriptor_stems
     docker compose exec backend python scripts/eval_pop.py --limit 40 --tag vocals \
         --methods muscriptor_vocal muscriptor_game
-    docker compose exec backend python scripts/eval_pop.py --limit 40 --tag official \
-        --methods muscriptor muscriptor_exact muscriptor_ref muscriptor_ref_raw
+    docker compose exec backend python scripts/eval_pop.py --limit 40 --tag exact \
+        --methods muscriptor muscriptor_exact
 
-The last one checks our MuScriptor wrapper against the official server (start it first with
-`docker compose --profile ref up -d muscriptor_ref`; see "Our MuScriptor vs the official one" in docs/transcription-accuracy.md):
   muscriptor          our service as the app runs it (fast mode only if MUSCRIPTOR_FAST=1)
   muscriptor_exact    our service with fast mode off, i.e. the official decoding settings (now the default too)
-  muscriptor_ref      the official server, with its timing fix (notes moved earlier by the model's lag)
-  muscriptor_ref_raw  the official server without that fix
 
 If a run stops part way, run the same command again: finished clips are skipped.
 
@@ -66,8 +62,7 @@ class LiveStatus:
 
 
 METHODS = ["general", "stems", "multi", "auto", "piano", "muscriptor", "muscriptor_fast", "muscriptor_beam",
-           "muscriptor_stems", "muscriptor_vocal", "muscriptor_game", "muscriptor_exact", "muscriptor_ref",
-           "muscriptor_ref_raw"]
+           "muscriptor_stems", "muscriptor_vocal", "muscriptor_game", "muscriptor_exact"]
 _raw: dict = {}
 
 
@@ -80,10 +75,6 @@ def transcribe(method: str, audio: Path) -> Path:
         return transcribe_muscriptor(audio, fast=True, dynamics=False)
     if method == "muscriptor_exact":  # one section at a time, held notes passed on: the official default
         return transcribe_muscriptor(audio, fast=False, dynamics=False)
-    if method in ("muscriptor_ref", "muscriptor_ref_raw"):  # the official server (muscriptor_ref service)
-        from app.core.muscriptor_client import transcribe_muscriptor_ref
-
-        return transcribe_muscriptor_ref(audio, detect_tempo=method == "muscriptor_ref")
     if method == "muscriptor_beam":  # searches 3 alternatives per step
         return transcribe_muscriptor(audio, beam_size=3, dynamics=False)
     if method == "muscriptor_stems":  # Demucs first, MuScriptor per stem

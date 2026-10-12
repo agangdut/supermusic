@@ -76,7 +76,7 @@ The tests above are piano and classical music. [MulTTiPop](https://huggingface.c
 
 ### Our MuScriptor vs the official one
 
-Our `muscriptor` service wraps the PyPI package, not the authors' own server. To check that the wrapper isn't costing accuracy, the official server from [github.com/muscriptor/muscriptor](https://github.com/muscriptor/muscriptor) runs as its own container, `muscriptor_ref`, built straight from their repo (pinned to commit `7f213af`, September 2026), and `eval_pop.py` can score both on the same clips.
+Our `muscriptor` service wraps the PyPI package, not the authors' own server. To check that the wrapper wasn't costing accuracy, we ran the official server from [github.com/muscriptor/muscriptor](https://github.com/muscriptor/muscriptor) (commit `7f213af`, September 2026) in its own container and scored both on the same clips. Once the answer was in, that extra container was removed, since the app only needs our own `muscriptor` service. It is in the git history (commit `673a6ca`) if you ever want to re-run the test.
 
 What is the same: the model code and weights. The repo's model and decoding code is identical to PyPI `muscriptor==0.3.0`, which our service installs, and both download the same `muscriptor-medium` weights (shared through `data/models/hf`). Both read the audio as 16 kHz mono and cut it into 5-second sections.
 
@@ -93,14 +93,14 @@ Where ours differs:
 
 The benchmark above (pitched F1 0.445) ran before fast mode became the default, so it measured the official decoding.
 
-Four methods separate those differences:
+Four methods separated those differences:
 
 | Method | What it runs |
 |---|---|
 | `muscriptor` | Our service as the app runs it (fast mode off since 2026-10-12, so now the same as `muscriptor_exact` unless `MUSCRIPTOR_FAST=1`) |
 | `muscriptor_exact` | Our service with fast mode off: the official decoding |
-| `muscriptor_ref` | The official server, with its lag correction |
-| `muscriptor_ref_raw` | The official server without the lag correction (`detect_tempo=false`) |
+| `muscriptor_ref` | The official server, with its lag correction (removed) |
+| `muscriptor_ref_raw` | The official server without the lag correction (removed) |
 
 **Result** (first 40 MulTTiPop dev clips, October 2026):
 
@@ -116,7 +116,6 @@ Four methods separate those differences:
 - **Drums were 0.015 lower in ours.** The official MIDI writer drops a note written twice at the same moment and trims overlapping repeats; ours didn't. Ours now does the same (re-test pending).
 - **Fast mode costs very little on this score** (overall 0.445 vs 0.452, for about 30% less time), but the score only checks where notes start. By ear it was worse: every note held across a 5-second join stops there (200 notes on Meek Mill "Free Game"), a hiccup every 5 seconds. Since 2026-10-12 fast mode is off by default.
 
-`muscriptor_exact` against `muscriptor_ref_raw` should be nearly identical; if not, something in the wrapper is off. `muscriptor_ref` against `muscriptor_ref_raw` shows what the lag correction is worth, and `muscriptor` against `muscriptor_exact` what fast mode costs. For one of your own songs, `scripts/compare_muscriptor.py` writes our two MIDIs and the official one side by side and prints how far they agree.
 
 ## Voices
 
@@ -225,12 +224,4 @@ For the pop test, first fetch the clips (needs YouTube access), then score:
 ```bash
 docker compose exec backend python scripts/build_pop_benchmark.py --split dev
 docker compose exec backend python scripts/eval_pop.py --split dev --methods general multi muscriptor
-```
-
-To compare our MuScriptor with the official server (the first build downloads a few GB):
-
-```bash
-docker compose --profile ref -f docker-compose.yml -f docker-compose.gpu.yml up -d --build muscriptor_ref
-docker compose exec backend python scripts/eval_pop.py --limit 40 --tag official --methods muscriptor muscriptor_exact muscriptor_ref muscriptor_ref_raw
-docker compose exec backend python scripts/compare_muscriptor.py data/uploads/your-song.mp3
 ```
