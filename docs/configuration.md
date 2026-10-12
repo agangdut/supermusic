@@ -9,6 +9,7 @@ With Docker, put settings in a `.env` file next to `docker-compose.yml` (start f
 | `JWT_SECRET_KEY` | `change-me-in-production` | Signs login tokens. **Change it before anyone else can reach the API.** |
 | `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3001` | Comma-separated sites allowed to call the API |
 | `YOUTUBE_API_KEY` | _(empty)_ | Optional. Adds YouTube details during CSV enrichment |
+| `LASTFM_API_KEY` | _(empty)_ | Optional, free from [last.fm/api](https://www.last.fm/api/account/create). Makes Music Map genres more accurate; without it MusicBrainz is used |
 | `SUPERMUSIC_ARTIFACT_DIR` | `/app/data/artifacts` in Docker | Where finished files are written and served from |
 | `SUPERMUSIC_UPLOAD_DIR` | `<raw dir>/uploads` | Where uploads are saved |
 | `SM_DATA_DIR` | `data/` | Root data folder |
@@ -21,21 +22,23 @@ With Docker, put settings in a `.env` file next to `docker-compose.yml` (start f
 | `SM_BASIC_PITCH_MELODIA` | `0` | `1` turns Basic Pitch's "melodia trick" back on. It adds notes where a pitch keeps ringing with no new press heard; on two piano covers these were mostly wrong (note F1 0.74 → 0.80 and 0.78 → 0.88 with it off) |
 | `SM_YTDLP_FORMAT` | `bestaudio/best` | yt-dlp format selector |
 | `SM_FIG_DPI` | `140` | Resolution of generated images |
+| `SM_PIANO_CHECKPOINT` | `data/models/piano_transcription.pth` | Piano model weights (downloaded on first use) |
+| `SM_SOUNDFONT` | FluidR3 GM | Soundfont used for the piano MP3 preview |
 | `DATABASE_URL` | `sqlite:///./data/supermusic.db` | Reserved for the database (not used yet) |
 
-## YourMT3+ service
+## Model servers (MuScriptor, YourMT3+, GAME)
 
 | Variable | Default | What it does |
 |---|---|---|
 | `YOURMT3_URL` | `http://yourmt3:8100` | Where the backend finds the Full band transcriber |
-| `MUSCRIPTOR_URL` | `http://muscriptor:8200` | Where the backend finds the "Full band (new)" MuScriptor transcriber |
+| `MUSCRIPTOR_URL` | `http://muscriptor:8200` | Where the backend finds MuScriptor, the default Full band transcriber |
 | `HF_TOKEN` | (empty) | Hugging Face read token for MuScriptor's weights. Accept the licence on [muscriptor-medium](https://huggingface.co/MuScriptor/muscriptor-medium) first. Non-commercial use only (CC BY-NC 4.0) |
 | `MUSCRIPTOR_MODEL` | `medium` | `small`, `medium` or `large` (large needs more than the RTX 2060's 6 GB) |
 | `MUSCRIPTOR_FAST` | `0` | `1` transcribes 4 five-second sections at once: roughly 3x faster, slightly rougher where sections join (not yet measured) |
 | `GAME_URL` | `http://game:8300` | Where the backend finds the GAME singing transcriber. If it isn't reachable, Full band and Auto use MuScriptor's own voice track |
 | `GAME_MODEL` | `medium` | `small`, `medium` or `large` GAME weights (non-commercial licence, downloaded on first use) |
 
-The `yourmt3` container runs on CPU unless you add `docker-compose.gpu.yml` (NVIDIA only). Its 562 MB model downloads once into `data/models/yourmt3`. To make the GPU the default on your machine, copy `docker-compose.gpu.yml` to `docker-compose.override.yml`; Compose loads that automatically, and git ignores it.
+The `muscriptor`, `yourmt3` and `game` containers run on CPU unless you add `docker-compose.gpu.yml` (NVIDIA only). Their weights download once into `data/models/` (YourMT3+'s is 562 MB). If a service isn't reachable, the backend falls back: Auto goes MuScriptor → YourMT3+ → Stems/General, and the Lead vocal uses the band model's own voice track without GAME. To make the GPU the default on your machine, copy `docker-compose.gpu.yml` to `docker-compose.override.yml`; Compose loads that automatically, and git ignores it.
 
 ## Frontend
 
@@ -54,5 +57,7 @@ These are fixed when the frontend is **built**, so rebuild after changing them (
 | Backend | 8000 |
 | Redis | 6379 |
 | YourMT3+ | 8100 (inside Docker only) |
+| MuScriptor | 8200 (inside Docker only) |
+| GAME | 8300 (inside Docker only) |
 
 Change the left-hand number in `docker-compose.yml` (for example `"8080:8000"`) if a port is taken.

@@ -37,8 +37,10 @@ Long tasks don't block the request. You **start** a job and get back a job objec
 
 | Method | Path | JSON body (* = required) |
 |---|---|---|
-| `POST` | `/midi/convert` | `source_path`*, `onset_sensitivity` (0.6), `model`: "auto", "stems", "piano" or "basic" (default "basic"; see below) |
+| `POST` | `/midi/convert` | `source_path`* (or `stem_job_id`), `model` (default "basic"; see below), `vocal_track` (true), `playable` (false), `hand_span` (14), `composer` ("composer1", Piano cover only), `stems` (Stems only), `onset_sensitivity` (0.6) |
 | `GET` | `/midi/jobs/{id}` | |
+| `POST` | `/midi/melody-match` | `midi_path`*, and `vocals_path` or `audio_path` (returns scores right away) |
+| `POST` | `/midi/playability` | `midi_path`*, `hand_span` (14) (returns scores right away) |
 | `POST` | `/stems/separate` | `audio_path`*, `model` ("htdemucs"), `stems` |
 | `GET` | `/stems/jobs/{id}` | |
 | `POST` | `/csv/enrich` | `csv_path`*, `strategy` ("youtube+acousticbrainz"), `options` |
@@ -50,7 +52,19 @@ Long tasks don't block the request. You **start** a job and get back a job objec
 | `POST` | `/batch/process` | `audio_files`*, `operations` (["transcribe"]) |
 | `GET` | `/batch/jobs/{id}` | |
 
-MIDI models: **auto** detects the instruments and picks one of the others. **stems** splits the song into 6 parts and returns one multi-track MIDI (Piano, Bass, Guitar, Vocals, Other, plus a General MIDI drum track). **piano** is for solo piano. **basic** (General) is the fastest. Auto and Stems add `detected`, `chosen_model`, `reason` and `tracks` to `result.metrics`.
+MIDI models (`model`):
+
+| Value | UI name | What it is |
+|---|---|---|
+| `auto` | Auto | Detects the instruments and picks one of the others |
+| `muscriptor` | Full band | MuScriptor, most accurate on pop; needs the muscriptor service and `HF_TOKEN` |
+| `multi` | Full band (YourMT3+) | YourMT3+; needs the yourmt3 service |
+| `stems` | Stems | Splits into 6 parts and returns one multi-track MIDI (Piano, Bass, Guitar, Vocals, Other, plus a drum track) |
+| `piano` | Piano | Solo piano, with velocity and pedal |
+| `basic` | General | Basic Pitch, the fastest |
+| `cover` | Piano cover | Pop2Piano arranges the song for piano |
+
+A finished MIDI job's `result.artifacts` holds `midi` and a `preview` MP3 (plus `midi_original` when `playable` is on). Auto and Stems add `detected`, `chosen_model`, `reason` and `tracks` to `result.metrics`; jobs that separated the voice add melody match scores. While a job runs, `stage` and `eta_s` describe its progress.
 
 Paths like `source_path` are **server** paths, the ones `/upload/*` returns.
 
@@ -59,7 +73,6 @@ Paths like `source_path` are **server** paths, the ones `/upload/*` returns.
 | Method | Path | JSON body (* = one of) | Returns |
 |---|---|---|---|
 | `POST` | `/map/build` | `csv_path`* or `sample: true`*, `neighbors` (4), `clusters` (auto), `weights` | the whole map, right away (no job) |
-
 | `POST` | `/map/import` | form: `files` (one or more Spotify / Apple Music exports or CSVs), `enrich` (true), `limit` (1500) | an import job `{id, status, progress, message, detected}` |
 | `GET` | `/map/import/{id}` | | the job; when `status` is `done`, `result` holds the map |
 

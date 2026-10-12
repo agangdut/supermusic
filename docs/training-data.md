@@ -1,6 +1,8 @@
 # Data for more accurate MIDI
 
-Researched 2026-10-11. The question: what music with matching note data could make SuperMusic's MIDI
+Researched 2026-10-11.
+
+> **Progress since (October 2026):** steps 1 and 2 of the suggested order are done. The MulTTiPop pop benchmark runs with `scripts/build_pop_benchmark.py` and `scripts/eval_pop.py`, and **MuScriptor** won it (0.47 overall F1 against 0.35 for YourMT3+), so it's now the default Full band engine. **GAME**, a singing-only model, was added for the Lead vocal and is being benchmarked. AMT-APC (step 3) and fine-tuning (step 4) haven't been started. Results are in [transcription-accuracy.md](transcription-accuracy.md#real-pop-songs-multtipop). The question: what music with matching note data could make SuperMusic's MIDI
 more accurate, especially on pop songs and piano covers?
 
 ## The short version
@@ -55,9 +57,9 @@ synthesizer (exact but sounds less real), or aligned by hand or by algorithm to 
 
 ## Suggested order
 
-1. Build a pop benchmark from MulTTiPop's YouTube IDs (run on the Docker backend) and score General,
+1. ✅ Build a pop benchmark from MulTTiPop's YouTube IDs (run on the Docker backend) and score General,
    Full band and Stems on it, the same way `docs/transcription-accuracy.md` does for MusicNet.
-2. Add MuScriptor (medium) as an engine next to YourMT3+ and compare on that benchmark.
+2. ✅ Add MuScriptor (medium) as an engine next to YourMT3+ and compare on that benchmark.
 3. Add AMT-APC next to Pop2Piano as a second Piano cover engine and compare with `scripts/compare_piano_cover.py`.
 4. Only then consider fine-tuning, using Pop2Piano + AMT-APC cover pairs for covers, or Slakh + rendered
    Lakh MIDI for full band, and judging it on the pop benchmark.

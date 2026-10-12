@@ -1,5 +1,9 @@
 # 🎹 Transcription accuracy
 
+**Summary:** for solo piano use **Piano** (0.97 note F1). For anything with a band, **Full band** (MuScriptor) is the most accurate on real pop (0.47 overall F1, against 0.35 for YourMT3+ and 0.14 for General). Auto picks between them for you. The sections below go from easiest test to hardest: solo piano, piano in a band, classical ensembles, real pop, then voices and melody.
+
+## Solo piano
+
 How well each MIDI model does on the [MAESTRO v3](https://magenta.tensorflow.org/datasets/maestro) test set: real concert-piano recordings paired with the exact MIDI the pianist played. Measured October 2026 with `scripts/eval_transcription.py` (20 randomly chosen test pieces, first 60 seconds of each, scored with `mir_eval`).
 
 
@@ -109,6 +113,25 @@ Separating the voice before Full band makes things *worse*, because Demucs leave
 
 The Lead vocal is scored on MulTTiPop clips that have a vocal part ("Vocal F1" in `scripts/eval_pop.py`; compare `muscriptor_vocal` with `muscriptor_game`). Results pending. Rap has no fixed pitch, so its "melody" follows the speaking voice's rise and fall rather than a tune.
 
+## Melody match: is the tune right?
+
+Pop songs you feed in have no answer key, so the benchmarks above can't score them. But the singer *is* an answer key for the melody: once the voice is separated, a pitch tracker can trace which note it's on every 20 ms. Laying the MIDI's melody over that trace says how much of the tune the transcription got right.
+
+| Score | Meaning |
+|---|---|
+| **melody match** | % of sung time where the MIDI plays the same note (within half a semitone). Higher is better. |
+| octave ok | Same, but a right note in the wrong octave counts. |
+| coverage | % of sung time where the MIDI plays any note. |
+| extra | % of the MIDI melody where nobody is singing (stray notes). Lower is better. |
+
+The MIDI's melody is its "Lead vocal" track, or else the highest note playing at each moment. Code: `backend/app/core/melody_match.py`.
+
+- **In the app:** any MIDI job that separated the voice (General with "Voice as its own melody", Full band with GAME, or Stems with Vocals picked) shows a melody match score under the player.
+- **API:** `POST /midi/melody-match` with `midi_path` and either `vocals_path` or `audio_path` (the voice is separated first).
+- **Comparing modes on your songs:** `docker compose exec backend python scripts/compare_melody.py data/raw/songs --limit 10`
+
+It only judges the melody, not chords, bass or drums. Rap has little steady pitch, so scores there mean less. Backing vocals and harmonies that leak into the vocal stem can pull the traced pitch off the lead line.
+
 ## How Auto decides
 
 Auto separates a 30-second excerpt from the middle of the song into 6 parts and measures each part's share of the sound:
@@ -134,6 +157,8 @@ docker compose exec backend python scripts/eval_mix.py --backing drums.wav bass.
 ```
 
 Both need `data/raw/maestro/maestro-v3.0.0.zip` (108 GB). Results go to `data/processed/eval/`.
+
+For the classical test, put `musicnet.tar.gz` and `musicnet_metadata.csv` in `data/raw/musicnet/`, then run `docker compose exec backend python scripts/eval_musicnet.py --seconds 60`.
 
 For the pop test, first fetch the clips (needs YouTube access), then score:
 

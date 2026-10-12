@@ -45,7 +45,7 @@ The rewrite kept 99.99% of their notes, so it leaves already-playable music alon
 ## Would training a model help?
 
 - **Training on MAESTRO: no.** MAESTRO is already two-hand playable, and the Piano model already gets 97% of its notes right ([accuracy](transcription-accuracy.md)). Training on it teaches transcription, not arranging.
-- **A piano-cover model: probably yes, for full songs.** The two gaps above are what a model that learned from human piano covers would fix. One already exists: **Pop2Piano** (Choi & Lee, 2023), trained on about 300 hours of pop songs paired with YouTube piano covers and available pretrained through Hugging Face `transformers`. The sensible next step is to add it as a "Piano cover" mode and measure it with the score above before training anything of our own. Fine-tuning would need paired song audio plus human piano covers, which we don't have; [POP909](https://github.com/music-x-lab/POP909-Dataset) has 909 piano arrangements but no audio.
+- **A piano-cover model: yes, for full songs.** The two gaps above are what a model that learned from human piano covers fixes. **Pop2Piano** (Choi & Lee, 2023), trained on about 300 hours of pop songs paired with YouTube piano covers, is now the **Piano cover** mode below, and the results show it does. Training our own would need paired song audio plus human piano covers; `scripts/build_cover_dataset.py` (end of this page) starts building that set.
 
 ## Piano cover mode (Pop2Piano)
 

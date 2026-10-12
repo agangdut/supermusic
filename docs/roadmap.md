@@ -4,16 +4,28 @@
 
 Verified against the running Docker stack with real audio (October 2026):
 
-- [x] `docker compose up --build` builds and starts the UI, API and Redis
+- [x] `docker compose up --build` builds and starts the UI, API, Redis and the three model servers (MuScriptor, YourMT3+, GAME)
 - [x] Upload audio and CSV files
-- [x] 🎹 Audio → MIDI (Basic Pitch)
-- [x] 🥁 Stem separation into 4 stems (Demucs)
+- [x] 🎹 Audio → MIDI in seven modes. **Full band** (MuScriptor) is the default for mixes and the most accurate on real pop; **Piano** for solo piano ([accuracy](transcription-accuracy.md))
+- [x] 🎤 Lead vocal track, with GAME transcribing the singing when its service is running
+- [x] 🖐️ Playable by two hands, Piano cover (Pop2Piano), and a piano MP3 preview for every MIDI job
+- [x] 🎯 Melody match score against the separated voice
+- [x] 🥁 Stem separation into 4 or 6 stems (Demucs), and transcribing just the stems you pick
 - [x] 🧾 CSV enrichment with BPM, key and duration
-- [x] ⬇️ Download audio from a YouTube link (yt-dlp)
-- [x] 🌌 Music Map: taste clusters, hidden connections and recommendations from a CSV
-- [x] 🔐 Register, log in, and fetch your profile
+- [x] ⬇️ Download audio from a YouTube link (yt-dlp, API only)
+- [x] 🌌 Music Map: taste clusters, hidden connections and recommendations from a CSV or Spotify / Apple Music exports, with broad genres from listener tags
+- [x] Live job progress (stage and time left) in the UI, with Lost / Try again when a job disappears
+- [x] 🔐 Register, log in, and fetch your profile (API only)
 - [x] Results saved to `./data` and downloadable from the UI
 - [x] API test suite and CI on `master`
+
+## 🎹 MIDI accuracy, next steps
+
+- [ ] Run the GAME vocal benchmark (`scripts/eval_pop.py --methods muscriptor_vocal muscriptor_game`) and keep GAME only if it wins
+- [ ] Run the MuScriptor experiments: fast mode, beam search, per-stem (`muscriptor_fast`, `muscriptor_beam`, `muscriptor_stems`)
+- [ ] Test MuScriptor on solo piano (MAESTRO) and classical (MusicNet); if it matches the Piano model, Auto gets simpler
+- [ ] Add AMT-APC next to Pop2Piano as a second Piano cover engine
+- [ ] Only then fine-tune, using cover pairs from `scripts/build_cover_dataset.py` ([training data survey](training-data.md))
 
 ## 🧱 Needed for a complete product
 
@@ -28,7 +40,7 @@ Jobs and user accounts live in memory, so restarting the backend loses them. `ba
 Jobs run inside the web server process. A few long Demucs jobs can tie it up, and a crash loses every running job. Redis is already in `docker-compose.yml` but unused.
 - [ ] Run jobs in a worker (RQ, Celery or arq) backed by Redis
 - [ ] Limit how many heavy jobs run at once
-- [ ] Show real progress in the UI (the WebSocket at `/ws/jobs` exists; the UI still polls)
+- [ ] Push progress over the WebSocket at `/ws/jobs` instead of polling every 2 seconds
 
 ### 3. Sign-in that means something
 - [ ] Login and sign-up pages in the UI
@@ -37,12 +49,12 @@ Jobs run inside the web server process. A few long Demucs jobs can tie it up, an
 - [ ] Refuse to start with the default `JWT_SECRET_KEY` outside development
 
 ### 4. Screens for the features the API already has
-The UI covers MIDI, stems and CSV. These work in the API but have no screen:
+The UI covers MIDI, stems, CSV and the Music Map. These work in the API but have no screen:
 - [ ] Paste a YouTube link to download
 - [ ] Build a similarity map from the audio itself (`/visualization/umap`), not just CSV columns
 - [ ] Batch processing (`/batch/process`)
 - [ ] "Download all" as a zip (`/export/*`)
-- [ ] Play stems and MIDI in the browser
+- [ ] Play stems in the browser (MIDI already has a piano preview)
 
 ### 5. Safety and housekeeping
 - [ ] Upload size limit
@@ -53,7 +65,7 @@ The UI covers MIDI, stems and CSV. These work in the API but have no screen:
 ### 6. Deploying it
 - [ ] A production compose file with HTTPS (for example behind Caddy or nginx)
 - [ ] Build the frontend with the public API URL instead of `localhost`
-- [ ] Optional GPU image for much faster Demucs
+- [ ] Optional GPU image for much faster Demucs (the model servers already have one)
 - [ ] Container health checks and log collection
 
 ### 7. Quality
@@ -63,9 +75,11 @@ The UI covers MIDI, stems and CSV. These work in the API but have no screen:
 
 ## 🌌 Music Map, next steps
 
+- [ ] Add a CLAP vector per song as an optional "sound" feature with its own slider: CLAP grouped songs by genre more than twice as well as the current features (39% vs 16%), MERT came second ([experiment](music-map.md#research-would-a-music-model-map-better))
+- [ ] Search your library with words ("sad slow piano ballad") using CLAP's text side
+
 - [ ] Recommend songs **outside** your library (e.g. MusicBrainz, Spotify or Last.fm "similar tracks", placed on your map)
-- [ ] Import listening history straight from Spotify, Last.fm or Apple Music instead of a CSV
-- [ ] Fill in missing key/BPM/mood by analysing the audio (librosa is already in the backend)
+- [ ] Import listening history straight from the Spotify or Last.fm API (file exports already work)
 - [ ] Save maps and watch your taste drift over time
 - [ ] Turn a hidden connection or a cluster into a playlist with one click
 - [ ] Play a 30-second preview when you click a star
@@ -75,6 +89,6 @@ The UI covers MIDI, stems and CSV. These work in the API but have no screen:
 `legacy/` holds the August 2025 prototype. These parts were never brought into the web app:
 
 - [ ] Mixtape segmenter: split hour-long DJ mixes into tracks, export CSV/CUE
-- [ ] MusicBrainz genre lookup with ID3 tag write-back
+- [ ] ID3 tag write-back (the MusicBrainz genre lookup now lives in the Music Map)
 - [ ] High-dimensional graph with thumbnail backgrounds
-- [ ] Training data pairs for a custom transcriber
+- [x] Training data pairs for a custom transcriber (now `scripts/build_cover_dataset.py`)

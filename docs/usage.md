@@ -17,16 +17,18 @@ Then open **http://localhost:3000/upload**.
 1. Under **Audio**, choose an `.mp3`, `.wav` or `.flac` file.
 2. Pick a **MIDI model**:
    - **Auto** (the default) listens to the song and picks one of the modes below. The finished job says what it detected and what it chose.
-   - **Full band** uses YourMT3+, the most accurate mode for anything with more than one instrument. It writes a track per instrument (piano, guitar, bass, strings, drums and more). It runs in its own container and uses your NVIDIA GPU if you have one: a 70-second song takes about 15 seconds on an RTX 2060.
-   - **Stems** is for full songs. It splits the song into parts and gives you one MIDI file with a track per instrument: piano, bass, guitar, vocals, other, and drums. Expect it to take a bit longer than the song itself on a CPU.
+   - **Full band** uses MuScriptor, the most accurate mode on pop and band mixes. It writes a track per instrument (vocals, piano, guitar, bass, strings, drums and more). It runs in its own container, uses your NVIDIA GPU if you have one, and needs a Hugging Face token (see [configuration](configuration.md)). Expect roughly 0.8 seconds per second of music on an RTX 2060; the job card shows "section X of Y" and the time left.
+   - **Full band (YourMT3+)** is the older full-band model: about 3x faster, less accurate on pop.
+   - **Stems** splits the song into parts and gives you one MIDI file with a track per instrument: piano, bass, guitar, vocals, other, and drums. You can pick which stems to transcribe. Useful when neither full-band service is running.
    - **Piano** is for solo piano. It was trained on MAESTRO and also captures how hard each note is played and the sustain pedal.
    - **General** is the fastest, and fine for a single non-piano instrument.
+   - **Piano cover** arranges the song for piano (Pop2Piano) instead of transcribing it note for note.
 
-   Leave **Voice as its own melody** on to get the singer as a clean "Lead vocal" track instead of stray notes on other instruments. See [Voices](transcription-accuracy.md#voices).
+   Leave **Voice as its own melody** on to get the singer as a clean "Lead vocal" track instead of stray notes on other instruments. See [Voices](transcription-accuracy.md#voices). Tick **Playable by two hands** for a left/right hand part a pianist can play ([how](playable-piano.md)).
 
-   The first Piano, Stems or Auto run downloads the models (about 170 MB plus about 300 MB) into `data/models`.
+   The first run of each model downloads its weights into `data/models`.
 3. Click **Transcribe → MIDI**.
-4. The job appears under **Jobs**. When it finishes, download the `.mid` file.
+4. The job appears under **Jobs** with live progress. When it finishes, play the piano preview, check the melody match score (if the voice was separated), and download the `.mid` file.
 
 ### 🥁 Split a song into stems
 
@@ -51,11 +53,7 @@ My demo,Me,,/app/data/raw/uploads/audio/demo.mp3
 
 ### 🌌 Explore the Music Map
 
-Open **http://localhost:3000/map**. It starts with a sample library; click **Map my CSV** to use your own. The [Music Map guide](music-map.md) explains what you're looking at.
-
-### 🌐 Try the 3D demo
-
-The home page has an interactive 3D plot. Use **Upload CSV** there to plot your own data; the bundled sample (`frontend/public/data/sample_dataset.csv`) shows the expected `x`, `y`, `z` columns.
+Open **http://localhost:3000/map**. It starts with a sample library; click **Import Spotify / Apple Music** to use your own CSV or listening history. The [Music Map guide](music-map.md) explains what you're looking at.
 
 ## From the command line
 
@@ -80,7 +78,7 @@ curl http://localhost:8000/midi/jobs/c323309a-…
 curl -O http://localhost:8000/artifacts/c323309a-…_song.mid
 ```
 
-Download straight from a link:
+Download straight from a link (there is no screen for this in the UI yet):
 
 ```bash
 curl -X POST http://localhost:8000/tracks/download \
@@ -103,5 +101,6 @@ docker compose exec backend python -m pytest -q backend/tests
 | `failed to solve … npm run build` | Pull the latest `master`; this was fixed. |
 | Backend keeps restarting | `docker compose logs backend` shows the error. |
 | A job says `error` | Open `/{area}/jobs/{id}` and read `error_detail`. |
-| Jobs disappear | Jobs live in memory and vanish when the backend restarts. Your files in `./data` stay. See the [roadmap](roadmap.md). |
+| A job card says **Lost** | Jobs live in memory and vanish when the backend restarts. Click **Try again**; your files in `./data` stay. See the [roadmap](roadmap.md). |
+| Full band says the model couldn't load | `HF_TOKEN` is missing or empty in `.env`, or the licence on [muscriptor-medium](https://huggingface.co/MuScriptor/muscriptor-medium) isn't accepted. Fix it, then `docker compose up -d muscriptor`. Auto falls back to YourMT3+ meanwhile. |
 | Download job fails on YouTube | YouTube changes often. Rebuild to get the newest yt-dlp: `docker compose build --no-cache backend`. |
