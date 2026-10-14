@@ -33,6 +33,7 @@ import re
 import time
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
@@ -241,7 +242,13 @@ def _cache_dir() -> Path:
     return d
 
 
+_deezer = genres.Throttle(0.12)  # Deezer allows 50 requests every 5 s; stay a bit under 10 a second
+_albums: Dict[int, dict] = {}  # songs on one album share its genre and release date
+
+
 def _get(url: str) -> dict:
+    if "api.deezer.com" in url:
+        _deezer.wait()
     req = urllib.request.Request(url, headers={"User-Agent": "SuperMusic/0.1"})
     with urllib.request.urlopen(req, timeout=15) as r:
         return json.loads(r.read())
@@ -331,7 +338,7 @@ def lookup(artist: str, title: str, analyse: bool = True) -> dict:
                 hit = _pick_hit(_get(f"https://api.deezer.com/search?q={q}&limit=10").get("data", []), artist, title)
             if hit:
                 info["deezer_id"] = hit["id"]
-                album = _get(f"https://api.deezer.com/album/{hit['album']['id']}")
+                album = _album(hit["album"]["id"])
                 info["deezer_genres"] = [g["name"] for g in album.get("genres", {}).get("data", [])]
                 if album.get("release_date"):
                     info["year"] = int(album["release_date"][:4])
@@ -359,6 +366,13 @@ def lookup(artist: str, title: str, analyse: bool = True) -> dict:
     return info
 
 
+def _album(album_id: int) -> dict:
+    if album_id not in _albums:
+        a = _get(f"https://api.deezer.com/album/{album_id}")
+        _albums[album_id] = {"genres": a.get("genres", {}), "release_date": a.get("release_date")}
+    return _albums[album_id]
+
+
 def _song_cache(artist: str, title: str) -> Path:
     return _cache_dir() / (re.sub(r"[^a-z0-9|]+", "_", song_key(artist, title))[:150] + ".json")
 
@@ -372,14 +386,18 @@ def enrich(df: pd.DataFrame, limit: int = 1500, analyse: bool = True,
            progress: Optional[Callable[[int, int], None]] = None,
            on_song: Optional[Callable[[dict], None]] = None,
            on_start: Optional[Callable[[dict], None]] = None,
-           give_up_after: int = 8) -> Tuple[pd.DataFrame, int]:
+           give_up_after: int = 8, workers: int = 8) -> Tuple[pd.DataFrame, int]:
     """Fill missing genre/year/bpm/key/energy for up to `limit` songs, most-played first.
 
     `on_start` gets {"needed", "todo", "cached"} before the first lookup: songs missing
     something, songs that will be looked up (at most `limit`), and how many of those were
-    looked up before. `on_song` gets one dict per song: {"cached", "found", "error", "seconds"}. If the
-    first `give_up_after` lookups all fail with network errors, the rest are skipped
-    (the services can't be reached) and `on_song` gets {"gave_up": True}."""
+    looked up before. `on_song` gets one dict per song: {"cached", "found", "error", "seconds"},
+    where "seconds" is the time since the previous song finished (so with several lookups
+    running at once it measures throughput, which is what the time-left estimate needs).
+    Songs are looked up one at a time until one works, then `workers` at a time; each
+    online service has its own rate limit (genres.Throttle), so going wider never floods
+    them. If the first `give_up_after` lookups all fail with network errors, the rest are
+    skipped (the services can't be reached) and `on_song` gets {"gave_up": True}."""
     df = df.copy()
     for f in ["genre", "key"]:  # all-empty columns are float; let them hold text
         df[f] = df[f].astype(object)
@@ -389,28 +407,48 @@ def enrich(df: pd.DataFrame, limit: int = 1500, analyse: bool = True,
     if on_start:
         on_start({"needed": len(needed), "todo": len(todo),
                   "cached": sum(is_cached(str(df.at[i, "artist"] or ""), str(df.at[i, "title"])) for i in todo)})
-    found = errors = successes = 0
-    for n, i in enumerate(todo, 1):
-        artist, title = str(df.at[i, "artist"] or ""), str(df.at[i, "title"])
+
+    # Read names up front: worker threads never touch df while results are written to it
+    names = {i: (str(df.at[i, "artist"] or ""), str(df.at[i, "title"])) for i in todo}
+
+    def one(i):
+        artist, title = names[i]
         cached = is_cached(artist, title)
-        t0 = time.monotonic()
-        info = lookup(artist, title, analyse=analyse)
+        return i, cached, lookup(artist, title, analyse=analyse)
+
+    found = errors = successes = done = 0
+    last = time.monotonic()
+
+    def record(i, cached, info) -> None:
+        nonlocal found, errors, successes, done, last
         hit = bool(info.get("deezer_id") or info.get("genre"))
         found += hit
         failed = "error" in info and not hit
         errors += failed
         successes += not failed
+        done += 1
         for f in ["genre", "year", "bpm", "key", "energy", "brightness"]:
             if f in info and pd.isna(df.at[i, f]):
                 df.at[i, f] = info[f]
+        now = time.monotonic()
         if on_song:
-            on_song({"cached": cached, "found": hit, "error": failed, "seconds": time.monotonic() - t0})
+            on_song({"cached": cached, "found": hit, "error": failed, "seconds": now - last})
+        last = now
         if progress:
-            progress(n, len(todo))
-        if successes == 0 and errors >= give_up_after:
-            if on_song:
-                on_song({"gave_up": True, "skipped": len(todo) - n})
+            progress(done, len(todo))
+
+    # One at a time until something works, so an offline machine gives up after a few tries
+    for i in todo:
+        record(*one(i))
+        if successes:
             break
-        if not cached:
-            time.sleep(0.05)  # stay well under Deezer's 50 requests / 5 s
+        if errors >= give_up_after:
+            if on_song:
+                on_song({"gave_up": True, "skipped": len(todo) - done})
+            return df, found
+    rest = todo[done:]
+    if rest:
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+            for fut in as_completed([pool.submit(one, i) for i in rest]):
+                record(*fut.result())  # results are written to df here, on this thread only
     return df, found

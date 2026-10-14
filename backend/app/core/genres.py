@@ -28,6 +28,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -103,7 +104,32 @@ def summarise(tags: Iterable[Tuple[str, float]], max_genres: int = MAX_GENRES) -
 # Network helpers
 # ---------------------------------------------------------------------------
 
+class Throttle:
+    """Spaces requests at least `interval` seconds apart, across threads.
+
+    Each caller books the next free slot and sleeps until it, so the lock is never
+    held while waiting and parallel lookups queue up instead of bursting."""
+
+    def __init__(self, interval: float):
+        self.interval = interval
+        self._lock = threading.Lock()
+        self._next = 0.0
+
+    def wait(self) -> None:
+        with self._lock:
+            now = time.monotonic()
+            slot = max(now, self._next)
+            self._next = slot + self.interval
+        if slot > now:
+            time.sleep(slot - now)
+
+
+_lastfm = Throttle(0.25)  # Last.fm asks for no more than 5 requests a second
+
+
 def _get(url: str, timeout: float = 15) -> dict:
+    if "audioscrobbler.com" in url:
+        _lastfm.wait()
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
@@ -197,8 +223,21 @@ def _cache_path(kind: str, key: str) -> Path:
     return _cache_dir() / f"{kind}_{re.sub(r'[^a-z0-9]+', '_', key.lower())[:150]}.json"
 
 
+_key_locks: Dict[str, threading.Lock] = defaultdict(threading.Lock)
+_key_locks_guard = threading.Lock()
+
+
 def _cached(kind: str, key: str, fetch) -> Optional[List[str]]:
     p = _cache_path(kind, key)
+    # Songs are looked up in parallel; when two songs by one artist arrive together,
+    # the second waits for the first's answer instead of asking the same question again.
+    with _key_locks_guard:
+        lock = _key_locks[str(p)]
+    with lock:
+        return _cached_locked(p, fetch)
+
+
+def _cached_locked(p: Path, fetch) -> Optional[List[str]]:
     if p.exists():
         try:
             return json.loads(p.read_text())["genres"]

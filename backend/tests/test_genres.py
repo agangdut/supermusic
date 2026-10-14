@@ -104,3 +104,38 @@ def test_lastfm_wins_when_a_key_is_set(offline, monkeypatch):
     monkeypatch.setattr(genres, "lastfm_tags", lambda artist, title=None: [("indie pop", 100), ("seen live", 90)])
     info = library_import.lookup("Adele", "Hello", analyse=False)
     assert info["genre"] == "Pop" and info["genre_source"] == "Last.fm"
+
+
+def test_throttle_spaces_requests_across_threads():
+    import threading
+    import time
+
+    t = genres.Throttle(0.05)
+    stamps = []
+
+    def go():
+        t.wait()
+        stamps.append(time.monotonic())
+
+    threads = [threading.Thread(target=go) for _ in range(6)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    stamps.sort()
+    assert all(b - a >= 0.04 for a, b in zip(stamps, stamps[1:]))
+
+
+def test_parallel_songs_by_one_artist_ask_once(offline):
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(8) as pool:
+        list(pool.map(lambda t: library_import.lookup("Adele", t, analyse=False), [f"Song {i}" for i in range(8)]))
+    assert sum("musicbrainz" in u for u in offline) == 1
+
+
+def test_songs_on_one_album_fetch_it_once(offline):
+    library_import._albums.clear()
+    library_import.lookup("Adele", "Hello", analyse=False)
+    library_import.lookup("Adele", "Hello Again", analyse=False)  # same search hit, same album
+    assert sum("/album/" in u for u in offline) == 1

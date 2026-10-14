@@ -80,7 +80,7 @@ _imports: Dict[str, "ImportJob"] = {}
 
 # Until a few songs have been timed: a new song costs a Deezer search, a preview download and
 # analysis (~1-2 s) plus a MusicBrainz request for a new artist (1 s); a cached one costs ~nothing.
-NEW_SONG_S = 2.0
+NEW_SONG_S = 0.5  # per song, with several lookups running at once
 CACHED_SONG_S = 0.02
 LISTEN_SONG_S = 1.5  # one preview fetched and run through CLAP (cached songs are near-instant)
 

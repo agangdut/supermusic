@@ -83,3 +83,23 @@ def test_build_estimate_grows_with_library():
     from app.core.music_map import estimate_build_seconds
     assert estimate_build_seconds(3000) > estimate_build_seconds(1500) > estimate_build_seconds(500)
     assert client.get("/map/estimate", params={"tracks": 1500}).json()["seconds"] > 0
+
+
+def test_lookups_run_in_parallel():
+    df = pd.DataFrame({"title": [f"Song {i}" for i in range(16)], "artist": "A", "genre": None, "bpm": None,
+                       "year": None, "key": None, "energy": None, "brightness": None, "play_count": None})
+
+    def slow(artist, title, analyse=True):
+        time.sleep(0.1)
+        return {"genre": "Pop"}
+
+    orig = library_import.lookup
+    library_import.lookup = slow
+    try:
+        t0 = time.monotonic()
+        out, found = library_import.enrich(df, workers=8)
+        took = time.monotonic() - t0
+    finally:
+        library_import.lookup = orig
+    assert found == 16 and (out["genre"] == "Pop").all()
+    assert took < 0.8  # one at a time would take 1.6 s
