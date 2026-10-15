@@ -60,6 +60,16 @@ export async function midiConvert({ source_path, onset_sensitivity = 0.6, model 
   return normalizeJobArtifacts(job);
 }
 
+/** POST /csv/enrich-files — several CSV / Spotify / Apple Music files merged into one enriched CSV. */
+export async function enrichFiles(files, { lookup = true, limit, output = "combined" } = {}) {
+  const form = new FormData();
+  for (const f of files) form.append("files", f);
+  form.append("lookup", lookup ? "true" : "false");
+  form.append("output", output);
+  if (limit) form.append("limit", String(limit));
+  return apiFetch("/csv/enrich-files", { method: "POST", body: form });
+}
+
 /** POST /csv/enrich */
 export async function csvEnrich({ csv_path, strategy = "youtube+acousticbrainz", options = {} }) {
   const job = await postJSON("/csv/enrich", { csv_path, strategy, options });
@@ -172,12 +182,13 @@ export async function uploadCsv(file) {
 }
 
 /** POST /map/import — Spotify / Apple Music exports (several files at once). Returns an import job. */
-export async function importLibrary(files, { enrich = true, listen = true, listenLimit = null } = {}) {
+export async function importLibrary(files, { enrich = true, listen = true, listenLimit = null, limit = null } = {}) {
   const form = new FormData();
   for (const f of files) form.append("files", f);
   form.append("enrich", enrich ? "true" : "false");
   form.append("listen", listen ? "true" : "false");
   if (listenLimit) form.append("listen_limit", String(listenLimit));
+  if (limit) form.append("limit", String(limit));
   return apiFetch("/map/import", { method: "POST", body: form });
 }
 

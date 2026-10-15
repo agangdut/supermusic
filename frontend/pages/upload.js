@@ -12,7 +12,7 @@ import ResultsCard from "@/components/upload/ResultsCard"; // wraps ThemedCard+R
 export default function UploadPage() {
   const {
     audioFile,
-    csvFile,
+    csvFiles,
     jobs,
     toast,
     busy,
@@ -22,7 +22,7 @@ export default function UploadPage() {
     latestStemsJobId,
     latestCsv,
     setAudioFile,
-    setCsvFile,
+    setCsvFiles,
     transcribeMidi,
     transcribeSeparatedStems,
     separateStems,
@@ -56,8 +56,8 @@ export default function UploadPage() {
           />
 
           <CsvCard
-            csvFile={csvFile}
-            setCsvFile={setCsvFile}
+            csvFiles={csvFiles}
+            setCsvFiles={setCsvFiles}
             enrichCsv={enrichCsv}
             busy={busy}
           />

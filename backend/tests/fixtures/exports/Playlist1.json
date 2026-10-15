@@ -1,0 +1,12 @@
+{
+  "playlists": [
+    {"name": "Late night", "lastModifiedDate": "2024-01-01", "items": [
+      {"track": {"trackName": "Here", "artistName": "Alessia Cara", "albumName": "Know-It-All", "trackUri": "spotify:track:1"}, "episode": null, "localTrack": null, "addedDate": "2023-02-01"},
+      {"track": {"trackName": "Snooze", "artistName": "SZA", "albumName": "SOS", "trackUri": "spotify:track:9"}, "episode": null, "localTrack": null, "addedDate": "2023-05-01"}
+    ], "description": null, "numberOfFollowers": 0},
+    {"name": "Gym", "lastModifiedDate": "2024-01-01", "items": [
+      {"track": {"trackName": "Here", "artistName": "Alessia Cara", "albumName": "Know-It-All", "trackUri": "spotify:track:1"}, "episode": null, "localTrack": null, "addedDate": "2022-12-01"},
+      {"track": null, "episode": {"episodeName": "x", "showName": "y"}, "localTrack": null, "addedDate": "2023-01-01"}
+    ], "description": null, "numberOfFollowers": 0}
+  ]
+}

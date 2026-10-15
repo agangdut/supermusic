@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 # Import your routers
@@ -52,6 +53,9 @@ app.add_exception_handler(Exception, general_exception_handler)
 # ------------------------------------------------------------------------------
 # CORS Middleware (allow frontend to call API from any origin during dev)
 # ------------------------------------------------------------------------------
+
+# A Music Map of 20,000 songs is ~15 MB of JSON; compressed it is a few MB
+app.add_middleware(GZipMiddleware, minimum_size=50_000)
 
 origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(

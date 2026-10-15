@@ -78,7 +78,7 @@ def enrich_csv_file(
                 row_dict.update(features)
             
             # Enrich with external APIs
-            if req.strategy in ["youtube+acousticbrainz", "youtube", "external"]:
+            if strategy in ["youtube+acousticbrainz", "youtube", "external"]:
                 external_data = enrich_with_external_apis(row_dict)
                 row_dict.update(external_data)
         except Exception as e:

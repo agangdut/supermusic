@@ -94,3 +94,62 @@ def test_spotify_genre_tags_become_broad_labels():
     assert labels <= {"Hip-Hop", "Pop", "Rock", "Latin"}
     drake = next(t for t in m["tracks"] if t["artist"] == "Drake")
     assert "toronto rap" in drake["styles"]  # the detail is still there
+
+
+def test_stats_and_track_extras_from_listening_history():
+    import numpy as np
+
+    rng = np.random.default_rng(3)
+    n = 120
+    df = pd.DataFrame({
+        "title": [f"Song {i}" for i in range(n)],
+        "artist": [f"Artist {i % 9}" for i in range(n)],
+        "genre": rng.choice(["pop", "hip hop", "rock", "jazz"], n),
+        "key": rng.integers(0, 12, n), "mode": rng.integers(0, 2, n),
+        "bpm": rng.normal(110, 20, n).round(1),
+        "energy": rng.random(n), "year": rng.integers(1980, 2024, n),
+        "play_count": rng.integers(0, 50, n), "skip_count": rng.integers(0, 8, n),
+        "first_played": [f"20{15 + i % 8}-0{1 + i % 9}-01" for i in range(n)],
+        "last_played": [f"20{17 + i % 8}-0{1 + i % 9}-01" for i in range(n)],
+    })
+    df.loc[0, ["play_count", "last_played"]] = [500, "2018-01-01"]  # a favourite left behind
+    r = build_map(df)
+    s = r["stats"]
+    assert s["overview"]["songs"] == n and s["overview"]["artists"] == 9
+    assert s["overview"]["plays"] == int(df["play_count"].sum())
+    assert abs(sum(g["library_share"] for g in s["genres"]) - 1) < 0.02
+    assert {"decades", "keys", "tempo", "concentration", "diversity", "top_artists"} <= set(s)
+    assert s["timeline"]["by"] == "year" and sum(p["new_songs"] for p in s["timeline"]["periods"]) == n
+    assert 0 in [x["id"] for x in s["lists"]["rediscover"]]
+    t = r["tracks"][0]
+    assert t["year"] and t["first_played"] and t["energy"] is not None and t["skips"] is not None
+
+
+def test_hidden_links_found_when_only_some_songs_have_key_and_tempo():
+    import numpy as np
+
+    rng = np.random.default_rng(7)
+    n = 400
+    df = pd.DataFrame({
+        "title": [f"Song {i}" for i in range(n)],
+        "artist": [f"Artist {i % 40}" for i in range(n)],
+        "genre": rng.choice(["pop", "hip hop", "rock", "jazz", "house"], n),
+        "year": rng.integers(1980, 2024, n),
+    })
+    has = rng.random(n) < 0.3  # like a big library where only the most-played were looked up
+    df["key"] = [rng.choice(["Am", "C", "Em", "G"]) if h else None for h in has]
+    df["bpm"] = np.where(has, rng.choice([90, 120, 128], n), np.nan)
+    r = build_map(df)
+    assert r["meta"]["musical_tracks"] == has.sum()
+    assert len(r["hidden_connections"]) > 0
+    assert all(has[h["source"]] and has[h["target"]] for h in r["hidden_connections"])
+
+
+def test_clusters_describe_their_contents():
+    from app.routes.map import SAMPLE_CSV
+
+    r = build_map(pd.read_csv(SAMPLE_CSV))
+    c = r["clusters"][0]
+    assert c["top_tracks"] and c["top_artists"]
+    names = [c["label"].split(" · ")[0] for c in r["clusters"]]
+    assert len(names) == len(set(names))

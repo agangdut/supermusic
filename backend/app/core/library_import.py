@@ -6,7 +6,9 @@ Supported (detected from the file's columns, so renamed files are fine):
   Spotify
     * Exportify playlist CSVs (track, artists, album, genres, audio features)
     * Account data export: StreamingHistory*.json and the extended
-      Streaming_History_Audio_*.json (plays, skips, minutes listened)
+      Streaming_History_Audio_*.json (plays, skips, minutes listened, when
+      you first and last played each song), YourLibrary.json (liked songs)
+      and Playlist*.json (which of your playlists each song is in)
   Apple Music
     * Library playlist export from the Music app (File > Library > Export
       Playlist…), a tab-separated .txt with Plays / Skips / Genre / Rating
@@ -16,8 +18,9 @@ Supported (detected from the file's columns, so renamed files are fine):
   Anything else with title/artist-style columns (our own CSV template).
 
 Several files can be combined: rows for the same song (matched on artist
-and title) are merged, play and skip counts are summed, and features are
-filled from whichever file has them.
+and title) are merged, play and skip counts are summed, first/last played
+dates widen to cover every file, and features are filled from whichever
+file has them.
 
 Optionally, `enrich()` looks each song up online: genre from listener tags
 (Last.fm if LASTFM_API_KEY is set, otherwise MusicBrainz; see genres.py),
@@ -46,7 +49,8 @@ from app.core.config import settings
 SKIP_MS = 30_000  # a play shorter than 30 s counts as a skip (Spotify's own rule)
 CANONICAL = ["title", "artist", "album", "genre", "key", "mode", "bpm", "energy", "danceability", "valence",
              "acousticness", "instrumentalness", "speechiness", "liveness", "loudness", "brightness", "year",
-             "play_count", "skip_count", "minutes_played", "liked", "rating", "source"]
+             "play_count", "skip_count", "minutes_played", "first_played", "last_played", "liked", "rating",
+             "playlists", "added_at", "uri", "source"]
 
 
 def _norm(col: str) -> str:
@@ -77,10 +81,9 @@ def song_key(artist: str, title: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _read_table(name: str, data: bytes) -> object:
-    """Return a DataFrame for tabular files, or a Python list for JSON."""
+    """Return a DataFrame for tabular files, or the parsed JSON (a list or a dict)."""
     if name.lower().endswith(".json") or data.lstrip()[:1] in (b"[", b"{"):
-        obj = json.loads(data.decode("utf-8-sig"))
-        return obj if isinstance(obj, list) else obj.get("tracks", obj.get("items", [obj]))
+        return json.loads(data.decode("utf-8-sig"))
     # The Music app writes UTF-16 tab-separated text
     if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
         return pd.read_csv(io.StringIO(data.decode("utf-16")), sep="\t")
@@ -89,21 +92,36 @@ def _read_table(name: str, data: bytes) -> object:
     return pd.read_csv(io.StringIO(text), sep=sep)
 
 
-def _aggregate_plays(rows: Iterable[Tuple[str, str, str, float, bool]], source: str) -> pd.DataFrame:
-    """rows: (title, artist, album, ms_played, explicitly_skipped)."""
+def _aggregate_plays(rows: Iterable[tuple], source: str) -> pd.DataFrame:
+    """rows: (title, artist, album, ms_played, explicitly_skipped[, when, uri]).
+
+    `when` is the play's timestamp as text ("2021-03-04T22:10:05Z" or "2021-03-04 22:10");
+    the first ten characters (the date) give first_played / last_played."""
     agg: Dict[str, dict] = {}
-    for title, artist, album, ms, skipped in rows:
+    for title, artist, album, ms, skipped, *extra in rows:
         if not title or not artist:
             continue
+        when = str(extra[0])[:10] if extra and extra[0] else None
+        uri = extra[1] if len(extra) > 1 else None
         k = song_key(artist, title)
-        a = agg.setdefault(k, {"title": title, "artist": artist, "album": album or None,
-                               "play_count": 0, "skip_count": 0, "minutes_played": 0.0})
+        a = agg.get(k)
+        if a is None:
+            a = agg[k] = {"title": title, "artist": artist, "album": album or None,
+                          "play_count": 0, "skip_count": 0, "minutes_played": 0.0,
+                          "first_played": when, "last_played": when, "uri": uri}
         ms = float(ms or 0)
         if skipped or ms < SKIP_MS:
             a["skip_count"] += 1
         else:
             a["play_count"] += 1
         a["minutes_played"] += ms / 60000
+        if when:
+            if not a["first_played"] or when < a["first_played"]:
+                a["first_played"] = when
+            if not a["last_played"] or when > a["last_played"]:
+                a["last_played"] = when
+        if uri and not a["uri"]:
+            a["uri"] = uri
     df = pd.DataFrame(agg.values())
     if len(df):
         df["minutes_played"] = df["minutes_played"].round(1)
@@ -115,18 +133,34 @@ def parse_file(name: str, data: bytes) -> Tuple[pd.DataFrame, str]:
     """Parse one export. Returns (canonical rows, a label for what it was)."""
     raw = _read_table(name, data)
 
+    # ---- Spotify account data: YourLibrary.json and Playlist*.json ---------------
+    if isinstance(raw, dict):
+        if isinstance(raw.get("playlists"), list):
+            return _spotify_playlists(raw["playlists"]), "Spotify playlists (account data)"
+        if isinstance(raw.get("tracks"), list) and ({"albums", "artists", "shows", "bannedTracks"} & set(raw)):
+            df = _canonical_from_columns(pd.DataFrame([t for t in raw["tracks"] if isinstance(t, dict)]), "spotify_library")
+            if len(df):
+                df["liked"] = True
+            return df, "Spotify liked songs (YourLibrary.json)"
+        raw = raw.get("tracks", raw.get("items", [raw]))
+
     # ---- JSON exports --------------------------------------------------------
     if isinstance(raw, list):
         recs = [r for r in raw if isinstance(r, dict)]
         keys = {_norm(k) for r in recs[:20] for k in r}
-        if "master_metadata_track_name" in keys:  # Spotify extended history
+        if "master_metadata_track_name" in keys or "episode_name" in keys:  # Spotify extended history
+            # Podcast episodes have no track name and are skipped by _aggregate_plays
             rows = ((r.get("master_metadata_track_name"), r.get("master_metadata_album_artist_name"),
-                     r.get("master_metadata_album_album_name"), r.get("ms_played"), bool(r.get("skipped")))
+                     r.get("master_metadata_album_album_name"), r.get("ms_played"), bool(r.get("skipped")),
+                     r.get("ts"), r.get("spotify_track_uri"))
                     for r in recs)
             return _aggregate_plays(rows, "spotify_history"), "Spotify extended streaming history"
         if "trackname" in keys and "msplayed" in keys:  # Spotify basic history
-            rows = ((r.get("trackName"), r.get("artistName"), None, r.get("msPlayed"), False) for r in recs)
+            rows = ((r.get("trackName"), r.get("artistName"), None, r.get("msPlayed"), False, r.get("endTime"))
+                    for r in recs)
             return _aggregate_plays(rows, "spotify_history"), "Spotify streaming history"
+        if "podcastname" in keys or "episodename" in keys:
+            return pd.DataFrame(), "Spotify podcast history (skipped: no songs in it)"
         # Apple Music Library Tracks.json and other track lists
         df = pd.DataFrame(recs)
         label = "Apple Music library" if "play_count" in {_norm(c) for c in df.columns} else "track list (JSON)"
@@ -141,8 +175,12 @@ def parse_file(name: str, data: bytes) -> Tuple[pd.DataFrame, str]:
         t, a = _first(df, "song_name", "content_name"), _first(df, "artist_name", "container_artist_name")
         al = _first(df, "album_name", "container_album_name")
         reason = df["end_reason_type"].astype(str).str.upper() if "end_reason_type" in cols else pd.Series([""] * len(df))
-        rows = ((r[t], r[a] if a else None, r[al] if al else None, r["play_duration_milliseconds"],
-                 "SKIP" in reason.iloc[i]) for i, (_, r) in enumerate(df.iterrows()))
+        when = _first(df, "event_start_timestamp", "event_timestamp", "play_date_utc")
+        none = [None] * len(df)
+        # Plain columns rather than iterrows: Apple's file is often 100,000+ rows wide with ~100 columns
+        rows = zip(df[t].tolist(), df[a].tolist() if a else none, df[al].tolist() if al else none,
+                   df["play_duration_milliseconds"].tolist(), ("SKIP" in r for r in reason.tolist()),
+                   df[when].tolist() if when else none)
         return _aggregate_plays(rows, "apple_history"), "Apple Music play activity"
 
     # ---- Apple Music daily / track play history (already counted) --------------
@@ -173,6 +211,31 @@ def parse_file(name: str, data: bytes) -> Tuple[pd.DataFrame, str]:
     return _canonical_from_columns(df, "csv"), "track list (CSV)"
 
 
+def _spotify_playlists(playlists: List[dict]) -> pd.DataFrame:
+    """Playlist*.json: one row per song, with the names of the playlists it is in."""
+    agg: Dict[str, dict] = {}
+    for pl in playlists:
+        name = str(pl.get("name") or "Untitled playlist")
+        for item in pl.get("items") or []:
+            t = (item or {}).get("track") or {}
+            title, artist = t.get("trackName"), t.get("artistName")
+            if not title or not artist:
+                continue
+            k = song_key(artist, title)
+            a = agg.setdefault(k, {"title": title, "artist": artist, "album": t.get("albumName"),
+                                   "uri": t.get("trackUri"), "playlists": [], "added_at": None})
+            if name not in a["playlists"]:
+                a["playlists"].append(name)
+            added = str(item.get("addedDate") or "")[:10] or None
+            if added and (not a["added_at"] or added < a["added_at"]):
+                a["added_at"] = added
+    df = pd.DataFrame(agg.values())
+    if len(df):
+        df["playlists"] = df["playlists"].map("; ".join)
+        df["source"] = "spotify_playlists"
+    return df
+
+
 def _canonical_from_columns(df: pd.DataFrame, source: str) -> pd.DataFrame:
     df = df.copy()
     df.columns = [_norm(c) for c in df.columns]
@@ -192,6 +255,11 @@ def _canonical_from_columns(df: pd.DataFrame, source: str) -> pd.DataFrame:
         "liked": pick("liked", "loved", "favorite", "favourite", "is_liked"),
         "rating": pick("rating", "my_rating", "stars"),
         "minutes_played": pick("minutes_played"),
+        "first_played": pick("first_played"),
+        "last_played": pick("last_played"),
+        "playlists": pick("playlists", "playlist", "playlist_name"),
+        "added_at": pick("added_at", "date_added", "added"),
+        "uri": pick("uri", "track_uri", "spotify_uri", "spotify_track_uri"),
     }
     for dst, src in mapping.items():
         if src:
@@ -208,6 +276,10 @@ def _canonical_from_columns(df: pd.DataFrame, source: str) -> pd.DataFrame:
     return out.reset_index(drop=True)
 
 
+def _truthy(v) -> bool:
+    return str(v).strip().lower() in {"1", "1.0", "true", "yes", "y", "♥", "x"}
+
+
 def merge(frames: List[pd.DataFrame]) -> pd.DataFrame:
     frames = [f for f in frames if f is not None and len(f)]
     if not frames:
@@ -221,9 +293,15 @@ def merge(frames: List[pd.DataFrame]) -> pd.DataFrame:
     sums = ["play_count", "skip_count", "minutes_played"]
     for c in sums:
         df[c] = pd.to_numeric(df[c], errors="coerce")
+    for c in ["first_played", "last_played", "added_at"]:  # ISO dates: text order is time order
+        df[c] = df[c].map(lambda v: None if v is None or (isinstance(v, float) and np.isnan(v)) or v == "" else str(v)[:10])
     agg = {c: "first" for c in CANONICAL if c not in sums and c != "source"}
     agg.update({c: "sum" for c in sums})
+    agg.update(first_played="min", last_played="max", added_at="min")
     agg["source"] = lambda s: "+".join(sorted(set(map(str, s.dropna()))))
+    agg["playlists"] = lambda s: "; ".join(dict.fromkeys(p.strip() for v in s.dropna() for p in str(v).split(";")
+                                                         if p.strip())) or None
+    agg["liked"] = lambda s: True if s.map(_truthy).any() else (s.dropna().iloc[0] if s.notna().any() else None)
     merged = df.groupby("_k", sort=False).agg(agg).reset_index(drop=True)
     for c in sums:
         if df[c].notna().sum() == 0:

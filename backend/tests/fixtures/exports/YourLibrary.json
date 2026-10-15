@@ -1,0 +1,13 @@
+{
+  "tracks": [
+    {"artist": "Alessia Cara", "album": "Know-It-All", "track": "Here", "uri": "spotify:track:1"},
+    {"artist": "SZA", "album": "SOS", "track": "Snooze", "uri": "spotify:track:9"}
+  ],
+  "albums": [],
+  "shows": [],
+  "episodes": [],
+  "bannedTracks": [],
+  "artists": [],
+  "bannedArtists": [],
+  "other": []
+}

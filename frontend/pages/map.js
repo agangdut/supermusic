@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Head from "next/head";
+import { useRouter } from "next/router";
 
 import PageShell from "@/components/layout/PageShell";
 import { setBackgroundWork } from "@/lib/backgroundWork";
 import { buildMap, getImport, getMapEstimate, importLibrary, likeSongs, searchSound, skipListening } from "@/lib/api";
 import { colorFor } from "@/components/map/colors";
 import ImportProgress, { BuildProgress } from "@/components/map/ImportProgress";
+import StatsPanel from "@/components/map/StatsPanel";
+import ClusterAtlas from "@/components/map/ClusterAtlas";
+import { availableLenses, buildLens, RAMP_CSS } from "@/components/map/lenses";
 
 const Graph3D = dynamic(() => import("@/components/map/Graph3D"), {
   ssr: false,
@@ -129,17 +133,23 @@ export default function MapPage() {
     }
   }, []);
 
+  // /map?csv=<server path> opens a library (e.g. from CSV enrichment); otherwise the sample
+  const router = useRouter();
   useEffect(() => {
-    if (startedRef.current) return; // React strict mode runs effects twice in dev
+    if (!router.isReady || startedRef.current) return; // React strict mode runs effects twice in dev
     startedRef.current = true;
-    load({ sample: true }, weights);
+    const csv = typeof router.query.csv === "string" ? router.query.csv : null;
+    const src = csv ? { csv_path: csv } : { sample: true };
+    setSource(src);
+    load(src, weights);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [router.isReady]);
 
   const [pending, setPending] = useState(null); // files picked, waiting for "Build my map"
   const [enrichOnline, setEnrichOnline] = useState(true);
   const [listenPreviews, setListenPreviews] = useState(true);
   const [listenLimit, setListenLimit] = useState(""); // blank = every song (up to the import limit)
+  const [lookupLimit, setLookupLimit] = useState(""); // blank = the server default (1,500)
   const [importJob, setImportJob] = useState(null);
   const [uploading, setUploading] = useState(0); // number of files being sent
   const [lastWarning, setLastWarning] = useState(null); // e.g. online lookups were skipped
@@ -165,7 +175,7 @@ export default function MapPage() {
     setUploading(files.length);
     setLastWarning(null);
     try {
-      let job = await importLibrary(files, { enrich: enrichOnline, listen: listenPreviews, listenLimit: parseInt(listenLimit, 10) || null });
+      let job = await importLibrary(files, { enrich: enrichOnline, listen: listenPreviews, listenLimit: parseInt(listenLimit, 10) || null, limit: parseInt(lookupLimit, 10) || null });
       setUploading(0);
       setImportJob(job);
       let misses = 0;
@@ -201,6 +211,12 @@ export default function MapPage() {
   };
 
   const hasSound = (data?.meta?.sound_tracks || 0) > 0;
+
+  // "Colour by" lens: the same stars, coloured by year, plays, tempo...
+  const [lensId, setLensId] = useState("cluster");
+  const lenses = useMemo(() => availableLenses(data?.tracks), [data]);
+  const lens = useMemo(() => buildLens(lenses.some((l) => l.id === lensId) ? lensId : "cluster", data?.tracks || []), [lensId, lenses, data]);
+  const mapRef = useRef();
 
   const runSearch = async (text) => {
     const q = (text ?? query).trim();
@@ -328,6 +344,20 @@ export default function MapPage() {
             </span>
           </label>
           {enrichOnline && (
+            <label className="mt-2 ml-5 flex flex-wrap items-center gap-2 text-xs text-gray-300">
+              <span>Look up at most</span>
+              <input
+                type="number" min="1" max="50000" placeholder="1500" value={lookupLimit}
+                onChange={(e) => setLookupLimit(e.target.value)}
+                className="w-24 rounded border border-white/10 bg-black/30 px-2 py-0.5 text-xs text-white"
+              />
+              <span className="text-gray-400">
+                songs, most-played first. Songs without a lookup have no tempo or key, so they can&apos;t get hidden links.
+                New songs take about half a second each; songs looked up before are instant.
+              </span>
+            </label>
+          )}
+          {enrichOnline && (
             <label className="mt-2 ml-5 flex items-start gap-2 text-xs text-gray-300">
               <input type="checkbox" checked={listenPreviews} onChange={(e) => setListenPreviews(e.target.checked)} className="mt-0.5 accent-fuchsia-500" />
               <span>
@@ -342,7 +372,7 @@ export default function MapPage() {
               <input
                 type="number"
                 min="1"
-                max="5000"
+                max="50000"
                 placeholder="all"
                 value={listenLimit}
                 onChange={(e) => setListenLimit(e.target.value)}
@@ -400,7 +430,7 @@ export default function MapPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         {/* 3D view */}
-        <div className="relative h-[68vh] min-h-[480px] overflow-hidden rounded-2xl border border-white/10
+        <div ref={mapRef} className="relative h-[68vh] min-h-[480px] overflow-hidden rounded-2xl border border-white/10
                         bg-[radial-gradient(ellipse_at_center,_#1a1440_0%,_#0b1121_55%,_#05070f_100%)]">
           {data && (
             <Graph3D
@@ -410,6 +440,7 @@ export default function MapPage() {
               focusCluster={clusterFocus}
               picks={picks}
               mode={tab}
+              colorOf={lens.colorOf}
               onSelect={(id) => { setSelectedId(id); if (id != null) setClusterFocus(null); }}
             />
           )}
@@ -425,7 +456,36 @@ export default function MapPage() {
           )}
           {data && (
             <div className="pointer-events-none absolute bottom-3 left-3 text-[11px] text-gray-500">
-              {data.meta.count} tracks · drag to orbit · scroll to zoom · click a star
+              {data.meta.count.toLocaleString()} tracks · drag to orbit · scroll to zoom · click a star
+            </div>
+          )}
+
+          {/* Colour by */}
+          {data && lenses.length > 1 && (
+            <div className="absolute right-3 top-3 w-[220px] rounded-xl bg-black/30 px-3 py-2 text-[11px] text-gray-300 backdrop-blur">
+              <label className="flex items-center justify-between gap-2">
+                <span className="shrink-0 text-gray-400">Colour by</span>
+                <select value={lens.lens.id} onChange={(e) => setLensId(e.target.value)}
+                  className="min-w-0 rounded border border-white/10 bg-[#0b1121] px-1.5 py-0.5 text-[11px] text-white">
+                  {lenses.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+                </select>
+              </label>
+              {lens.legend?.kind === "ramp" && (
+                <div className="mt-2">
+                  <div className="h-1.5 rounded-full" style={{ background: RAMP_CSS }} />
+                  <div className="mt-0.5 flex justify-between text-gray-400"><span>{lens.legend.lo}</span><span>{lens.legend.hi}</span></div>
+                  {lens.legend.missing && <div className="mt-0.5 flex items-center gap-1.5 text-gray-500"><span className="h-2 w-2 rounded-full bg-[#3b4252]" /> no data</div>}
+                </div>
+              )}
+              {lens.legend?.kind === "swatches" && (
+                <div className="mt-2 space-y-0.5">
+                  {lens.legend.items.map((it) => (
+                    <div key={it.label} className="flex items-center gap-1.5 truncate">
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: it.color }} /> {it.label}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -534,6 +594,9 @@ export default function MapPage() {
                   <span className="shrink-0 text-xs text-gray-500">{c.size}</span>
                 </div>
                 <div className="mt-2"><SignalBar value={c.signal} color={colorFor(c.id)} /></div>
+                {c.top_artists?.length > 0 && (
+                  <div className="mt-1.5 truncate text-[11px] text-gray-400">{c.top_artists.slice(0, 3).map((a) => a.name).join(", ")}</div>
+                )}
                 <div className="mt-1.5 text-[11px] text-gray-500">
                   {c.lift != null
                     ? `${Math.round(c.listening_share * 100)}% of your plays · ${c.lift >= 1 ? `${c.lift}× more than its size` : `${c.lift}× its size`}`
@@ -548,7 +611,18 @@ export default function MapPage() {
                   Pairs from different clusters that still match musically: similar sound, same or neighbouring key, same or half/double tempo, similar mood.
                   Good for transitions and playlist bridges.
                 </p>
-                {data?.hidden_connections.length === 0 && <p className="text-sm text-gray-500">No strong cross-cluster matches yet. Add key, BPM or mood columns.</p>}
+                {data?.hidden_connections.length === 0 && (
+                  <p className="text-sm leading-6 text-gray-500">
+                    {(data.meta.musical_tracks ?? 0) === 0
+                      ? "None of these songs has a key or tempo, and hidden links are matches on key, tempo and sound. Import again with “Look up genre, tempo, key and energy online” ticked (and a higher look-up limit for a big library), or use a CSV with key and BPM columns."
+                      : `No strong cross-cluster matches among the ${data.meta.musical_tracks.toLocaleString()} songs that have a key or tempo. Looking up more songs online gives it more to work with.`}
+                  </p>
+                )}
+                {data?.hidden_connections.length > 0 && data.meta.musical_tracks != null && data.meta.musical_tracks < data.meta.count * 0.5 && (
+                  <p className="text-[11px] leading-5 text-gray-500">
+                    Only {data.meta.musical_tracks.toLocaleString()} of {data.meta.count.toLocaleString()} songs have a key or tempo, so links are found among those. Look up more songs online for more.
+                  </p>
+                )}
                 {data?.hidden_connections.map((h, i) => (
                   <div key={i} className="rounded-xl border border-fuchsia-400/15 bg-fuchsia-400/[0.03] p-3">
                     <TrackLine t={byId[h.source]} onClick={() => setSelectedId(h.source)} />
@@ -659,6 +733,44 @@ export default function MapPage() {
           Built from {data.meta.source === "sample" ? "the sample library" : data.meta.source} using{" "}
           {data.meta.features_used.join(", ")} · layout: {data.meta.method.toUpperCase()}
         </p>
+      )}
+
+      {data?.clusters?.length > 1 && (
+        <div className="mt-6">
+          <h2 className="text-lg font-semibold text-white">Your music, cluster by cluster</h2>
+          <p className="mb-3 text-xs text-gray-500">
+            What each part of the map is made of. Click a card to light it up on the map; click a song to fly to it.
+          </p>
+          <ClusterAtlas
+            clusters={data.clusters}
+            byId={byId}
+            focusCluster={clusterFocus}
+            onFocus={(id) => {
+              setSelectedId(null);
+              setTab("clusters");
+              setClusterFocus(clusterFocus === id ? null : id);
+              mapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+            onSelect={(id) => {
+              setClusterFocus(null);
+              setSelectedId(id);
+              mapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+          />
+        </div>
+      )}
+
+      {data?.stats && (
+        <StatsPanel
+          stats={data.stats}
+          clusters={data.clusters}
+          byId={byId}
+          onSelect={(id) => {
+            setClusterFocus(null);
+            setSelectedId(id);
+            mapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }}
+        />
       )}
     </PageShell>
   );

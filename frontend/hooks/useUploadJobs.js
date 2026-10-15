@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, API_BASE } from "@/utils/fetcher";
 import { setBackgroundWork } from "@/lib/backgroundWork";
-import { midiConvert, stemsSeparate, csvEnrich, getJob, areaForJobType, normalizeJobArtifacts } from "@/lib/api";
+import { midiConvert, stemsSeparate, csvEnrich, enrichFiles, getJob, areaForJobType, normalizeJobArtifacts, toArtifactUrl } from "@/lib/api";
 
 // Map backend status to frontend status
 const mapStatus = (status) => {
@@ -36,11 +36,19 @@ const midiResult = (result) => ({
   melody: result?.metrics?.melody,
 });
 
+// The CSV result: download link, the server path the Music Map can open, and what was done
+const csvResult = (result) => ({
+  url: toArtifactUrl(result?.artifacts?.csv),
+  zip: toArtifactUrl(result?.artifacts?.zip),
+  library_csv: result?.library_csv || null,
+  metrics: result?.metrics || null,
+});
+
 const STORAGE_KEY = "supermusic.workspace";
 
 export default function useUploadJobs() {
   const [audioFile, setAudioFile] = useState(null);
-  const [csvFile, setCsvFile] = useState(null);
+  const [csvFiles, setCsvFiles] = useState([]);
 
   const [jobs, setJobs] = useState([]);
   const [toast, setToast] = useState(null);
@@ -119,8 +127,8 @@ export default function useUploadJobs() {
       } else if (j.job_type === "stem_separation") {
         setLatestStems(normalizeJobArtifacts({ result: { artifacts } }).result.artifacts);
         setLatestStemsJobId(j.id);
-      } else if (j.job_type === "csv_enrichment" && artifacts.csv) {
-        setLatestCsv(artifacts.csv);
+      } else if (j.job_type === "csv_enrichment" && (artifacts.csv || artifacts.zip)) {
+        setLatestCsv(csvResult(data.result));
       }
     }
   }, []);
@@ -258,7 +266,8 @@ export default function useUploadJobs() {
       const run = {
         midi_conversion: () => midiConvert(p),
         stem_separation: () => stemsSeparate(p),
-        csv_enrichment: () => csvEnrich(p),
+        // Batch jobs were sent as files, which the browser no longer has
+        csv_enrichment: p.csv_path ? () => csvEnrich(p) : null,
       }[type];
       if (!run) return notify("This job can't be retried. Start it again from the form.", "warn");
       setJobs((prev) => prev.filter((x) => x.id !== j.id));
@@ -356,36 +365,23 @@ export default function useUploadJobs() {
     }
   }, [audioFile, uploadFile, createJob, notify]);
 
-  const enrichCsv = useCallback(async () => {
-    if (!csvFile) {
-      notify("Please select a CSV file first.", "warn");
+  const enrichCsv = useCallback(async ({ lookup = true, limit, output = "combined" } = {}) => {
+    if (!csvFiles.length) {
+      notify("Please choose at least one file first.", "warn");
       return;
     }
-
-    try {
-      // Step 1: Upload the CSV file
-      setBusy(true);
-      notify("Uploading CSV file…", "info");
-      const csvPath = await uploadFile(csvFile, "csv");
-
-      // Step 2: Create CSV enrichment job
-      await createJob(
-        "csv_enrichment",
-        () => csvEnrich({ csv_path: csvPath }),
-        "CSV enrichment complete ✅",
-        "CSV enrichment failed ❌",
-        (result) => {
-          if (result?.artifacts?.csv) {
-            setLatestCsv(result.artifacts.csv);
-          }
-        }
-      );
-    } catch (err) {
-      notify(`CSV enrichment failed: ${err.message}`, "err");
-    } finally {
-      setBusy(false);
-    }
-  }, [csvFile, uploadFile, createJob, notify]);
+    // Files go up with the request; the server merges them and runs the job
+    notify(`Uploading ${csvFiles.length} file${csvFiles.length > 1 ? "s" : ""}…`, "info");
+    await createJob(
+      "csv_enrichment",
+      () => enrichFiles(csvFiles, { lookup, limit, output }),
+      "CSV enrichment complete ✅",
+      "CSV enrichment failed ❌",
+      (result) => {
+        if (result?.artifacts?.csv || result?.artifacts?.zip) setLatestCsv(csvResult(result));
+      }
+    );
+  }, [csvFiles, createJob, notify]);
 
   const clearJobs = useCallback(() => {
     setJobs([]);
@@ -394,7 +390,7 @@ export default function useUploadJobs() {
   return {
     // state
     audioFile,
-    csvFile,
+    csvFiles,
     jobs,
     toast,
     busy,
@@ -406,7 +402,7 @@ export default function useUploadJobs() {
 
     // setters for inputs
     setAudioFile,
-    setCsvFile,
+    setCsvFiles,
 
     // actions
     transcribeMidi,
