@@ -96,13 +96,18 @@ async def enrich_files(
     files: List[UploadFile] = File(..., description="CSVs and Spotify / Apple Music exports (JSON or text); several at once is fine."),
     lookup: bool = Form(True, description="Look songs up online for genre, year, tempo, key and energy."),
     limit: int = Form(2000, ge=0, le=50_000, description="Look up at most this many songs (most-played first)."),
+    output: str = Form("combined", pattern="^(combined|separate)$",
+                       description="combined: one CSV for all files. separate: one enriched CSV per input file."),
 ) -> Job:
     """Combine several files into one deduplicated track list and fill in what's missing.
 
     Each file is recognised from its columns (Exportify CSV, Spotify StreamingHistory /
     Streaming_History_Audio / YourLibrary / Playlist JSON, Apple Music exports, any CSV
     with title and artist). The same song in several files becomes one row, with play and
-    skip counts added up. The result is one CSV that the Music Map can open directly."""
+    skip counts added up. The result is one CSV that the Music Map can open directly.
+
+    With output=separate, each input file gets its own enriched CSV instead (songs are
+    still looked up once, even when they appear in several files), plus a zip of them all."""
     from app.core import library_import
 
     parsed, detected = [], []
@@ -116,7 +121,7 @@ async def enrich_files(
         detected.append({"file": f.filename, "type": label, "songs": int(len(df))})
 
     names = [d["file"] for d in detected]
-    job = Job(job_type=JobType.CSV_ENRICHMENT, payload={"files": names, "lookup": lookup, "limit": limit})
+    job = Job(job_type=JobType.CSV_ENRICHMENT, payload={"files": names, "lookup": lookup, "limit": limit, "output": output})
     job_store[str(job.id)] = job
     job.mark_running(f"Combining {len(files)} file{'s' if len(files) != 1 else ''}…")
     job.progress = 5
@@ -137,6 +142,8 @@ async def enrich_files(
 
                 df, found = library_import.enrich(df, limit=limit, progress=progress)
             job.message = "Saving…"
+            if output == "separate":
+                return _save_separate(job, parsed, detected, df, before, found)
             df = df.dropna(axis=1, how="all")  # columns no file had
             name = Path(names[0]).stem if len(names) == 1 else f"Library ({len(names)} files)"
             path = save_artifact(job, f"{name} (enriched).csv", df.to_csv(index=False).encode("utf-8"))
@@ -157,6 +164,55 @@ async def enrich_files(
 
     threading.Thread(target=work, daemon=True).start()
     return job
+
+
+LOOKED_UP = ["genre", "genre_source", "year", "bpm", "key", "energy", "brightness"]
+
+
+def _save_separate(job: Job, parsed, detected, combined, before, found) -> None:
+    """One enriched CSV per input file. Each keeps only its own songs and its own play counts;
+    details looked up online (once, on the combined list) are copied in by song."""
+    import io
+    import zipfile
+
+    from app.core import library_import
+
+    combined = combined.copy()
+    combined["_k"] = [library_import.song_key(a, t) for a, t in zip(combined["artist"], combined["title"])]
+    looked = combined.drop_duplicates("_k").set_index("_k")
+    outputs, artifacts, buf = [], {}, io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for n, (df, info) in enumerate(zip(parsed, detected), start=1):
+            if not len(df):
+                outputs.append({**info, "csv": None, "songs": 0})
+                continue
+            one = library_import.merge([df])
+            keys = [library_import.song_key(a, t) for a, t in zip(one["artist"], one["title"])]
+            for col in LOOKED_UP:
+                if col in looked:
+                    filled = looked[col].reindex(keys).to_numpy()
+                    one[col] = one[col].where(one[col].notna(), filled) if col in one else filled
+            one = one.dropna(axis=1, how="all")
+            name = f"{Path(info['file'] or f'file {n}').stem} (enriched).csv"
+            data = one.to_csv(index=False).encode("utf-8")
+            path = save_artifact(job, name, data)
+            zf.writestr(Path(path).name, data)
+            artifacts[f"csv_{n}"] = path
+            outputs.append({**info, "csv": path, "songs": int(len(one)), "coverage_after": _coverage(one)})
+    zip_path = save_artifact(job, f"Enriched files ({len(artifacts)}).zip", buf.getvalue())
+    metrics = {
+        "files": detected,
+        "outputs": outputs,
+        "rows_in": sum(d["songs"] for d in detected),
+        "songs": int(len(combined)),
+        "coverage_before": before,
+        "coverage_after": _coverage(combined.drop(columns="_k")),
+    }
+    if found is not None:
+        metrics["matched_online"] = int(found)
+    first = next((o["csv"] for o in outputs if o["csv"]), None)
+    job.mark_success({"artifacts": {"zip": zip_path, **artifacts}, "library_csv": first, "metrics": metrics},
+                     message=f"{len(artifacts)} enriched files ready")
 
 
 @router.get("/jobs/{job_id}", response_model=Job)

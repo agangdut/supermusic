@@ -85,7 +85,7 @@ Listening histories don't include genre, tempo or key. With **Look up genre, tem
 
 The merged library is saved to `data/processed/library/`, and the sliders and **Remap** work on it like any other map.
 
-The **CSV / library files** card on the Workspace page does the same merge without drawing a map: drop in any number of files, get one deduplicated, enriched CSV back with a summary of what each file was, how many duplicates were merged and how many songs now have each detail, plus an **Open it in the Music Map** link.
+The **CSV / library files** card on the Workspace page does the same merge without drawing a map: drop in any number of files, get one deduplicated, enriched CSV back with a summary of what each file was, how many duplicates were merged and how many songs now have each detail, plus an **Open it in the Music Map** link. With several files you can also pick **One file per input**: each file comes back as its own enriched CSV (its own songs and play counts, with details looked up once and shared across files), plus a .zip of them all.
 
 **Big libraries.** Maps up to 50,000 songs are allowed. On a 4-core CPU a 23,000-song library draws in about 25 seconds (plus about 20 seconds once per server start, while UMAP compiles its fast neighbour search; the server does that in the background at start-up). Above 2,500 songs the 3D view draws all stars as one point cloud and all links as one set of lines, so it stays smooth; the overview names the 12 biggest clusters, and big libraries get up to 24 clusters instead of 10.
 

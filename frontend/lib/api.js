@@ -61,10 +61,11 @@ export async function midiConvert({ source_path, onset_sensitivity = 0.6, model 
 }
 
 /** POST /csv/enrich-files — several CSV / Spotify / Apple Music files merged into one enriched CSV. */
-export async function enrichFiles(files, { lookup = true, limit } = {}) {
+export async function enrichFiles(files, { lookup = true, limit, output = "combined" } = {}) {
   const form = new FormData();
   for (const f of files) form.append("files", f);
   form.append("lookup", lookup ? "true" : "false");
+  form.append("output", output);
   if (limit) form.append("limit", String(limit));
   return apiFetch("/csv/enrich-files", { method: "POST", body: form });
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import StemsToMidi from "./StemsToMidi";
+import { toArtifactUrl } from "@/lib/api";
 
 // Players use the Web Audio API, so they only load in the browser
 const MidiPlayer = dynamic(() => import("@/components/player/MidiPlayer"), { ssr: false });
@@ -90,9 +91,11 @@ function CsvSummary({ csv }) {
       {m && (
         <>
           <div className="grid grid-cols-3 gap-2">
-            <Stat value={m.songs?.toLocaleString()} label="songs" />
+            <Stat value={m.songs?.toLocaleString()} label={m.outputs ? "different songs" : "songs"} />
             <Stat value={m.files?.length} label={m.files?.length === 1 ? "file" : "files"} />
-            <Stat value={m.duplicates_merged?.toLocaleString()} label="duplicates merged" />
+            {m.outputs
+              ? <Stat value={m.outputs.filter((o) => o.csv).length} label="enriched files" />
+              : <Stat value={m.duplicates_merged?.toLocaleString()} label="duplicates merged" />}
           </div>
           {m.files?.length > 0 && (
             <ul className="space-y-1 text-xs">
@@ -130,13 +133,37 @@ function CsvSummary({ csv }) {
           )}
         </>
       )}
+      {m?.outputs?.length > 0 && (
+        <div>
+          <div className="mb-1.5 text-[11px] uppercase tracking-wider text-gray-500">Enriched files</div>
+          <ul className="space-y-1 text-xs">
+            {m.outputs.map((o) => (
+              <li key={o.file} className="flex items-center justify-between gap-3">
+                <span className="min-w-0 truncate text-gray-200" title={o.file}>{o.file}</span>
+                <span className="flex shrink-0 items-center gap-3 text-gray-400">
+                  {o.songs.toLocaleString()} songs
+                  {o.csv ? (
+                    <>
+                      <a href={toArtifactUrl(o.csv)} target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline hover:text-indigo-300">Download</a>
+                      <a href={`/map?csv=${encodeURIComponent(o.csv)}`} className="text-fuchsia-300 underline hover:text-fuchsia-200">Map</a>
+                    </>
+                  ) : <span className="text-gray-500">no songs</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="flex flex-wrap gap-3">
+        {c.zip && (
+          <a href={c.zip} className="text-indigo-400 underline hover:text-indigo-300">Download all as .zip</a>
+        )}
         {c.url && (
           <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline hover:text-indigo-300">
             Download the enriched CSV
           </a>
         )}
-        {c.library_csv && (
+        {c.library_csv && !m?.outputs && (
           <a href={`/map?csv=${encodeURIComponent(c.library_csv)}`} className="text-fuchsia-300 underline hover:text-fuchsia-200">
             Open it in the Music Map
           </a>

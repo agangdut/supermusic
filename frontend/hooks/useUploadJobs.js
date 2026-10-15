@@ -39,6 +39,7 @@ const midiResult = (result) => ({
 // The CSV result: download link, the server path the Music Map can open, and what was done
 const csvResult = (result) => ({
   url: toArtifactUrl(result?.artifacts?.csv),
+  zip: toArtifactUrl(result?.artifacts?.zip),
   library_csv: result?.library_csv || null,
   metrics: result?.metrics || null,
 });
@@ -126,7 +127,7 @@ export default function useUploadJobs() {
       } else if (j.job_type === "stem_separation") {
         setLatestStems(normalizeJobArtifacts({ result: { artifacts } }).result.artifacts);
         setLatestStemsJobId(j.id);
-      } else if (j.job_type === "csv_enrichment" && artifacts.csv) {
+      } else if (j.job_type === "csv_enrichment" && (artifacts.csv || artifacts.zip)) {
         setLatestCsv(csvResult(data.result));
       }
     }
@@ -364,7 +365,7 @@ export default function useUploadJobs() {
     }
   }, [audioFile, uploadFile, createJob, notify]);
 
-  const enrichCsv = useCallback(async ({ lookup = true, limit } = {}) => {
+  const enrichCsv = useCallback(async ({ lookup = true, limit, output = "combined" } = {}) => {
     if (!csvFiles.length) {
       notify("Please choose at least one file first.", "warn");
       return;
@@ -373,11 +374,11 @@ export default function useUploadJobs() {
     notify(`Uploading ${csvFiles.length} file${csvFiles.length > 1 ? "s" : ""}…`, "info");
     await createJob(
       "csv_enrichment",
-      () => enrichFiles(csvFiles, { lookup, limit }),
+      () => enrichFiles(csvFiles, { lookup, limit, output }),
       "CSV enrichment complete ✅",
       "CSV enrichment failed ❌",
       (result) => {
-        if (result?.artifacts?.csv) setLatestCsv(csvResult(result));
+        if (result?.artifacts?.csv || result?.artifacts?.zip) setLatestCsv(csvResult(result));
       }
     );
   }, [csvFiles, createJob, notify]);

@@ -17,6 +17,7 @@ export default function CsvCard({
   const [lookup, setLookup] = useState(true);
   const [limit, setLimit] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [output, setOutput] = useState("combined");
   const files = csvFiles || [];
 
   // Picking again adds to the list (an account export is many files); same name = same file
@@ -39,15 +40,17 @@ export default function CsvCard({
       footer={
         <>
           <div className="text-[11px] text-gray-400">
-            Output: one enriched .csv{files.length > 1 ? ` from ${files.length} files` : ""}
+            {output === "separate" && files.length > 1
+              ? `Output: ${files.length} enriched .csv files (+ a .zip)`
+              : `Output: one enriched .csv${files.length > 1 ? ` from ${files.length} files` : ""}`}
           </div>
 
           <PrimaryButton
-            onClick={() => enrichCsv({ lookup, limit: parseInt(limit, 10) || undefined })}
+            onClick={() => enrichCsv({ lookup, limit: parseInt(limit, 10) || undefined, output: files.length > 1 ? output : "combined" })}
             disabled={!files.length || busy}
             className={(!files.length || busy) ? "opacity-50 cursor-not-allowed" : ""}
           >
-            {files.length > 1 ? `Combine & enrich ${files.length} files` : "Enrich"}
+            {files.length < 2 ? "Enrich" : output === "separate" ? `Enrich ${files.length} files` : `Combine & enrich ${files.length} files`}
           </PrimaryButton>
         </>
       }
@@ -90,6 +93,23 @@ export default function CsvCard({
             <span>{files.length} file{files.length > 1 ? "s" : ""} · {fmtSize(total)}</span>
             <button onClick={() => setCsvFiles([])} className="hover:text-white">Clear</button>
           </div>
+        </div>
+      )}
+
+      {files.length > 1 && (
+        <div className="grid grid-cols-2 gap-2 text-xs" role="radiogroup" aria-label="Output">
+          {[
+            ["combined", "One combined file", "Duplicates merged, plays added up"],
+            ["separate", "One file per input", `${files.length} enriched files, plus a .zip`],
+          ].map(([id, label, hint]) => (
+            <button key={id} type="button" role="radio" aria-checked={output === id} onClick={() => setOutput(id)}
+              className={`rounded-lg border px-2.5 py-2 text-left transition-colors ${
+                output === id ? "border-purple-400/60 bg-purple-500/10 text-white" : "border-white/10 text-gray-400 hover:border-white/20"
+              }`}>
+              <div className="font-medium">{label}</div>
+              <div className="mt-0.5 text-[11px] text-gray-500">{hint}</div>
+            </button>
+          ))}
         </div>
       )}
 
