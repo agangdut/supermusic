@@ -157,3 +157,82 @@ def render_picture(m: Dict[str, Any], path: Path, width: int = 1200, height: int
     fig.savefig(path, dpi=dpi, facecolor=BACKGROUND)
     plt.close(fig)
 
+
+
+def render_card(meta: Dict[str, Any], picture: Path, path: Path, width: int = 1200, height: int = 630) -> None:
+    """A Wrapped-style card for chats and socials: the map on the right, the headline facts on the left.
+    1200x630 is the size link previews (Open Graph) expect."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Circle, FancyBboxPatch
+
+    s = meta.get("showcase") or {}
+    dpi = 100
+    fig = plt.figure(figsize=(width / dpi, height / dpi), dpi=dpi, facecolor=BACKGROUND)
+
+    # The map picture fills the right side, fading into the background on its left edge
+    ax_img = fig.add_axes([0.38, 0, 0.62, 1])
+    ax_img.axis("off")
+    if picture.is_file():
+        img = plt.imread(picture)[..., :3].astype(float)
+        if img.max() > 1:
+            img /= 255
+        h, w = img.shape[:2]
+        cw = min(w, int(h * (0.62 * width) / height))
+        x0 = (w - cw) // 2
+        img = img[:, x0:x0 + cw]
+        bg = np.array([5, 7, 15]) / 255
+        fade = np.clip(np.linspace(0, 1, img.shape[1]) / 0.35, 0, 1) ** 1.5
+        img = img * fade[None, :, None] + bg[None, None, :] * (1 - fade[None, :, None])
+        ax_img.imshow(img, aspect="auto")
+
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.axis("off")
+    ax.set_xlim(0, width)
+    ax.set_ylim(0, height)
+
+    ax.text(56, height - 64, "Super", color="#e5e7eb", fontsize=20, fontweight="bold", va="center")
+    ax.text(140, height - 64, "Music", color="#c084fc", fontsize=20, fontweight="bold", va="center")
+    title = str(meta.get("title") or "My music map")
+    if len(title) > 26:
+        title = title[:25] + "…"
+    ax.text(56, height - 150, title, color="white", fontsize=36, fontweight="bold", va="center")
+    by = meta.get("by")
+    ax.text(56, height - 200, f"by {by}" if by else "a SuperMusic map", color="#9ca3af", fontsize=17, va="center")
+
+    stats = [(s.get("songs") or meta.get("songs") or 0, "songs"), (s.get("artists") or 0, "artists"),
+             (s.get("clusters") or 0, "galaxies")]
+    for i, (v, label) in enumerate(stats):
+        x = 56 + i * 150
+        txt = f"{v / 1000:.1f}k" if v >= 10000 else f"{v:,}"
+        ax.text(x, height - 280, txt, color="white", fontsize=30, fontweight="bold", va="center")
+        ax.text(x, height - 318, label.upper(), color="#6b7280", fontsize=11, va="center")
+
+    y = height - 380
+    renderer = fig.canvas.get_renderer()
+    for g in (s.get("galaxies") or [])[:3]:
+        color = g.get("color") or "#a78bfa"
+        ax.add_patch(Circle((66, y), 7, color=color))
+        ax.add_patch(Circle((66, y), 14, color=color, alpha=0.18))
+        name = ax.text(88, y, g.get("name") or "", color="white", fontsize=17, fontweight="bold", va="center")
+        right = ax.transData.inverted().transform((name.get_window_extent(renderer=renderer).x1, 0))[0]
+        ax.text(right + 12, y, (g.get("label") or "").split(" · ")[0], color="#9ca3af", fontsize=14, va="center")
+        y -= 44
+
+    line = None
+    if s.get("best_link"):
+        b = s["best_link"]
+        line = f"Hidden link: {b['a']} ↔ {b['b']}"
+    elif s.get("most_played"):
+        line = f"Most played: {s['most_played']['title']}"
+    if line:
+        if len(line) > 52:
+            line = line[:51] + "…"
+        ax.add_patch(FancyBboxPatch((50, 40), 470, 46, boxstyle="round,pad=0,rounding_size=12",
+                                    facecolor="#f0abfc", alpha=0.10, edgecolor="#f0abfc", linewidth=0.8))
+        ax.text(66, 63, line, color="#f5d0fe", fontsize=13, va="center")
+
+    fig.savefig(path, dpi=dpi, facecolor=BACKGROUND)
+    plt.close(fig)

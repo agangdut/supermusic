@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from app.core import community, map_share
+from app.core import community, map_share, social
+from app.middleware.auth import current_username
 from app.routes.community import client_ip, listener
 from app.core.music_map import MapOptions, build_map, similar_tracks, estimate_build_seconds
 
@@ -282,6 +283,7 @@ async def import_library(
     limit: int = Form(1500, ge=1, le=50_000),
     listen_limit: Optional[int] = Form(None, ge=1, le=50_000, description="Listen to at most this many previews (most-played songs first). Defaults to `limit`."),
     voter: Optional[str] = Depends(listener),
+    me: Optional[str] = Depends(current_username),
 ) -> dict:
     parsed, detected = [], []
     for f in files:
@@ -337,6 +339,8 @@ async def import_library(
                 result["meta"]["matched_online"] = found
             job.result = result
             job.status = "done"
+            if me:  # the newest import is the account's own map (for Compare and the digest)
+                social.set_library(me, str(csv_path), result["meta"]["source"])
         except Exception as e:
             job.error = str(e)
             job.status = "error"
@@ -464,28 +468,35 @@ def _library_roots() -> List[Path]:
 
 
 @router.post("/share")
-async def share_map(req: ShareRequest) -> dict:
-    """Save a snapshot of a map under a short link. Returns the id and a secret delete token."""
+async def share_map(req: ShareRequest, me: Optional[str] = Depends(current_username)) -> dict:
+    """Save a snapshot of a map under a short link. Returns the id and a secret delete token.
+    Signed in, the map also goes on your profile (and your followers' feeds when listed)."""
     tracks = req.map.get("tracks")
     if isinstance(tracks, list) and len(tracks) > MAX_TRACKS:
         raise HTTPException(status_code=400, detail=f"Maps are limited to {MAX_TRACKS:,} tracks.")
     result = dict(req.map)
     result["meta"] = {**(result.get("meta") or {}),
                       "weights": {k: max(0.0, min(2.0, float(v))) for k, v in req.weights.items()}}
+    by = (req.by or "").strip() or None
+    if me and not by:
+        by = social.display_names([me]).get(me, me)
     try:
-        return await run_in_threadpool(
-            map_share.create, result, title=req.title.strip(), by=(req.by or "").strip() or None,
-            listed=req.listed, include_listening=req.include_listening, library=_shareable_library(req))
+        made = await run_in_threadpool(
+            map_share.create, result, title=req.title.strip(), by=by,
+            listed=req.listed, include_listening=req.include_listening, library=_shareable_library(req), owner=me)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    if me and req.listed:
+        social.log(me, "shared_map", None, {"id": made["id"], "title": made["title"], "songs": made.get("songs")})
+    return made
 
 
 @router.get("/shared")
 async def shared_maps(limit: int = 50, sort: str = "top", voter: Optional[str] = Depends(listener)) -> dict:
     """Maps people chose to list publicly, with a picture, showcase stats and upvotes.
-    sort=top (most upvoted first) or sort=new."""
+    sort=top (most upvoted first), sort=week (most upvoted this week) or sort=new."""
     return {"maps": await run_in_threadpool(map_share.list_public, max(1, min(limit, 200)),
-                                            "new" if sort == "new" else "top", voter)}
+                                            sort if sort in ("new", "week") else "top", voter)}
 
 
 @router.get("/shared/{share_id}")
@@ -508,6 +519,17 @@ async def shared_map_picture(share_id: str):
     return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
+@router.get("/shared/{share_id}/card.png")
+async def shared_map_card(share_id: str):
+    """A 1200x630 share card (the map and its headline facts), for chats, socials and link previews."""
+    from fastapi.responses import FileResponse
+
+    path = await run_in_threadpool(map_share.card_path, share_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="No card for this map.")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
 class MapVoteRequest(BaseModel):
     up: bool = Field(True, description="true to upvote, false to take the upvote back")
 
@@ -519,7 +541,13 @@ async def vote_shared_map(share_id: str, req: MapVoteRequest, request: Request,
     if not voter:
         raise HTTPException(status_code=400, detail="Send an X-Listener-Id header or sign in to upvote.")
     try:
-        return await run_in_threadpool(map_share.vote, share_id, voter, community.ip_hash(client_ip(request)), req.up)
+        result = await run_in_threadpool(map_share.vote, share_id, voter, community.ip_hash(client_ip(request)), req.up)
+        owner = map_share.owner_of(share_id)
+        if req.up and owner and voter != f"user:{owner}":
+            meta = map_share.read_meta(share_id) or {}
+            social.log(voter[5:] if voter.startswith("user:") else "", "upvoted", owner,
+                       {"id": share_id, "title": meta.get("title")})
+        return result
     except LookupError:
         raise HTTPException(status_code=404, detail="This shared map doesn't exist, or its owner stopped sharing it.")
     except map_share.VoteError as e:
@@ -527,16 +555,82 @@ async def vote_shared_map(share_id: str, req: MapVoteRequest, request: Request,
 
 
 class UnshareRequest(BaseModel):
-    delete_token: str = Field(..., min_length=8, max_length=100)
+    delete_token: Optional[str] = Field(None, max_length=100)
 
 
 @router.post("/shared/{share_id}/delete")
-def unshare(share_id: str, req: UnshareRequest) -> dict:
+def unshare(share_id: str, req: UnshareRequest, me: Optional[str] = Depends(current_username)) -> dict:
     if not map_share.read_meta(share_id):
         raise HTTPException(status_code=404, detail="This shared map is already gone.")
-    if not map_share.delete(share_id, req.delete_token):
-        raise HTTPException(status_code=403, detail="Only the browser that shared this map can stop sharing it.")
+    if not map_share.delete(share_id, req.delete_token or "", owner=me):
+        raise HTTPException(status_code=403, detail="Only the person (or browser) that shared this map can stop sharing it.")
     return {"deleted": share_id}
+
+
+class ListedRequest(BaseModel):
+    listed: bool
+
+
+@router.post("/shared/{share_id}/listed")
+def set_listed(share_id: str, req: ListedRequest, me: Optional[str] = Depends(current_username)) -> dict:
+    """Show or hide one of your maps on the public list (signed in, your own maps only)."""
+    if not me or not map_share.set_listed(share_id, me, req.listed):
+        raise HTTPException(status_code=403, detail="Only the person who shared this map can change that.")
+    return {"id": share_id, "listed": req.listed}
+
+
+# ---------------------------------------------------------------------------
+# Compare two maps (a blend)
+# ---------------------------------------------------------------------------
+
+class BlendSource(BaseModel):
+    csv_path: Optional[str] = None
+    sample: bool = False
+    share_id: Optional[str] = None
+
+
+class BlendRequest(BaseModel):
+    mine: BlendSource = Field(..., description="Your library: csv_path from an import, a share, or the sample.")
+    theirs: BlendSource = Field(..., description="Theirs: usually a share_id from an invite link.")
+    weights: Dict[str, float] = Field(default_factory=dict)
+
+
+@router.post("/blend")
+async def blend_maps(req: BlendRequest, me: Optional[str] = Depends(current_username)) -> dict:
+    """Both libraries drawn as one map. Each song says whose it is: "you", "them" or "both"."""
+    from app.core import blend
+
+    a = pd.read_csv(_library(req.mine))
+    b = pd.read_csv(_library(req.theirs))
+    try:
+        result = await run_in_threadpool(blend.blend, a, b, {k: max(0.0, min(2.0, float(v))) for k, v in req.weights.items()})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if req.theirs.share_id:
+        meta = map_share.read_meta(req.theirs.share_id) or {}
+        result["blend"]["theirs"] = {"id": meta.get("id"), "title": meta.get("title"), "by": meta.get("by"),
+                                     "owner": meta.get("owner")}
+        owner = meta.get("owner")
+        if owner and owner != me:
+            social.log(me or "", "compared", owner, {"id": meta.get("id"), "title": meta.get("title"),
+                                                     "match": result["blend"]["match"]})
+    return result
+
+
+class RadioPlayed(BaseModel):
+    station: str = Field(..., min_length=1, max_length=200)
+    label: str = Field(..., min_length=1, max_length=120)
+    share_id: Optional[str] = None
+
+
+@router.post("/radio/played")
+async def radio_played(req: RadioPlayed, voter: Optional[str] = Depends(listener)) -> dict:
+    """Count a station start for the weekly radio charts."""
+    from app.core import games
+
+    if voter:
+        games.radio_played(req.station, req.label, req.share_id if req.share_id and map_share.read_meta(req.share_id) else None, voter)
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
