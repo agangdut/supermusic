@@ -197,3 +197,16 @@ def test_clusters_describe_their_contents():
     assert c["top_tracks"] and c["top_artists"]
     names = [c["label"].split(" · ")[0] for c in r["clusters"]]
     assert len(names) == len(set(names))
+
+
+def test_clusters_are_named_after_galaxies():
+    from app.core.music_map import GALAXIES
+
+    r = client.post("/map/build", json={"sample": True}).json()
+    names = [c["name"] for c in r["clusters"]]
+    assert len(set(names)) == len(names) and set(names) <= {g for g, _ in GALAXIES}
+    # the bigger the cluster, the bigger its galaxy
+    by_size = sorted(r["clusters"], key=lambda c: (-c["size"], c["id"]))
+    assert [c["galaxy_ly"] for c in by_size] == sorted((c["galaxy_ly"] for c in by_size), reverse=True)
+    assert by_size[0]["name"] == "IC 1101" and by_size[-1]["name"] == "Segue 1"
+    assert len(GALAXIES) >= 40 and [ly for _, ly in GALAXIES] == sorted((ly for _, ly in GALAXIES), reverse=True)

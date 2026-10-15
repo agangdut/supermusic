@@ -257,7 +257,7 @@ export default function RadioPanel({ data, byId, selectedId, clusterFocus, reque
       {kind === "cluster" && (
         <select value={clusterId ?? ""} onChange={(e) => setClusterId(Number(e.target.value))}
           className="w-full rounded-lg border border-white/10 bg-[#0b1121] px-2 py-1.5 text-xs text-white">
-          {(data?.clusters || []).map((c) => <option key={c.id} value={c.id}>{c.label} ({c.size})</option>)}
+          {(data?.clusters || []).map((c) => <option key={c.id} value={c.id}>{c.name ? `${c.name}: ${c.label.split(" · ")[0]}` : c.label} ({c.size})</option>)}
         </select>
       )}
 

@@ -57,6 +57,23 @@ ALIASES: Dict[str, Sequence[str]] = {
     "played_with": ("played_with",),
 }
 
+# Cluster names: real galaxies, biggest first, with their rough diameter in light-years
+# (published sizes vary a lot; the order is what matters). The biggest cluster gets the
+# biggest galaxy and the smallest the smallest; 40 covers the most clusters a map can have.
+GALAXIES = (
+    ("IC 1101", 4_000_000), ("NGC 262", 1_300_000), ("Malin 1", 650_000), ("Comet", 600_000),
+    ("Condor", 520_000), ("Tadpole", 280_000), ("Messier 87", 240_000), ("Andromeda", 220_000),
+    ("Pinwheel", 170_000), ("Cartwheel", 150_000), ("Messier 106", 135_000), ("Needle", 120_000),
+    ("Hoag's Object", 120_000), ("NGC 1300", 110_000), ("Milky Way", 100_000), ("Sunflower", 98_000),
+    ("Phantom", 95_000), ("Bode's", 90_000), ("Sculptor", 90_000), ("Coma Pinwheel", 85_000),
+    ("Whirlpool", 76_000), ("Centaurus A", 60_000), ("Triangulum", 60_000), ("Southern Pinwheel", 55_000),
+    ("Black Eye", 54_000), ("Sombrero", 50_000), ("Fireworks", 40_000), ("Cigar", 37_000),
+    ("Large Magellanic Cloud", 32_000), ("Small Magellanic Cloud", 19_000), ("Sagittarius Dwarf", 10_000),
+    ("Sextans Dwarf", 8_000), ("Fornax Dwarf", 6_000), ("Draco Dwarf", 3_000), ("Sculptor Dwarf", 3_000),
+    ("Leo I", 2_000), ("Carina Dwarf", 1_500), ("Ursa Minor Dwarf", 1_000), ("Boötes I", 700), ("Segue 1", 200),
+)
+
+
 # Audio descriptors we use as-is when present (Spotify-style, 0..1 mostly)
 AUDIO_FEATURES = (
     "energy", "danceability", "valence", "acousticness", "instrumentalness",
@@ -1091,6 +1108,14 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
         if firsts[parts[0]] > 1 and c.get("top_artists"):
             parts[0] = f"{parts[0]}: {c['top_artists'][0]['name']}"
             c["label"] = " · ".join(parts)
+
+    # A galaxy name for each cluster: the more songs, the bigger the galaxy. Picks are spread
+    # over the whole list, so a map with 8 clusters runs from IC 1101 down to Segue 1.
+    by_size = sorted(clusters, key=lambda c: (-c["size"], c["id"]))
+    k = len(by_size)
+    for i, c in enumerate(by_size):
+        g = round(i * (len(GALAXIES) - 1) / (k - 1)) if k > 1 else 0
+        c["name"], c["galaxy_ly"] = GALAXIES[min(g, len(GALAXIES) - 1)]
 
     if eng is not None and total_eng > 0:
         max_lift = max(c["lift"] for c in clusters) or 1

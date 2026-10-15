@@ -1,6 +1,6 @@
 // "Your library in numbers": the map's library-wide statistics (backend: app/core/map_stats.py).
 import { useState } from "react";
-import { colorFor } from "./colors";
+import { clusterName, colorFor } from "./colors";
 
 const pct = (v) => (v == null ? "–" : `${v < 0.01 && v > 0 ? "<1" : Math.round(v * 100)}%`);
 const LIB = "#64748b"; // library share
@@ -113,7 +113,7 @@ function KeyGrid({ keys, listening }) {
 function Timeline({ timeline, clusters }) {
   const periods = timeline.periods;
   const top = Math.max(...periods.map((p) => p.new_songs), 1);
-  const names = Object.fromEntries(clusters.map((c) => [String(c.id), c.label.split(" · ")[0]]));
+  const names = Object.fromEntries(clusters.map((c) => [String(c.id), clusterName(c)]));
   return (
     <div>
       <div className="flex h-32 items-end gap-0.5">

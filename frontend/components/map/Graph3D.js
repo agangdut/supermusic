@@ -222,7 +222,7 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
       const cx = members.reduce((a, t) => a + t.x, 0) / members.length;
       const cy = members.reduce((m, t) => Math.max(m, t.y), -Infinity) + 6;
       const cz = members.reduce((a, t) => a + t.z, 0) / members.length;
-      const name = c.label.split(" · ").slice(0, 2).join(" · ");
+      const name = c.name ? `${c.name} · ${c.label.split(" · ")[0]}` : c.label.split(" · ").slice(0, 2).join(" · ");
       const sprite = textSprite(name, colorFor(c.id));
       sprite.position.set(cx, cy, cz);
       labelSprites.current.set(c.id, sprite);
