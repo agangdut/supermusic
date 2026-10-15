@@ -13,6 +13,27 @@ const KINDS = [
 
 const songLine = (t) => [t.title, t.artist].filter(Boolean).join(" · ");
 
+// Full song on Spotify or YouTube: the library's own link when it has one, otherwise a search.
+// Opening one pauses the preview so the two don't play over each other.
+function FullSongLinks({ t, onOpen, big = false }) {
+  const q = encodeURIComponent([t.artist, t.title].filter(Boolean).join(" "));
+  const links = [
+    ["Spotify", t.spotify_url || `https://open.spotify.com/search/${q}`, "hover:border-emerald-400/50 hover:text-emerald-300"],
+    ["YouTube", t.youtube_url || `https://www.youtube.com/results?search_query=${q}`, "hover:border-rose-400/50 hover:text-rose-300"],
+  ];
+  return (
+    <span className="flex shrink-0 gap-1">
+      {links.map(([label, href, hover]) => (
+        <a key={label} href={href} target="_blank" rel="noopener noreferrer" onClick={onOpen}
+          title={`Play the whole song on ${label}`}
+          className={`rounded-md border border-white/10 text-gray-400 transition ${hover} ${big ? "px-2 py-0.5 text-[11px]" : "px-1.5 py-0.5 text-[10px]"}`}>
+          {label}
+        </a>
+      ))}
+    </span>
+  );
+}
+
 // Type to find a song; big libraries are too long for a dropdown
 function SongPicker({ tracks, value, onChange, placeholder }) {
   const [text, setText] = useState("");
@@ -256,6 +277,15 @@ export default function RadioPanel({ data, byId, selectedId, clusterFocus, reque
       {station && (
         <div className="rounded-xl border border-fuchsia-400/15 bg-fuchsia-400/[0.03] p-3">
           <div className="truncate text-sm font-medium text-white">{station.name}</div>
+          {byId[currentId] && (
+            <div className="mt-2 flex items-center gap-2 rounded-lg bg-white/[0.04] px-2 py-1.5">
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] uppercase tracking-wider text-gray-500">{playing ? "Now playing (preview)" : "Paused"}</div>
+                <div className="truncate text-xs text-white">{songLine(byId[currentId])}</div>
+              </div>
+              <FullSongLinks t={byId[currentId]} onOpen={() => setPlaying(false)} big />
+            </div>
+          )}
           <div className="mt-2 flex items-center gap-2">
             <button onClick={prev} className={btn} aria-label="Previous">⏮</button>
             <button onClick={() => setPlaying((p) => !p)} className={`${btn} min-w-[64px]`}>{playing ? "❚❚ Pause" : "▶ Play"}</button>
@@ -270,14 +300,15 @@ export default function RadioPanel({ data, byId, selectedId, clusterFocus, reque
             {songs.map((t, i) => {
               const pv = previews[t.id];
               return (
-                <li key={t.id}>
+                <li key={t.id} className={`flex items-center gap-1 rounded-md pr-1 ${i === pos ? "bg-white/10" : "hover:bg-white/5"}`}>
                   <button onClick={() => { setPos(i); setPlaying(true); }}
-                    className={`flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left ${i === pos ? "bg-white/10" : "hover:bg-white/5"}`}>
+                    className="flex min-w-0 flex-1 items-center gap-2 px-1.5 py-1 text-left">
                     <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-gray-500">{i === pos && playing ? "♪" : i + 1}</span>
                     <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: colorFor(t.cluster) }} />
                     <span className="min-w-0 flex-1 truncate text-xs text-gray-200">{songLine(t)}</span>
                     {pv && !pv.preview && !pv.error && <span className="shrink-0 text-[10px] text-gray-600">no preview</span>}
                   </button>
+                  <FullSongLinks t={t} onOpen={() => setPlaying(false)} />
                 </li>
               );
             })}

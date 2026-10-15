@@ -82,7 +82,7 @@ The **Radio** tab turns the map into a station. Songs that sound alike sit close
 - **Through a cluster** wanders around one cluster, starting near a well-loved song in its middle.
 - **From A to B** is a DJ-style path: it heads a little further towards the second song with every track, so the music changes gradually from one to the other.
 
-It plays each song's **30-second preview** from Deezer, which needs no account or key (the backend looks the song up, because Deezer's API can't be called from a browser directly). Songs Deezer has no preview for are skipped. Full songs can't be played inside SuperMusic: Spotify only lets other sites play full tracks for Premium listeners through its own player, and Apple Music needs a paid developer account.
+It plays each song's **30-second preview** from Deezer, which needs no account or key (the backend looks the song up, because Deezer's API can't be called from a browser directly). Songs Deezer has no preview for are skipped. Every song in the station, and the one playing now, has **Spotify** and **YouTube** buttons that open the whole song there (the library's own link when it has one, otherwise a search); opening one pauses the preview. Full songs can't be played inside SuperMusic: Spotify only lets other sites play full tracks for Premium listeners through its own player, and Apple Music needs a paid developer account.
 
 **Take it with you.** Under a station:
 
