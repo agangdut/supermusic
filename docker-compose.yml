@@ -80,6 +80,8 @@ services:
     environment:
       - NEXT_PUBLIC_API_BASE=http://localhost:8000
       - NEXT_PUBLIC_ARTIFACT_BASE=http://localhost:8000/artifacts
+      # Share links (/s/<id>) are filled in on the server, which reaches the API by its compose name
+      - API_INTERNAL_BASE=http://backend:8000
     depends_on:
       - backend
     restart: unless-stopped

@@ -98,7 +98,8 @@ def _clean_library(df: pd.DataFrame, include_listening: bool) -> pd.DataFrame:
 
 
 def create(result: Dict[str, Any], *, title: str, by: Optional[str], listed: bool,
-           include_listening: bool, library: Optional[Path]) -> Dict[str, Any]:
+           include_listening: bool, library: Optional[Path], owner: Optional[str] = None) -> Dict[str, Any]:
+    """`owner`: the signed-in account sharing it, so the map shows on their profile."""
     cleaned = clean_map(result, include_listening)
     share_id = secrets.token_urlsafe(6)  # 8 characters, ~280 trillion possibilities
     token = secrets.token_urlsafe(18)
@@ -118,11 +119,12 @@ def create(result: Dict[str, Any], *, title: str, by: Optional[str], listed: boo
             "title": title,
             "by": by or None,
             "listed": listed,
-            "created": int(time.time()),
+            "created": time.time(),  # sub-second, so shares made in the same second still sort newest first
             "songs": len(cleaned["tracks"]),
             "clusters": [c.get("label") for c in clusters[:4] if c.get("label")],
             "listening": include_listening,
             "has_library": has_library,
+            "owner": owner,
             "token_sha256": _hash(token),
         }
         _add_extras(folder, meta, cleaned)
@@ -158,6 +160,21 @@ def _ensure_extras(folder: Path, meta: Dict[str, Any]) -> Dict[str, Any]:
     return meta
 
 
+def card_path(share_id: str) -> Optional[Path]:
+    """The share card (map picture + headline facts, 1200x630), drawn the first time it's asked for."""
+    f = _folder(share_id)
+    if not f:
+        return None
+    meta = _ensure_extras(f, json.loads((f / "meta.json").read_text()))
+    p = f / "card.png"
+    if not p.is_file():
+        try:
+            map_showcase.render_card(meta, f / "picture.png", p)
+        except Exception:
+            return None
+    return p
+
+
 def picture_path(share_id: str) -> Optional[Path]:
     f = _folder(share_id)
     if not f:
@@ -176,14 +193,14 @@ class VoteError(ValueError):
     pass
 
 
-def votes(share_ids: List[str], voter: Optional[str]) -> Dict[str, Dict[str, Any]]:
-    """{share_id: {"votes": n, "voted": bool}}."""
+def votes(share_ids: List[str], voter: Optional[str], since: float = 0) -> Dict[str, Dict[str, Any]]:
+    """{share_id: {"votes": n, "voted": bool}}. `since`: count only upvotes after this time."""
     if not share_ids:
         return {}
     c = store.connect()
     marks = ",".join("?" * len(share_ids))
-    counts = dict(c.execute(f"SELECT share_id, COUNT(*) FROM map_votes WHERE share_id IN ({marks}) GROUP BY share_id",
-                            share_ids).fetchall())
+    counts = dict(c.execute(f"SELECT share_id, COUNT(*) FROM map_votes WHERE share_id IN ({marks}) "
+                            f"AND created_at >= ? GROUP BY share_id", [*share_ids, since]).fetchall())
     mine = set()
     if voter:
         mine = {r[0] for r in c.execute(f"SELECT share_id FROM map_votes WHERE voter = ? AND share_id IN ({marks})",
@@ -233,7 +250,8 @@ def library_path(share_id: str) -> Optional[Path]:
 
 
 def list_public(limit: int = 50, sort: str = "new", voter: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Listed maps with their upvotes. sort: "new" (newest first) or "top" (most upvoted)."""
+    """Listed maps with their upvotes. sort: "new" (newest first), "top" (most upvoted) or
+    "week" (most upvoted in the last 7 days, as `week_votes`)."""
     metas = []
     for meta_file in share_dir().glob("*/meta.json"):
         try:
@@ -245,21 +263,105 @@ def list_public(limit: int = 50, sort: str = "new", voter: Optional[str] = None)
     v = votes([m["id"] for m in metas], voter)
     for m in metas:
         m.update(v.get(m["id"], {"votes": 0, "voted": False}))
-    if sort == "top":
+    if sort == "week":
+        week = votes([m["id"] for m in metas], None, since=time.time() - 7 * 86400)
+        for m in metas:
+            m["week_votes"] = week.get(m["id"], {}).get("votes", 0)
+        metas.sort(key=lambda m: (-m["week_votes"], -m["votes"], -m.get("created", 0)))
+    elif sort == "top":
         metas.sort(key=lambda m: (-m["votes"], -m.get("created", 0)))
     else:
         metas.sort(key=lambda m: -m.get("created", 0))
     return metas[:limit]
 
 
-def delete(share_id: str, token: str) -> bool:
-    """True when the token matched and the share is gone."""
+def delete(share_id: str, token: str, owner: Optional[str] = None) -> bool:
+    """True when the token matched (or `owner` owns it) and the share is gone."""
     f = _folder(share_id)
     if not f:
         return False
     meta = json.loads((f / "meta.json").read_text())
-    if not secrets.compare_digest(meta.get("token_sha256", ""), _hash(token or "")):
+    owns = bool(owner) and meta.get("owner") == owner
+    if not owns and not secrets.compare_digest(meta.get("token_sha256", ""), _hash(token or "")):
         return False
     shutil.rmtree(f, ignore_errors=True)
     store.connect().execute("DELETE FROM map_votes WHERE share_id = ?", (share_id,))
     return True
+
+
+# ---- owners (accounts) ------------------------------------------------------------------
+
+def _all_metas() -> List[Dict[str, Any]]:
+    out = []
+    for meta_file in share_dir().glob("*/meta.json"):
+        try:
+            out.append(json.loads(meta_file.read_text()))
+        except Exception:
+            continue
+    return out
+
+
+def by_owner(username: str, include_unlisted: bool = False, voter: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Maps an account shared, newest first, with their upvotes."""
+    metas = []
+    for meta in _all_metas():
+        if meta.get("owner") != username or not (meta.get("listed") or include_unlisted):
+            continue
+        try:
+            metas.append(public_meta(_ensure_extras(share_dir() / meta["id"], meta)))
+        except Exception:
+            metas.append(public_meta(meta))
+    v = votes([m["id"] for m in metas], voter)
+    for m in metas:
+        m.update(v.get(m["id"], {"votes": 0, "voted": False}))
+    metas.sort(key=lambda m: -m.get("created", 0))
+    return metas
+
+
+def upvotes_by_owner() -> Dict[str, int]:
+    """{username: upvotes on all their shared maps}."""
+    owner_of = {m["id"]: m.get("owner") for m in _all_metas() if m.get("owner")}
+    out: Dict[str, int] = {}
+    for sid, n in store.connect().execute("SELECT share_id, COUNT(*) FROM map_votes GROUP BY share_id"):
+        o = owner_of.get(sid)
+        if o:
+            out[o] = out.get(o, 0) + int(n)
+    return out
+
+
+def owner_of(share_id: str) -> Optional[str]:
+    meta = read_meta(share_id)
+    return meta.get("owner") if meta else None
+
+
+def claim(username: str, shares: List[Dict[str, str]]) -> List[str]:
+    """Attach maps shared from this browser before signing in (proved by their delete tokens)."""
+    claimed = []
+    for s in shares:
+        f = _folder(str(s.get("id") or ""))
+        if not f:
+            continue
+        meta = json.loads((f / "meta.json").read_text())
+        if meta.get("owner"):
+            continue
+        if secrets.compare_digest(meta.get("token_sha256", ""), _hash(str(s.get("delete_token") or ""))):
+            meta["owner"] = username
+            (f / "meta.json").write_text(json.dumps(meta))
+            claimed.append(meta["id"])
+    return claimed
+
+
+def set_listed(share_id: str, owner: str, listed: bool) -> bool:
+    f = _folder(share_id)
+    if not f:
+        return False
+    meta = json.loads((f / "meta.json").read_text())
+    if meta.get("owner") != owner:
+        return False
+    meta["listed"] = listed
+    (f / "meta.json").write_text(json.dumps(meta))
+    return True
+
+
+def all_listed() -> List[Dict[str, Any]]:
+    return [m for m in _all_metas() if m.get("listed")]

@@ -20,6 +20,8 @@ from app.routes import batch as batch_routes
 from app.routes import export as export_routes
 from app.routes import map as map_routes
 from app.routes import community as community_routes
+from app.routes import people as people_routes
+from app.routes import community_atlas as atlas_routes
 from app.core.piano_transcription import warm_up as piano_warm_up
 from app.middleware.rate_limit import limiter, RATE_LIMITS
 from slowapi.errors import RateLimitExceeded
@@ -117,6 +119,12 @@ app.include_router(map_routes.router)
 
 # Shared song stats (listener corrections)
 app.include_router(community_routes.router)
+
+# Profiles, follows, feed, digest, leaderboards
+app.include_router(people_routes.router)
+
+# Community atlas, artists' tracks, games
+app.include_router(atlas_routes.router)
 
 
 @app.on_event("startup")

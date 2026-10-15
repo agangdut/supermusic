@@ -55,7 +55,7 @@ export default function PeoplePanel({ source, onSongTitle }) {
           {matches?.map((m) => (
             <div key={m.share_id} className="rounded-xl border border-white/5 p-3">
               <div className="flex items-baseline justify-between gap-2">
-                <a href={`/map?share=${m.share_id}`} className="min-w-0 truncate text-sm font-medium text-white hover:underline">
+                <a href={`/?share=${m.share_id}`} className="min-w-0 truncate text-sm font-medium text-white hover:underline">
                   {m.title}{m.by ? <span className="text-gray-500"> by {m.by}</span> : null}
                 </a>
                 <span className="shrink-0 text-sm font-semibold text-emerald-300">{m.match}%</span>

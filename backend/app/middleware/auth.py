@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Optional
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -13,9 +14,12 @@ ALGORITHM = "HS256"
 security = HTTPBearer(auto_error=False)
 
 
+TOKEN_DAYS = 30
+
+
 def create_access_token(data: dict) -> str:
-    """Create JWT access token."""
-    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
+    """Create JWT access token (valid for TOKEN_DAYS days)."""
+    return jwt.encode({**data, "exp": int(time.time()) + TOKEN_DAYS * 86400}, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def verify_token(credentials: Optional[HTTPAuthorizationCredentials] = Security(security)) -> Optional[dict]:
@@ -37,3 +41,17 @@ def require_auth(credentials: Optional[HTTPAuthorizationCredentials] = Security(
         raise HTTPException(status_code=401, detail="Authentication required")
     return payload
 
+
+
+def current_username(credentials: Optional[HTTPAuthorizationCredentials] = Security(security)) -> Optional[str]:
+    """The signed-in account's username, or None."""
+    payload = verify_token(credentials)
+    return payload.get("sub") if payload else None
+
+
+def require_username(credentials: Optional[HTTPAuthorizationCredentials] = Security(security)) -> str:
+    """The signed-in account's username; 401 when signed out."""
+    name = current_username(credentials)
+    if not name:
+        raise HTTPException(status_code=401, detail="Sign in first.")
+    return name

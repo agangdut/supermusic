@@ -45,13 +45,44 @@ async def vote(req: VoteRequest, request: Request, voter: Optional[str] = Depend
     """Correct one stat of one song. It changes your map now, and everyone's once another listener agrees."""
     if not voter:
         raise HTTPException(status_code=400, detail="Send an X-Listener-Id header or sign in to edit songs.")
+    before = await run_in_threadpool(_agreed, req.artist, req.title, req.field)
     try:
         saved = await run_in_threadpool(community.vote, req.artist, req.title, req.field, req.value,
                                         voter, community.ip_hash(client_ip(request)))
     except community.VoteError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    after = await run_in_threadpool(_agreed, req.artist, req.title, req.field)
+    if after is not None and after != before:
+        _tell_agreeing(req.artist, req.title, req.field, after)
     view = await run_in_threadpool(community.song_view, req.artist, req.title, voter)
     return {"saved": saved, **view}
+
+
+def _agreed(artist: str, title: str, field: str) -> Any:
+    from app.core import store
+    from app.core.library_import import song_key
+
+    rows = store.connect().execute(
+        "SELECT song_key, field, voter, ip_hash, value, created_at FROM song_votes WHERE song_key = ? AND field = ?",
+        (song_key(artist, title), field)).fetchall()
+    a = community.agree(field, community._one_per_listener(rows).get((song_key(artist, title), field), []))
+    return a["value"] if a else None
+
+
+def _tell_agreeing(artist: str, title: str, field: str, value: Any) -> None:
+    """A fix just reached everyone's maps: tell each signed-in listener who suggested it (for their feed)."""
+    import json
+
+    from app.core import social, store
+    from app.core.library_import import song_key
+
+    rows = store.connect().execute(
+        "SELECT voter, value FROM song_votes WHERE song_key = ? AND field = ? AND voter LIKE 'user:%'",
+        (song_key(artist, title), field)).fetchall()
+    for r in rows:
+        if social._matches(field, json.loads(r["value"]), value):
+            social.log("", "fix_agreed", r["voter"][5:], {"title": title, "artist": artist, "field": field,
+                                                          "label": community.LABELS.get(field, field), "value": value})
 
 
 @router.get("/activity")

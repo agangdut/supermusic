@@ -80,6 +80,19 @@ The **People** tab has two parts.
 - **Listeners like you.** Your library compared with every map shared publicly (*List it on Shared maps*), closest first. Closeness is measured on artists, not exact songs, since two people who love an artist rarely saved the very same tracks: each library becomes "what share of my listening is each artist" (plays when the file has them, otherwise one per song), and the match is how much those two lists overlap (cosine similarity: 100% means the same artists in the same proportions). Each match shows the artists you both play, opens the other map, and lists up to five of their songs you don't have, songs by artists you already play first. Code: `backend/app/core/taste_match.py`.
 - **Latest song fixes.** The newest edits from everyone, and how many listeners have fixed how many songs. Click a song to fly to it if it's on your map.
 
+## The platform
+
+The map is the home page (`/`; old `/map` links still work). Around it:
+
+- **Accounts and profiles** (`/login`, `/u/<name>`): a display name, bio, your shared maps, followers, reputation and recent activity. Maps you shared before signing in move onto your account when you sign in.
+- **Share card**: every shared map gets a 1200×630 picture (`/map/shared/<id>/card.png`) and its own page, `/s/<id>`, whose link previews show the card on social apps.
+- **Compare**: `/?compare=<share id>` puts your map and theirs in one galaxy. Stars are coloured blue (only you), pink (only them) or gold (both), with a taste-match score and picks for each of you. Play counts are never shown.
+- **Follow and feed** (`/feed`): what people you follow shared, plus upvotes, follows and agreed song fixes on your own maps. The **weekly digest** sits on top: songs to rediscover, new listeners close to you and what changed. It isn't emailed yet (that needs a mail server).
+- **Community atlas** (`/atlas`): every publicly listed map merged into one universe; brighter stars are in more libraries. Light up your own songs and pin short notes to any song.
+- **Artists** (`/artists`): upload a track to see which galaxy it lands in, its neighbours and the listeners whose maps are full of music like it. The audio is analysed and then deleted.
+- **Reputation**: points for song fixes others agree with (10), being first to suggest a fix (5) and upvotes on your maps (2). Levels go Listener, Tuner, Curator, Cartographer, Astronomer.
+- **Games and charts** (`/play`, Explore → Charts): a ten-question galaxy quiz scored on the server, top maps of the week, top contributors and the most started radio stations.
+
 ## Map Radio
 
 The **Radio** tab turns the map into a station. Songs that sound alike sit close together, so a station walks from star to star: each next song is one of the four closest unplayed ones (usually the closest), the same artist never plays twice in a row, and one artist gets at most one song in eight. **New mix** walks the same place again with different picks.

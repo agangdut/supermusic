@@ -11,6 +11,12 @@ Tables:
   song_facts  what an online lookup found for a song (BPM, key, energy, ...)
   song_votes  what listeners said a song's stats are (one row per listener per stat)
   map_votes   upvotes on shared Music Maps (one row per listener per map)
+  follows     who follows whom (usernames)
+  events      what people did, for the feed (shared a map, a fix was agreed, ...)
+  atlas_pins  notes people pinned on songs in the community atlas
+  artist_tracks  songs artists uploaded to see where they land on the atlas
+  radio_plays stations people started, for the radio charts
+  quiz_scores rounds of the galaxy quiz, for its leaderboard
 """
 from __future__ import annotations
 
@@ -61,7 +67,73 @@ CREATE TABLE IF NOT EXISTS map_votes (
     PRIMARY KEY (share_id, voter)
 );
 CREATE INDEX IF NOT EXISTS map_votes_ip ON map_votes (share_id, ip_hash);
+CREATE TABLE IF NOT EXISTS follows (
+    follower TEXT NOT NULL,
+    followee TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    PRIMARY KEY (follower, followee)
+);
+CREATE INDEX IF NOT EXISTS follows_followee ON follows (followee);
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor TEXT NOT NULL,          -- username, or "" for the system
+    kind TEXT NOT NULL,           -- shared_map, followed, upvoted, fix_agreed, pinned, artist_track, compared
+    target TEXT,                  -- username the event is about (gets it in their feed too)
+    payload TEXT NOT NULL,        -- JSON
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS events_actor ON events (actor, created_at);
+CREATE INDEX IF NOT EXISTS events_target ON events (target, created_at);
+CREATE TABLE IF NOT EXISTS atlas_pins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    song_key TEXT NOT NULL,
+    author TEXT NOT NULL,         -- "user:<name>" or "anon:<browser id>"
+    text TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS atlas_pins_song ON atlas_pins (song_key);
+CREATE TABLE IF NOT EXISTS artist_tracks (
+    id TEXT PRIMARY KEY,
+    owner TEXT,                   -- username, or NULL when uploaded signed out
+    title TEXT NOT NULL,
+    artist TEXT,
+    result TEXT NOT NULL,         -- JSON: where it landed
+    public INTEGER NOT NULL DEFAULT 0,
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS radio_plays (
+    station TEXT NOT NULL,        -- stable key, e.g. "share:<id>:cluster:3"
+    label TEXT NOT NULL,
+    share_id TEXT,
+    listener TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS radio_plays_time ON radio_plays (created_at);
+CREATE TABLE IF NOT EXISTS quiz_scores (
+    listener TEXT NOT NULL,
+    name TEXT,
+    score INTEGER NOT NULL,
+    rounds INTEGER NOT NULL,
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS quiz_scores_time ON quiz_scores (created_at);
 """
+
+# Columns added after a table first shipped: (table, column, definition)
+_COLUMNS = [
+    ("users", "display_name", "TEXT"),
+    ("users", "bio", "TEXT"),
+    ("users", "library_csv", "TEXT"),   # the library behind "my map", for the digest and compare
+    ("users", "library_title", "TEXT"),
+    ("users", "is_artist", "INTEGER NOT NULL DEFAULT 0"),
+]
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    for table, col, decl in _COLUMNS:
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if col not in have:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
 
 _local = threading.local()
 _init_lock = threading.Lock()
@@ -89,6 +161,7 @@ def connect() -> sqlite3.Connection:
         with _init_lock:
             if path not in _ready:
                 conn.executescript(_SCHEMA)
+                _migrate(conn)
                 _ready.add(path)
         conns[path] = conn
     return conn

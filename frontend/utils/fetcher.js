@@ -26,14 +26,26 @@ export function listenerId() {
 /**
  * Fetch from the backend API
  */
+function accountToken() {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem("sm-token");
+  } catch {
+    return null;
+  }
+}
+
 export async function apiFetch(path, options = {}) {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
   
-  const lid = url.startsWith(API_BASE) ? listenerId() : null; // only our own server gets it
+  const ours = url.startsWith(API_BASE); // only our own server gets who you are
+  const lid = ours ? listenerId() : null;
+  const token = ours ? accountToken() : null;
   const defaultOptions = {
     headers: {
       "Content-Type": "application/json",
       ...(lid ? { "X-Listener-Id": lid } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
   };
