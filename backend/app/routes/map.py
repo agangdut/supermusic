@@ -4,12 +4,12 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from app.core import community, map_share
-from app.routes.community import listener
+from app.routes.community import client_ip, listener
 from app.core.music_map import MapOptions, build_map, similar_tracks, estimate_build_seconds
 
 router = APIRouter(prefix="/map", tags=["map"])
@@ -481,17 +481,49 @@ async def share_map(req: ShareRequest) -> dict:
 
 
 @router.get("/shared")
-def shared_maps(limit: int = 50) -> dict:
-    """Maps people chose to list publicly, newest first."""
-    return {"maps": map_share.list_public(max(1, min(limit, 200)))}
+async def shared_maps(limit: int = 50, sort: str = "top", voter: Optional[str] = Depends(listener)) -> dict:
+    """Maps people chose to list publicly, with a picture, showcase stats and upvotes.
+    sort=top (most upvoted first) or sort=new."""
+    return {"maps": await run_in_threadpool(map_share.list_public, max(1, min(limit, 200)),
+                                            "new" if sort == "new" else "top", voter)}
 
 
 @router.get("/shared/{share_id}")
-async def shared_map(share_id: str) -> dict:
+async def shared_map(share_id: str, voter: Optional[str] = Depends(listener)) -> dict:
     found = await run_in_threadpool(map_share.get, share_id)
     if not found:
         raise HTTPException(status_code=404, detail="This shared map doesn't exist, or its owner stopped sharing it.")
+    found.update(map_share.votes([share_id], voter)[share_id])
     return found
+
+
+@router.get("/shared/{share_id}/picture.png")
+async def shared_map_picture(share_id: str):
+    """A picture of the map, made when it was shared."""
+    from fastapi.responses import FileResponse
+
+    path = await run_in_threadpool(map_share.picture_path, share_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="No picture for this map.")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+class MapVoteRequest(BaseModel):
+    up: bool = Field(True, description="true to upvote, false to take the upvote back")
+
+
+@router.post("/shared/{share_id}/vote")
+async def vote_shared_map(share_id: str, req: MapVoteRequest, request: Request,
+                          voter: Optional[str] = Depends(listener)) -> dict:
+    """Upvote a shared map, once per listener (signed in, or this browser)."""
+    if not voter:
+        raise HTTPException(status_code=400, detail="Send an X-Listener-Id header or sign in to upvote.")
+    try:
+        return await run_in_threadpool(map_share.vote, share_id, voter, community.ip_hash(client_ip(request)), req.up)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="This shared map doesn't exist, or its owner stopped sharing it.")
+    except map_share.VoteError as e:
+        raise HTTPException(status_code=429, detail=str(e))
 
 
 class UnshareRequest(BaseModel):

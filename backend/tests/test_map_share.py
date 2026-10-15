@@ -111,3 +111,60 @@ def test_youtube_ids_prefer_the_csv_link(monkeypatch):
         {"title": "B", "artist": "C"},
     ]})
     assert r.json()["ids"] == ["dQw4w9WgXcQ", "abcdefghijk"]
+
+
+def test_shares_get_a_picture_and_showcase_stats():
+    share = client.post("/map/share", json={"map": _sample_map(), "title": "Pretty", "listed": True, "sample": True}).json()
+    assert share["picture"] is True
+    sc = share["showcase"]
+    assert sc["songs"] == share["songs"] and sc["clusters"] >= 2 and sc["galaxies"]
+    assert sc["top_genres"] and sc["top_artists"]
+    r = client.get(f"/map/shared/{share['id']}/picture.png")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png" and r.content[:4] == b"\x89PNG"
+
+
+def test_older_shares_get_their_picture_when_listed():
+    import json
+    from app.core import map_share
+
+    share = client.post("/map/share", json={"map": _sample_map(), "title": "Old", "listed": True, "sample": True}).json()
+    folder = map_share.share_dir() / share["id"]
+    meta = json.loads((folder / "meta.json").read_text())
+    meta.pop("showcase"), meta.pop("picture")
+    (folder / "meta.json").write_text(json.dumps(meta))
+    (folder / "picture.png").unlink()
+    listed = {m["id"]: m for m in client.get("/map/shared").json()["maps"]}
+    assert listed[share["id"]]["showcase"]["songs"] == share["songs"]
+    assert (folder / "picture.png").is_file()
+
+
+def test_upvotes_one_per_listener_and_top_sort():
+    a = client.post("/map/share", json={"map": _sample_map(), "title": "A", "listed": True, "sample": True}).json()
+    b = client.post("/map/share", json={"map": _sample_map(), "title": "B", "listed": True, "sample": True}).json()
+    url = f"/map/shared/{b['id']}/vote"
+    assert client.post(url, json={"up": True}).status_code == 400  # nobody to count
+    me = {"X-Listener-Id": "listener-one-123"}
+    assert client.post(url, json={"up": True}, headers=me).json() == {"votes": 1, "voted": True}
+    assert client.post(url, json={"up": True}, headers=me).json()["votes"] == 1  # twice counts once
+    client.post(url, json={"up": True}, headers={"X-Listener-Id": "listener-two-456"})
+    top = client.get("/map/shared", params={"sort": "top"}, headers=me).json()["maps"]
+    assert top[0]["id"] == b["id"] and top[0]["votes"] == 2 and top[0]["voted"] is True
+    assert client.get(f"/map/shared/{b['id']}", headers=me).json()["voted"] is True
+    assert client.post(url, json={"up": False}, headers=me).json() == {"votes": 1, "voted": False}
+    new = client.get("/map/shared", params={"sort": "new"}).json()["maps"]
+    assert [m["id"] for m in new].index(b["id"]) < [m["id"] for m in new].index(a["id"])
+
+
+def test_one_network_cant_stuff_votes():
+    sid = client.post("/map/share", json={"map": _sample_map(), "title": "Stuffed", "sample": True}).json()["id"]
+    codes = [client.post(f"/map/shared/{sid}/vote", json={"up": True}, headers={"X-Listener-Id": f"sock-puppet-{i:04d}"}).status_code
+             for i in range(5)]
+    assert codes[:3] == [200, 200, 200] and codes[3] == 429
+
+
+def test_votes_go_with_the_share():
+    share = client.post("/map/share", json={"map": _sample_map(), "title": "Bye", "sample": True}).json()
+    client.post(f"/map/shared/{share['id']}/vote", json={"up": True}, headers={"X-Listener-Id": "listener-bye-789"})
+    client.post(f"/map/shared/{share['id']}/delete", json={"delete_token": share["delete_token"]})
+    assert client.post(f"/map/shared/{share['id']}/vote", json={"up": True},
+                       headers={"X-Listener-Id": "listener-bye-789"}).status_code == 404

@@ -10,6 +10,7 @@ Tables:
   songs       one row per song anyone has looked up or described (artist, title)
   song_facts  what an online lookup found for a song (BPM, key, energy, ...)
   song_votes  what listeners said a song's stats are (one row per listener per stat)
+  map_votes   upvotes on shared Music Maps (one row per listener per map)
 """
 from __future__ import annotations
 
@@ -52,6 +53,14 @@ CREATE TABLE IF NOT EXISTS song_votes (
 CREATE INDEX IF NOT EXISTS song_votes_voter ON song_votes (voter, created_at);
 CREATE INDEX IF NOT EXISTS song_votes_ip ON song_votes (ip_hash, created_at);
 CREATE INDEX IF NOT EXISTS song_votes_time ON song_votes (created_at);
+CREATE TABLE IF NOT EXISTS map_votes (
+    share_id TEXT NOT NULL,
+    voter TEXT NOT NULL,          -- "user:<name>" or "anon:<browser id>"
+    ip_hash TEXT,
+    created_at REAL NOT NULL,
+    PRIMARY KEY (share_id, voter)
+);
+CREATE INDEX IF NOT EXISTS map_votes_ip ON map_votes (share_id, ip_hash);
 """
 
 _local = threading.local()

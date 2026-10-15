@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
+from app.core import map_showcase, store
 from app.core.config import settings
 from app.core.music_map import ALIASES
 
@@ -124,11 +125,86 @@ def create(result: Dict[str, Any], *, title: str, by: Optional[str], listed: boo
             "has_library": has_library,
             "token_sha256": _hash(token),
         }
+        _add_extras(folder, meta, cleaned)
         (folder / "meta.json").write_text(json.dumps(meta))
     except Exception:
         shutil.rmtree(folder, ignore_errors=True)
         raise
     return {"id": share_id, "delete_token": token, **public_meta(meta)}
+
+
+def _add_extras(folder: Path, meta: Dict[str, Any], m: Dict[str, Any]) -> None:
+    """The picture and showcase stats for the Shared maps page. A failure here must never
+    lose the share itself, so it just leaves them out."""
+    try:
+        meta["showcase"] = map_showcase.showcase(m)
+    except Exception:
+        meta["showcase"] = None
+    try:
+        map_showcase.render_picture(m, folder / "picture.png")
+        meta["picture"] = True
+    except Exception:
+        meta["picture"] = False
+
+
+def _ensure_extras(folder: Path, meta: Dict[str, Any]) -> Dict[str, Any]:
+    """Maps shared before pictures existed get theirs the first time they're listed."""
+    if "showcase" in meta and "picture" in meta:
+        return meta
+    with gzip.open(folder / "map.json.gz", "rt", encoding="utf-8") as fh:
+        m = json.load(fh)
+    _add_extras(folder, meta, m)
+    (folder / "meta.json").write_text(json.dumps(meta))
+    return meta
+
+
+def picture_path(share_id: str) -> Optional[Path]:
+    f = _folder(share_id)
+    if not f:
+        return None
+    _ensure_extras(f, json.loads((f / "meta.json").read_text()))
+    p = f / "picture.png"
+    return p if p.is_file() else None
+
+
+# ---- upvotes -------------------------------------------------------------------------
+
+MAX_VOTES_PER_NETWORK = 3  # browser ids are free to make; one home network can't stuff a map
+
+
+class VoteError(ValueError):
+    pass
+
+
+def votes(share_ids: List[str], voter: Optional[str]) -> Dict[str, Dict[str, Any]]:
+    """{share_id: {"votes": n, "voted": bool}}."""
+    if not share_ids:
+        return {}
+    c = store.connect()
+    marks = ",".join("?" * len(share_ids))
+    counts = dict(c.execute(f"SELECT share_id, COUNT(*) FROM map_votes WHERE share_id IN ({marks}) GROUP BY share_id",
+                            share_ids).fetchall())
+    mine = set()
+    if voter:
+        mine = {r[0] for r in c.execute(f"SELECT share_id FROM map_votes WHERE voter = ? AND share_id IN ({marks})",
+                                        [voter, *share_ids])}
+    return {s: {"votes": int(counts.get(s, 0)), "voted": s in mine} for s in share_ids}
+
+
+def vote(share_id: str, voter: str, ip: Optional[str], up: bool) -> Dict[str, Any]:
+    """Upvote a map (up=True) or take the upvote back. One per listener."""
+    if not _folder(share_id):
+        raise LookupError(share_id)
+    with store.tx() as c:
+        if not up:
+            c.execute("DELETE FROM map_votes WHERE share_id = ? AND voter = ?", (share_id, voter))
+        elif not c.execute("SELECT 1 FROM map_votes WHERE share_id = ? AND voter = ?", (share_id, voter)).fetchone():
+            if ip and c.execute("SELECT COUNT(*) FROM map_votes WHERE share_id = ? AND ip_hash = ?",
+                                (share_id, ip)).fetchone()[0] >= MAX_VOTES_PER_NETWORK:
+                raise VoteError("This map already has several upvotes from your network.")
+            c.execute("INSERT INTO map_votes (share_id, voter, ip_hash, created_at) VALUES (?, ?, ?, ?)",
+                      (share_id, voter, ip, time.time()))
+    return votes([share_id], voter)[share_id]
 
 
 def public_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
@@ -156,16 +232,23 @@ def library_path(share_id: str) -> Optional[Path]:
     return p if p and p.is_file() else None
 
 
-def list_public(limit: int = 50) -> List[Dict[str, Any]]:
+def list_public(limit: int = 50, sort: str = "new", voter: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Listed maps with their upvotes. sort: "new" (newest first) or "top" (most upvoted)."""
     metas = []
     for meta_file in share_dir().glob("*/meta.json"):
         try:
             meta = json.loads(meta_file.read_text())
+            if meta.get("listed"):
+                metas.append(public_meta(_ensure_extras(meta_file.parent, meta)))
         except Exception:
             continue
-        if meta.get("listed"):
-            metas.append(public_meta(meta))
-    metas.sort(key=lambda m: -m.get("created", 0))
+    v = votes([m["id"] for m in metas], voter)
+    for m in metas:
+        m.update(v.get(m["id"], {"votes": 0, "voted": False}))
+    if sort == "top":
+        metas.sort(key=lambda m: (-m["votes"], -m.get("created", 0)))
+    else:
+        metas.sort(key=lambda m: -m.get("created", 0))
     return metas[:limit]
 
 
@@ -178,4 +261,5 @@ def delete(share_id: str, token: str) -> bool:
     if not secrets.compare_digest(meta.get("token_sha256", ""), _hash(token or "")):
         return False
     shutil.rmtree(f, ignore_errors=True)
+    store.connect().execute("DELETE FROM map_votes WHERE share_id = ?", (share_id,))
     return True

@@ -182,10 +182,18 @@ export async function getSharedMap(id) {
   return apiFetch(`/map/shared/${encodeURIComponent(id)}`);
 }
 
-/** Maps people chose to list publicly. */
-export async function listSharedMaps() {
-  return apiFetch("/map/shared");
+/** Maps people chose to list publicly, with picture, showcase stats and upvotes. sort: "top" | "new". */
+export async function listSharedMaps(sort = "top") {
+  return apiFetch(`/map/shared?sort=${sort}`);
 }
+
+/** Upvote a shared map (up=false takes it back). Returns { votes, voted }. */
+export async function voteSharedMap(id, up = true) {
+  return postJSON(`/map/shared/${encodeURIComponent(id)}/vote`, { up });
+}
+
+/** The picture saved when a map was shared. */
+export const sharedMapPicture = (id) => `${API_BASE}/map/shared/${encodeURIComponent(id)}/picture.png`;
 
 export async function unshareMap(id, delete_token) {
   return postJSON(`/map/shared/${encodeURIComponent(id)}/delete`, { delete_token });

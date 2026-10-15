@@ -13,6 +13,7 @@ import ClusterAtlas from "@/components/map/ClusterAtlas";
 import { availableLenses, buildLens, RAMP_CSS } from "@/components/map/lenses";
 import RadioPanel from "@/components/map/RadioPanel";
 import ShareDialog from "@/components/map/ShareDialog";
+import UpvoteButton from "@/components/map/UpvoteButton";
 import SongStatsEditor from "@/components/map/SongStatsEditor";
 import PeoplePanel from "@/components/map/PeoplePanel";
 
@@ -410,7 +411,10 @@ export default function MapPage() {
               {" · "}{(shared.songs || 0).toLocaleString()} songs. Try the Radio tab to listen through it.
             </div>
           </div>
-          <a href="/maps" className="shrink-0 text-xs text-indigo-200 hover:text-white">More shared maps →</a>
+          <div className="flex shrink-0 items-center gap-3">
+            <UpvoteButton id={shared.id} votes={shared.votes ?? 0} voted={!!shared.voted} />
+            <a href="/maps" className="text-xs text-indigo-200 hover:text-white">More shared maps →</a>
+          </div>
         </div>
       )}
 
