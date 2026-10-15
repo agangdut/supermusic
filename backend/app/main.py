@@ -19,6 +19,7 @@ from app.routes import websocket as websocket_routes
 from app.routes import batch as batch_routes
 from app.routes import export as export_routes
 from app.routes import map as map_routes
+from app.routes import community as community_routes
 from app.core.piano_transcription import warm_up as piano_warm_up
 from app.middleware.rate_limit import limiter, RATE_LIMITS
 from slowapi.errors import RateLimitExceeded
@@ -113,6 +114,9 @@ app.include_router(export_routes.router, tags=["export"])
 
 # Taste map endpoints
 app.include_router(map_routes.router)
+
+# Shared song stats (listener corrections)
+app.include_router(community_routes.router)
 
 
 @app.on_event("startup")

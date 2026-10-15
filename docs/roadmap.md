@@ -33,9 +33,9 @@ Verified against the running Docker stack with real audio (October 2026):
 Ordered by how much each one matters.
 
 ### 1. Keep data across restarts
-Jobs and user accounts live in memory, so restarting the backend loses them. `backend/app/database.py` already defines a SQLite/SQLAlchemy model for jobs but nothing uses it yet.
+Jobs live in memory, so restarting the backend loses them. Accounts, shared song stats and lookups are saved in one SQLite file, `data/supermusic.db` (`backend/app/core/store.py`). `backend/app/database.py` defines an older SQLAlchemy model for jobs that nothing uses yet.
 - [ ] Save jobs in the database instead of the in-memory `job_store`
-- [ ] Save users in the database instead of `users_db`
+- [x] Save users in the database instead of `users_db`
 
 ### 2. A real job queue
 Jobs run inside the web server process. A few long Demucs jobs can tie it up, and a crash loses every running job. Redis is already in `docker-compose.yml` but unused.
@@ -85,6 +85,13 @@ The UI covers MIDI, stems, CSV and the Music Map. These work in the API but have
 - [x] Turn a cluster or a path between two songs into a station, and send it to Spotify, YouTube or a CSV (Map Radio)
 - [x] Share a map by link, optionally listed on a public Shared maps page
 - [ ] Accounts for shared maps (today the sharing browser keeps the delete key)
+- [x] Listeners fix a song's tempo, key, genre, energy... and tag vibes; agreed fixes reach everyone's map
+- [x] "Listeners like you": public shared maps closest to yours, with songs of theirs to try
+- [ ] A "Vibes" colour lens and a filter by vibe tag
+- [ ] Suggest a link: listeners say "these two go together", and agreed pairs join the hidden links
+- [ ] Blend two maps into one (yours and a friend's), with shared clusters highlighted
+- [ ] Notes and pins on a shared map's clusters ("best for late drives")
+- [ ] Trust scores: listeners whose fixes others keep agreeing with count for more
 - [ ] Full-length playback inside SuperMusic for Spotify Premium listeners (Spotify Web Playback SDK)
 - [ ] Play a 30-second preview when you click a star
 

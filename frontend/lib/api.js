@@ -237,3 +237,26 @@ export async function getMapEstimate(tracks) {
   const res = await apiFetch(`/map/estimate?tracks=${encodeURIComponent(tracks)}`);
   return res?.seconds ?? null;
 }
+
+// --- Shared song stats (listener corrections) --------------------------------
+
+/** GET /community/song — a song's looked-up stats, what listeners agreed on, and your own edits. */
+export async function getSongStats({ artist, title }) {
+  const q = new URLSearchParams({ artist: artist || "", title: title || "" });
+  return apiFetch(`/community/song?${q}`);
+}
+
+/** POST /community/vote — value null takes your earlier answer back. */
+export async function voteSongStat({ artist, title, field, value }) {
+  return postJSON("/community/vote", { artist: artist || "", title, field, value });
+}
+
+/** GET /community/activity */
+export async function getCommunityActivity(limit = 20) {
+  return apiFetch(`/community/activity?limit=${limit}`);
+}
+
+/** POST /map/taste-match — public shared maps closest to this library. */
+export async function tasteMatch({ csv_path, sample = false, share_id, limit = 10 }) {
+  return postJSON("/map/taste-match", { csv_path, sample, share_id, limit });
+}

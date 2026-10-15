@@ -54,6 +54,26 @@ Press **Share** above the map to get a short link like `/map?share=ASRLnVJ2`. An
 - **Stopping.** There are no accounts yet, so the browser that shared a map keeps a secret key for it. *Shared maps* lists the maps shared from this browser with a **Stop sharing** button. Clearing the browser's site data loses that key.
 - **Where they're kept.** Each share is a folder in `data/shared_maps/` (the map, its settings, and a copy of the song list), so shares survive a restart. Only the sample, another share, or a CSV SuperMusic wrote itself can be copied into a share.
 
+## Fix a song's stats (shared with everyone)
+
+Online lookups get songs wrong sometimes: a tempo read at double speed (180 BPM for a 90 BPM song), the wrong key, an artist's genre stamped on every song. Click a star, then **✎ Fix stats or add a vibe** to correct its tempo (with ½ and ×2 buttons), key, genre, energy, happiness, danceability, how acoustic it is and its year, or to tag its **vibe** ("late night", "gym", "rainy day"). For each stat the panel shows what the lookup found and where from, what other listeners agreed on, and your own answer, with **Undo** to take yours back.
+
+- **Your edit changes your map straight away** (the labels update at once; **Remap** moves the star).
+- **It reaches everyone's map once a second listener agrees.** A correction becomes the shared value only when at least 2 different listeners agree and they make up at least 60% of the answers for that stat. "Agree" means close enough: within 4% for tempo (and 90 and 180 count as the same tempo felt half or double time), within 15 points out of 100 for energy-style scores, the same year, key or genres. The shared value is the average of the agreeing answers, so one wild answer can't drag it. Vibe tags show on everyone's map once 2 listeners use the same tag.
+- **Guards against bad edits.** One answer per listener per stat; two browsers on the same network count once; each listener and each network address can make 500 edits a day; values must be sensible (tempo 40–250, a real key, genres from the list).
+- **Who you are.** Without an account, your browser gets a random listener id (kept in its storage), so your edits follow you on that browser. Signed-in listeners vote as their account.
+- **Where it's used.** Agreed values (and your own edits) replace the file's or the lookup's values every time a map is drawn: imports, **Remap**, shared maps when remapped, and *Songs you may like*. The saved library CSV is left as it was, so taking an edit back works.
+- **Lookups are shared too.** Every online lookup's answer (Deezer tempo and year, the key and energy measured from the preview, the genre from listener tags) is saved in the same database with its source, and the fix panel shows it.
+
+Everything lives in one SQLite file, `data/supermusic.db` (set `SM_DB_PATH` to move it), together with accounts. Code: `backend/app/core/community.py` (the agreement rules), `core/store.py` (the database), routes in `routes/community.py`.
+
+## People
+
+The **People** tab has two parts.
+
+- **Listeners like you.** Your library compared with every map shared publicly (*List it on Shared maps*), closest first. Closeness is measured on artists, not exact songs, since two people who love an artist rarely saved the very same tracks: each library becomes "what share of my listening is each artist" (plays when the file has them, otherwise one per song), and the match is how much those two lists overlap (cosine similarity: 100% means the same artists in the same proportions). Each match shows the artists you both play, opens the other map, and lists up to five of their songs you don't have, songs by artists you already play first. Code: `backend/app/core/taste_match.py`.
+- **Latest song fixes.** The newest edits from everyone, and how many listeners have fixed how many songs. Click a song to fly to it if it's on your map.
+
 ## Map Radio
 
 The **Radio** tab turns the map into a station. Songs that sound alike sit close together, so a station walks from star to star: each next song is one of the four closest unplayed ones (usually the closest), the same artist never plays twice in a row, and one artist gets at most one song in eight. **New mix** walks the same place again with different picks.

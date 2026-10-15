@@ -297,7 +297,9 @@ def merge(frames: List[pd.DataFrame]) -> pd.DataFrame:
         df[c] = df[c].map(lambda v: None if v is None or (isinstance(v, float) and np.isnan(v)) or v == "" else str(v)[:10])
     agg = {c: "first" for c in CANONICAL if c not in sums and c != "source"}
     agg.update({c: "sum" for c in sums})
-    agg.update(first_played="min", last_played="max", added_at="min")
+    # Not "min"/"max": pandas 2 can't compare None with text in those
+    earliest = lambda s: min(s.dropna(), default=None)  # noqa: E731
+    agg.update(first_played=earliest, last_played=lambda s: max(s.dropna(), default=None), added_at=earliest)
     agg["source"] = lambda s: "+".join(sorted(set(map(str, s.dropna()))))
     agg["playlists"] = lambda s: "; ".join(dict.fromkeys(p.strip() for v in s.dropna() for p in str(v).split(";")
                                                          if p.strip())) or None
@@ -403,6 +405,7 @@ def _pick_hit(hits: List[dict], artist: str, title: str) -> Optional[dict]:
 def lookup(artist: str, title: str, analyse: bool = True) -> dict:
     """Genre, year (and preview features) for one song, cached on disk."""
     cache = _song_cache(artist, title)
+    fresh = False
     if cache.exists():
         info = json.loads(cache.read_text())
     else:
@@ -434,6 +437,7 @@ def lookup(artist: str, title: str, analyse: bool = True) -> dict:
             info["error"] = str(e)[:120]
         if "error" not in info:
             cache.write_text(json.dumps(info))
+            fresh = True
     # Genre comes from listener tags (Last.fm / MusicBrainz) first, Deezer's album genre last.
     # Older cache files stored Deezer's raw genre as "genre"; it is ignored now.
     info = {k: v for k, v in info.items() if k != "genre"}
@@ -441,6 +445,8 @@ def lookup(artist: str, title: str, analyse: bool = True) -> dict:
     if found:
         info["genre"] = ";".join(found)
         info["genre_source"] = source
+    from app.core import community  # shared with everyone's imports (imported here: it imports us)
+    community.record_lookup(artist, title, info, only_if_new=not fresh)
     return info
 
 
