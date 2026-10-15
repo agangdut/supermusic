@@ -6,6 +6,7 @@
 //   song     songs around one song, spreading outwards
 //   cluster  a walk through one cluster
 //   journey  from one song to another, a DJ-style path across the map
+import { clusterName } from "./colors";
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
@@ -76,8 +77,8 @@ export function buildStation(data, { kind, seedId, clusterId, toId, length = 25,
     const c = ["x", "y", "z"].reduce((o, k) => ({ ...o, [k]: members.reduce((a, t) => a + t[k], 0) / members.length }), {});
     const ranked = [...members].sort((a, b) => (b.engagement || 0) - (a.engagement || 0) || dist(a, c) - dist(b, c));
     const start = ranked[Math.floor(random() * Math.min(5, ranked.length))];
-    const label = data.clusters.find((x) => x.id === clusterId)?.label || "Cluster";
-    return { kind, name: `${label.split(" · ")[0]} radio`, ids: walk(start, members, length, random).map((t) => t.id) };
+    const cl = data.clusters.find((x) => x.id === clusterId);
+    return { kind, name: `${clusterName(cl)} radio`, ids: walk(start, members, length, random).map((t) => t.id) };
   }
   const start = byId.get(seedId);
   if (!start) return null;

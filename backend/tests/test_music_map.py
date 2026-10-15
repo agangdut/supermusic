@@ -197,3 +197,14 @@ def test_clusters_describe_their_contents():
     assert c["top_tracks"] and c["top_artists"]
     names = [c["label"].split(" · ")[0] for c in r["clusters"]]
     assert len(names) == len(set(names))
+
+
+def test_clusters_are_named_after_galaxies():
+    from app.core.music_map import GALAXIES
+
+    r = client.post("/map/build", json={"sample": True}).json()
+    names = [c["name"] for c in r["clusters"]]
+    assert len(set(names)) == len(names) and set(names) <= set(GALAXIES)
+    home = max(r["clusters"], key=lambda c: (c.get("listening_share") or 0, c["size"]))
+    assert home["name"] == "Milky Way"
+    assert len(GALAXIES) >= 40  # the most clusters a map can ask for

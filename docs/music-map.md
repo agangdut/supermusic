@@ -21,7 +21,7 @@ Position means similarity. Two stars close together sound alike on the things yo
 
 ## The panels
 
-**Clusters.** Every group gets a plain-language name, like *Neo-Soul · A minor · 84–95 BPM · upbeat*. The bar shows its **signal**. With listening data, the signal is how much more you play the cluster than its size would predict: a cluster that is 14% of your library but 20% of your plays has a lift of 1.43×. Without listening data, it shows how tightly the tracks hang together. Click a cluster to light it up.
+**Clusters.** Every group is named after a real galaxy, with a plain-language description underneath, like *Andromeda: Neo-Soul · A minor · 84–95 BPM · upbeat*. The cluster you play most (or the biggest one, without listening data) is the **Milky Way**, your home galaxy; the rest follow in order (Andromeda, Triangulum, Whirlpool, …). The bar shows its **signal**. With listening data, the signal is how much more you play the cluster than its size would predict: a cluster that is 14% of your library but 20% of your plays has a lift of 1.43×. Without listening data, it shows how tightly the tracks hang together. Click a cluster to light it up.
 
 **Hidden links.** These are pairs of songs from different clusters that belong together anyway. They come from four kinds of evidence, taken in turn so no one kind crowds out the rest (each link is labelled with its kind):
 - **Played together**: songs you keep playing back to back in the same listening session (at least twice, within 20 minutes of each other, skips left out). This comes from Spotify's streaming history files, and is often the most personal link: two songs that sound nothing alike but live together in your head.

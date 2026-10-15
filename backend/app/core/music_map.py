@@ -57,6 +57,17 @@ ALIASES: Dict[str, Sequence[str]] = {
     "played_with": ("played_with",),
 }
 
+# Cluster names, in order: the first goes to the cluster you play most (or the biggest).
+# All real galaxies; 40 covers the most clusters a map can have.
+GALAXIES = (
+    "Milky Way", "Andromeda", "Triangulum", "Whirlpool", "Sombrero", "Pinwheel", "Cartwheel", "Black Eye",
+    "Sunflower", "Cigar", "Tadpole", "Sculptor", "Centaurus A", "Fireworks", "Needle", "Antennae", "Mice",
+    "Butterfly", "Large Magellanic Cloud", "Small Magellanic Cloud", "Comet", "Phantom", "Southern Pinwheel",
+    "Hoag's Object", "Bode's", "Medusa", "Cosmos Redshift 7", "Malin 1", "Messier 87", "Leo I", "Draco",
+    "Fornax", "Carina", "Sextans", "Sagittarius Dwarf", "Canis Major Dwarf", "Little Sombrero", "Coma Pinwheel",
+    "Silver Dollar", "Condor",
+)
+
 # Audio descriptors we use as-is when present (Spotify-style, 0..1 mostly)
 AUDIO_FEATURES = (
     "energy", "danceability", "valence", "acousticness", "instrumentalness",
@@ -1091,6 +1102,12 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
         if firsts[parts[0]] > 1 and c.get("top_artists"):
             parts[0] = f"{parts[0]}: {c['top_artists'][0]['name']}"
             c["label"] = " · ".join(parts)
+
+    # A galaxy name for each cluster, easier to talk about than its genre mix. Your
+    # most-played (or biggest) cluster is home: the Milky Way.
+    rank = sorted(clusters, key=lambda c: (-(c.get("listening_share") or 0), -c["size"], c["id"]))
+    for i, c in enumerate(rank):
+        c["name"] = GALAXIES[i] if i < len(GALAXIES) else f"{GALAXIES[i % len(GALAXIES)]} {i // len(GALAXIES) + 1}"
 
     if eng is not None and total_eng > 0:
         max_lift = max(c["lift"] for c in clusters) or 1
