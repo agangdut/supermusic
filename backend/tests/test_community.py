@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 from fastapi.testclient import TestClient
 
@@ -6,7 +8,7 @@ from app.main import app
 
 client = TestClient(app)
 
-SAMPLE = pd.read_csv("app/sample_data/sample_library.csv")
+SAMPLE = pd.read_csv(Path(__file__).resolve().parents[1] / "app" / "sample_data" / "sample_library.csv")
 TITLE, ARTIST = str(SAMPLE["title"][0]), str(SAMPLE["artist"][0])
 
 
