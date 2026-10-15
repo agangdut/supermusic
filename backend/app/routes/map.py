@@ -587,6 +587,7 @@ class BlendSource(BaseModel):
     csv_path: Optional[str] = None
     sample: bool = False
     share_id: Optional[str] = None
+    account: bool = Field(False, description="Your account's own map (the library you last imported signed in).")
 
 
 class BlendRequest(BaseModel):
@@ -600,8 +601,15 @@ async def blend_maps(req: BlendRequest, me: Optional[str] = Depends(current_user
     """Both libraries drawn as one map. Each song says whose it is: "you", "them" or "both"."""
     from app.core import blend
 
-    a = pd.read_csv(_library(req.mine))
-    b = pd.read_csv(_library(req.theirs))
+    def read(src: BlendSource) -> pd.DataFrame:
+        if src.account:
+            path = (social.user_row(me) or {}).get("library_csv") if me else None
+            if not path or not Path(path).is_file():
+                raise HTTPException(status_code=404, detail="Your account has no map yet. Import your library first.")
+            return pd.read_csv(path)
+        return pd.read_csv(_library(src))
+
+    a, b = read(req.mine), read(req.theirs)
     try:
         result = await run_in_threadpool(blend.blend, a, b, {k: max(0.0, min(2.0, float(v))) for k, v in req.weights.items()})
     except ValueError as e:

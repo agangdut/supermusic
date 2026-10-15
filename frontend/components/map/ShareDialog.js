@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-import { shareMap, unshareMap } from "@/lib/api";
+import { shareMap, sharedMapCard, unshareMap } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 // Shares made in this browser, with the secret token that can delete them
 const MINE = "supermusic.mySharedMaps";
@@ -23,9 +24,9 @@ function rememberShare(s) {
 
 export async function stopSharing(id) {
   const mine = myShares().find((s) => s.id === id);
-  if (!mine) throw new Error("This map was shared from another browser.");
   try {
-    await unshareMap(id, mine.delete_token);
+    // Without this browser's token the server checks you're signed in as the map's owner
+    await unshareMap(id, mine?.delete_token || null);
   } catch (e) {
     if (!/already gone/.test(e.message || "")) throw e;
   }
@@ -36,13 +37,15 @@ export async function stopSharing(id) {
   }
 }
 
-export const shareUrl = (id) => `${window.location.origin}/map?share=${encodeURIComponent(id)}`;
+// /s/<id> is the share's landing page: a card with link previews for chats, "Open" and "Compare with mine"
+export const shareUrl = (id) => `${window.location.origin}/s/${encodeURIComponent(id)}`;
 
 export default function ShareDialog({ data, weights, source, defaultTitle, onClose }) {
+  const { user } = useAuth();
   const hasListening = !!data?.meta?.has_listening_data;
   const [title, setTitle] = useState(defaultTitle || "My music map");
   const [by, setBy] = useState("");
-  const [listed, setListed] = useState(false);
+  const [listed, setListed] = useState(true);
   const [includeListening, setIncludeListening] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -91,11 +94,15 @@ export default function ShareDialog({ data, weights, source, defaultTitle, onClo
               <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} required
                 className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-white focus:border-fuchsia-400/50 focus:outline-none" />
             </label>
+            {user ? (
+              <p className="text-xs text-gray-400">Shared as <b className="text-gray-200">{user.display_name}</b>; it goes on your profile.</p>
+            ) : (
             <label className="block">
               <span className="text-xs text-gray-400">Your name (optional)</span>
               <input value={by} onChange={(e) => setBy(e.target.value)} maxLength={40} placeholder="Anonymous"
                 className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-white placeholder:text-gray-600 focus:border-fuchsia-400/50 focus:outline-none" />
             </label>
+            )}
             <label className="flex items-start gap-2 text-xs text-gray-300">
               <input type="checkbox" checked={listed} onChange={(e) => setListed(e.target.checked)} className="mt-0.5 accent-fuchsia-500" />
               <span>List it on <a href="/maps" target="_blank" className="text-fuchsia-300 hover:underline">Shared maps</a> so anyone can find it. Unticked, only people with the link can open it.</span>
@@ -119,14 +126,32 @@ export default function ShareDialog({ data, weights, source, defaultTitle, onClo
 
         {shared && (
           <div className="mt-3 space-y-3 text-sm">
-            <p className="text-gray-300">Anyone with this link can open your map:</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={sharedMapCard(shared.id)} alt="Your share card" className="aspect-[1200/630] w-full rounded-xl border border-white/10 bg-black/40" />
             <div className="flex gap-2">
               <input readOnly value={shareUrl(shared.id)} onFocus={(e) => e.target.select()}
                 className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-white" />
               <button onClick={copy} className="rounded-lg bg-white/10 px-3 text-xs text-white hover:bg-white/15">{copied ? "Copied" : "Copy"}</button>
             </div>
+            <div className="flex flex-wrap gap-2">
+              {typeof navigator !== "undefined" && navigator.share && (
+                <button
+                  onClick={() => navigator.share({ title: shared.title, text: "Here's my music as a galaxy. Compare yours with mine:", url: shareUrl(shared.id) }).catch(() => {})}
+                  className="rounded-lg bg-gradient-to-r from-fuchsia-600 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white">
+                  Share…
+                </button>
+              )}
+              <a href={sharedMapCard(shared.id)} download={`${shared.title}.png`} target="_blank" rel="noreferrer"
+                className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-gray-200 hover:bg-white/5">
+                Download card
+              </a>
+            </div>
             <p className="text-[11px] leading-5 text-gray-500">
-              You can stop sharing it from <a href="/maps" className="text-fuchsia-300 hover:underline">Shared maps</a> in this browser.
+              Friends who open the link can explore your map or press <b className="text-gray-300">Compare with mine</b> to see where your
+              tastes overlap. Chats and socials show the card as the link preview.
+              {user
+                ? <> Manage it from <a href={`/u/${user.username}`} className="text-fuchsia-300 hover:underline">your profile</a>.</>
+                : <> You can stop sharing it from <a href="/maps" className="text-fuchsia-300 hover:underline">Explore</a> in this browser.</>}
             </p>
           </div>
         )}

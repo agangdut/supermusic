@@ -9,8 +9,13 @@ const RAMP = ["#1e3a8a", "#2563eb", "#38bdf8", "#a5f3fc", "#f0fdff"];
 
 const year = (d) => (d ? Number(String(d).slice(0, 4)) + (Number(String(d).slice(5, 7)) || 1) / 12 - 1 / 12 : null);
 
+// Blends (Compare) tag each song by whose library it's in
+export const WHO_COLORS = { you: "#38bdf8", them: "#f472b6", both: "#fbbf24" };
+export const WHO_NAMES = { you: "Only you", them: "Only them", both: "Both of you" };
+
 export const LENSES = [
   { id: "cluster", label: "Cluster" },
+  { id: "who", label: "Whose song", value: (t) => t.who ?? null, categorical: true, colors: WHO_COLORS, names: WHO_NAMES },
   { id: "genre", label: "Genre", value: (t) => (t.genre ? t.genre.split(", ")[0] : null), categorical: true },
   { id: "era", label: "Release year", value: (t) => t.year ?? null, fmt: (v) => Math.round(v) },
   { id: "discovered", label: "First played", value: (t) => year(t.first_played || t.added), fmt: (v) => Math.floor(v) },
@@ -50,6 +55,14 @@ export function availableLenses(tracks) {
 export function buildLens(lensId, tracks) {
   const lens = LENSES.find((l) => l.id === lensId) || LENSES[0];
   if (!lens.value) return { lens, colorOf: (t) => colorFor(t.cluster), legend: null };
+
+  if (lens.colors) {
+    return {
+      lens,
+      colorOf: (t) => lens.colors[lens.value(t)] || MISSING,
+      legend: { kind: "swatches", items: Object.entries(lens.colors).map(([k, c]) => ({ label: lens.names?.[k] || k, color: c })) },
+    };
+  }
 
   if (lens.categorical) {
     // The 8 most common values get the fixed palette in order; the rest share one grey

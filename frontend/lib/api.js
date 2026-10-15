@@ -268,3 +268,71 @@ export async function getCommunityActivity(limit = 20) {
 export async function tasteMatch({ csv_path, sample = false, share_id, limit = 10 }) {
   return postJSON("/map/taste-match", { csv_path, sample, share_id, limit });
 }
+
+// --- Accounts, people and the feed -------------------------------------------
+
+/** Remember which library is "my map" in this browser (and on the account when signed in). */
+export function rememberMyMap({ csv_path, title }) {
+  try {
+    window.localStorage.setItem("sm-my-map", JSON.stringify({ csv_path, title, at: Date.now() }));
+  } catch {
+    // private window: Compare will ask for the library again
+  }
+  apiFetch("/me/library", { method: "PUT", body: JSON.stringify({ csv_path, title }) }).catch(() => {});
+}
+
+export function myMap() {
+  try {
+    return JSON.parse(window.localStorage.getItem("sm-my-map") || "null");
+  } catch {
+    return null;
+  }
+}
+
+export const getProfile = (username) => apiFetch(`/users/${encodeURIComponent(username)}`);
+export const updateProfile = (patch) => apiFetch("/auth/me", { method: "PATCH", body: JSON.stringify(patch) });
+export const followUser = (username, on = true) => postJSON(`/users/${encodeURIComponent(username)}/follow`, { on });
+export const followList = (username, which) => apiFetch(`/users/${encodeURIComponent(username)}/${which}`);
+export const searchPeople = (q) => apiFetch(`/users?q=${encodeURIComponent(q)}`);
+export const getFeed = (before) => apiFetch(`/feed${before ? `?before=${before}` : ""}`);
+export const getDigest = () => apiFetch("/digest");
+export const getLeaderboards = () => apiFetch("/leaderboards");
+export const setMapListed = (id, listed) => postJSON(`/map/shared/${encodeURIComponent(id)}/listed`, { listed });
+
+/** The 1200x630 share card of a shared map. */
+export const sharedMapCard = (id) => `${API_BASE}/map/shared/${encodeURIComponent(id)}/card.png`;
+
+/** Two libraries as one map; each track has who: "you" | "them" | "both", plus a `blend` summary. */
+export const blendMaps = ({ mine, theirs, weights = {} }) => postJSON("/map/blend", { mine, theirs, weights });
+
+/** Count a Map Radio station for the weekly charts. */
+export const radioPlayed = ({ station, label, share_id }) => postJSON("/map/radio/played", { station, label, share_id }).catch(() => {});
+
+// --- Community atlas ---------------------------------------------------------
+
+export const getAtlas = () => apiFetch("/atlas");
+export const atlasMine = (source) => postJSON("/atlas/mine", source);
+export const atlasSong = (song_key) => apiFetch(`/atlas/song?song_key=${encodeURIComponent(song_key)}`);
+export const atlasPins = () => apiFetch("/atlas/pins");
+export const addAtlasPin = ({ song_key, text, title }) => postJSON("/atlas/pins", { song_key, text, title });
+export const deleteAtlasPin = (id) => apiFetch(`/atlas/pins/${id}`, { method: "DELETE" });
+
+// --- Artists -----------------------------------------------------------------
+
+export async function landTrack(file, { title, artist_name, genre, public: isPublic }) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("title", title);
+  if (artist_name) form.append("artist_name", artist_name);
+  if (genre) form.append("genre", genre);
+  form.append("public", isPublic ? "true" : "false");
+  return apiFetch("/artist/land", { method: "POST", body: form });
+}
+export const setTrackPublic = (id, isPublic) => postJSON(`/artist/tracks/${encodeURIComponent(id)}`, { public: isPublic });
+export const deleteTrack = (id) => apiFetch(`/artist/tracks/${encodeURIComponent(id)}`, { method: "DELETE" });
+
+// --- Games -------------------------------------------------------------------
+
+export const quizQuestion = () => apiFetch("/games/quiz");
+export const quizAnswer = (id, choice) => postJSON("/games/quiz/answer", { id, choice });
+export const quizFinish = (name) => postJSON("/games/quiz/finish", { name });

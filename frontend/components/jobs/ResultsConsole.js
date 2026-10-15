@@ -145,7 +145,7 @@ function CsvSummary({ csv }) {
                   {o.csv ? (
                     <>
                       <a href={toArtifactUrl(o.csv)} target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline hover:text-indigo-300">Download</a>
-                      <a href={`/map?csv=${encodeURIComponent(o.csv)}`} className="text-fuchsia-300 underline hover:text-fuchsia-200">Map</a>
+                      <a href={`/?csv=${encodeURIComponent(o.csv)}`} className="text-fuchsia-300 underline hover:text-fuchsia-200">Map</a>
                     </>
                   ) : <span className="text-gray-500">no songs</span>}
                 </span>
@@ -164,7 +164,7 @@ function CsvSummary({ csv }) {
           </a>
         )}
         {c.library_csv && !m?.outputs && (
-          <a href={`/map?csv=${encodeURIComponent(c.library_csv)}`} className="text-fuchsia-300 underline hover:text-fuchsia-200">
+          <a href={`/?csv=${encodeURIComponent(c.library_csv)}`} className="text-fuchsia-300 underline hover:text-fuchsia-200">
             Open it in the Music Map
           </a>
         )}

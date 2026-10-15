@@ -12,6 +12,10 @@ const PICK_COLOR = "#fde68a";
 // line segments (two draw calls) instead of one three.js object each. A sprite per song
 // is fine for a few thousand but crawls at 20,000.
 export const LARGE_MAP = 2500;
+// Phones and tablets get the light renderer much sooner, and fewer moving sparks
+const PHONE_LARGE_MAP = 600;
+const isPhone = () => typeof window !== "undefined" &&
+  (window.matchMedia?.("(pointer: coarse)").matches || window.innerWidth < 768);
 
 const libraryRadius = (tracks) => tracks.reduce((r, t) => Math.max(r, Math.hypot(t.x, t.y, t.z)), 90);
 
@@ -105,8 +109,14 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
   const fgRef = useRef();
   const wrapRef = useRef();
   const [size, setSize] = useState({ width: 800, height: 600 });
-  const large = (data?.tracks?.length || 0) > LARGE_MAP;
+  const [phone] = useState(isPhone);
+  const large = (data?.tracks?.length || 0) > (phone ? PHONE_LARGE_MAP : LARGE_MAP);
   const colorOfTrack = colorOf || ((t) => colorFor(t.cluster));
+
+  // Phones: draw at most 1.5 pixels per CSS pixel (a 3x screen costs 4x the work for little gain)
+  useEffect(() => {
+    if (phone) fgRef.current?.renderer()?.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  }, [phone]);
 
   // Fit the canvas to its container
   useEffect(() => {
@@ -473,7 +483,8 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
         linkColor={(l) => (l.kind === "hidden" ? HIDDEN_COLOR : colorFor(typeof l.source === "object" ? l.source.cluster : 0))}
         linkOpacity={0.22}
         linkWidth={(l) => (l.kind === "hidden" ? 0.6 : 0.25)}
-        linkDirectionalParticles={(l) => (l.kind === "hidden" ? 2 : focus ? 1 : 0)}
+        rendererConfig={phone ? { antialias: false, powerPreference: "low-power" } : undefined}
+        linkDirectionalParticles={(l) => (l.kind === "hidden" ? (phone ? 1 : 2) : focus && !phone ? 1 : 0)}
         linkDirectionalParticleWidth={(l) => (l.kind === "hidden" ? 1.2 : 1)}
         linkDirectionalParticleSpeed={(l) => 0.004 + 0.006 * (l.strength ?? 0.5)}
         linkDirectionalParticleColor={(l) => (l.kind === "hidden" ? HIDDEN_COLOR : "#ffffff")}
