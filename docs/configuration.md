@@ -7,7 +7,7 @@ With Docker, put settings in a `.env` file next to `docker-compose.yml` (start f
 | Variable | Default | What it does |
 |---|---|---|
 | `JWT_SECRET_KEY` | `change-me-in-production` | Signs login tokens. **Change it before anyone else can reach the API.** |
-| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3001` | Comma-separated sites allowed to call the API |
+| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000` | Comma-separated sites allowed to call the API |
 | `YOUTUBE_API_KEY` | _(empty)_ | Optional. Adds YouTube details during CSV enrichment |
 | `LASTFM_API_KEY` | _(empty)_ | Optional, free from [last.fm/api](https://www.last.fm/api/account/create). Makes Music Map genres more accurate; without it MusicBrainz is used |
 | `SUPERMUSIC_ARTIFACT_DIR` | `/app/data/artifacts` in Docker | Where finished files are written and served from |
@@ -50,6 +50,7 @@ These are fixed when the frontend is **built**, so rebuild after changing them (
 |---|---|---|
 | `NEXT_PUBLIC_API_BASE` | `http://localhost:8000` | Where the browser sends API calls |
 | `NEXT_PUBLIC_ARTIFACT_BASE` | `<API base>/artifacts` | Where result files are downloaded from |
+| `NEXT_PUBLIC_SPOTIFY_CLIENT_ID` | _(empty)_ | Optional. Turns on Map Radio's **Save to Spotify** button. With Docker, set `SPOTIFY_CLIENT_ID` in `.env` instead. See [Setting up "Save to Spotify"](music-map.md#setting-up-save-to-spotify) |
 
 ## Ports
 

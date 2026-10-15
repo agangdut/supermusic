@@ -5,7 +5,7 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=sqlite:///./data/supermusic.db
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-production}
       - SUPERMUSIC_ARTIFACT_DIR=/app/data/artifacts
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
@@ -72,6 +72,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Built into the page, so a change needs `docker compose build frontend`
+        - NEXT_PUBLIC_SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
     ports:
       - "3000:3000"
     environment:

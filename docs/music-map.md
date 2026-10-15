@@ -45,6 +45,45 @@ They make good transitions, mashups and playlist bridges. Only songs with a key,
 
 The **insight cards** across the top show the strongest skews in your listening, for example *"34% of your listening is Lo-Fi, though it's only 22% of your library."*
 
+## Share your map
+
+Press **Share** above the map to get a short link like `/map?share=ASRLnVJ2`. Anyone who opens it sees the map as you saw it, can click around, **Remap** it with different sliders, see songs they may like and start a radio station. They can't change your copy.
+
+- **Listed or link-only.** Tick *List it on Shared maps* to show it on the **Shared maps** page (`/maps`); unticked, only people with the link can find it.
+- **Play counts stay private by default.** Unless you tick *Include how often I play each song*, the share drops play counts, likes, skips, play dates, the *For you* picks, the insight cards and *Your library in numbers*, and the song list copied into the share has those columns removed too. People see the songs, clusters and links.
+- **Stopping.** There are no accounts yet, so the browser that shared a map keeps a secret key for it. *Shared maps* lists the maps shared from this browser with a **Stop sharing** button. Clearing the browser's site data loses that key.
+- **Where they're kept.** Each share is a folder in `data/shared_maps/` (the map, its settings, and a copy of the song list), so shares survive a restart. Only the sample, another share, or a CSV SuperMusic wrote itself can be copied into a share.
+
+## Map Radio
+
+The **Radio** tab turns the map into a station. Songs that sound alike sit close together, so a station walks from star to star: each next song is one of the four closest unplayed ones (usually the closest), the same artist never plays twice in a row, and one artist gets at most one song in eight. **New mix** walks the same place again with different picks.
+
+- **Around a song** spreads out from one song. Type a song or click a star; the song card also has **Start radio from this song**.
+- **Through a cluster** wanders around one cluster, starting near a well-loved song in its middle.
+- **From A to B** is a DJ-style path: it heads a little further towards the second song with every track, so the music changes gradually from one to the other.
+
+It plays each song's **30-second preview** from Deezer, which needs no account or key (the backend looks the song up, because Deezer's API can't be called from a browser directly). Songs Deezer has no preview for are skipped. Full songs can't be played inside SuperMusic: Spotify only lets other sites play full tracks for Premium listeners through its own player, and Apple Music needs a paid developer account.
+
+**Take it with you.** Under a station:
+
+| Button | What it does | Needs |
+|---|---|---|
+| **Copy Spotify links** | Copies one `open.spotify.com` link per song. In the Spotify desktop app, open a playlist, click in its song list and press Ctrl+V (Cmd+V on a Mac). | Songs with Spotify links: Spotify exports and Exportify CSVs have them |
+| **Save to Spotify** | Signs you in to Spotify and creates a private playlist; songs without a link are searched by title and artist. | Your own free Spotify app, below. Shown only when one is set up |
+| **Play on YouTube** | Finds each song on YouTube and opens them as one playlist (`youtube.com/watch_videos?video_ids=…`, 50 songs at most). Press **Save** on YouTube to keep it. | `yt-dlp` on the server (it's in `requirements.txt`) |
+| **Download CSV** | Title, artist, album and Spotify link per song. Converter sites such as TuneMyMusic or Soundiiz turn it into an Apple Music, Spotify or YouTube Music playlist. | Nothing |
+
+YouTube's official API isn't used: it allows each app 10,000 points a day, a search costs 100 and adding a song to a playlist costs 50, which is about two 50-song playlists a day for everyone. yt-dlp's search has no quota, and found videos are cached in `data/cache/youtube_ids.json`.
+
+### Setting up "Save to Spotify"
+
+1. Sign in at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and create an app. Tick **Web API**.
+2. Add the redirect URI `http://127.0.0.1:3000/spotify-callback`. Spotify no longer accepts `localhost`, so open SuperMusic at **http://127.0.0.1:3000** when you use this.
+3. Put the app's Client ID in `.env` as `SPOTIFY_CLIENT_ID=...` and run `docker compose build frontend && docker compose up -d`. Without Docker, set `NEXT_PUBLIC_SPOTIFY_CLIENT_ID` before `npm run build` or `npm run dev`.
+4. Make sure `CORS_ORIGINS` includes `http://127.0.0.1:3000` (the default does).
+
+New Spotify apps start in **development mode** (rules as of February 2026): the app's owner needs Spotify Premium, and only the owner plus up to 5 people added under **User Management** in the dashboard can sign in. Opening it to everyone ("extended quota") is only for registered businesses with at least 250,000 monthly users. That makes it a good fit for you and a few friends, and the copy-links and CSV routes cover everyone else. Sign-in happens in the browser (PKCE), so no Spotify secret is stored anywhere.
+
 ## Shape the map
 
 The sliders change what "similar" means, from 0× (ignore) to 2× (dominant). Click **Remap** to apply.
