@@ -119,7 +119,7 @@ def create(result: Dict[str, Any], *, title: str, by: Optional[str], listed: boo
             "title": title,
             "by": by or None,
             "listed": listed,
-            "created": int(time.time()),
+            "created": time.time(),  # sub-second, so shares made in the same second still sort newest first
             "songs": len(cleaned["tracks"]),
             "clusters": [c.get("label") for c in clusters[:4] if c.get("label")],
             "listening": include_listening,
