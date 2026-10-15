@@ -9,6 +9,7 @@ import { buildMap, getImport, getMapEstimate, importLibrary, likeSongs, searchSo
 import { colorFor } from "@/components/map/colors";
 import ImportProgress, { BuildProgress } from "@/components/map/ImportProgress";
 import StatsPanel from "@/components/map/StatsPanel";
+import ClusterAtlas from "@/components/map/ClusterAtlas";
 import { availableLenses, buildLens, RAMP_CSS } from "@/components/map/lenses";
 
 const Graph3D = dynamic(() => import("@/components/map/Graph3D"), {
@@ -148,6 +149,7 @@ export default function MapPage() {
   const [enrichOnline, setEnrichOnline] = useState(true);
   const [listenPreviews, setListenPreviews] = useState(true);
   const [listenLimit, setListenLimit] = useState(""); // blank = every song (up to the import limit)
+  const [lookupLimit, setLookupLimit] = useState(""); // blank = the server default (1,500)
   const [importJob, setImportJob] = useState(null);
   const [uploading, setUploading] = useState(0); // number of files being sent
   const [lastWarning, setLastWarning] = useState(null); // e.g. online lookups were skipped
@@ -173,7 +175,7 @@ export default function MapPage() {
     setUploading(files.length);
     setLastWarning(null);
     try {
-      let job = await importLibrary(files, { enrich: enrichOnline, listen: listenPreviews, listenLimit: parseInt(listenLimit, 10) || null });
+      let job = await importLibrary(files, { enrich: enrichOnline, listen: listenPreviews, listenLimit: parseInt(listenLimit, 10) || null, limit: parseInt(lookupLimit, 10) || null });
       setUploading(0);
       setImportJob(job);
       let misses = 0;
@@ -341,6 +343,20 @@ export default function MapPage() {
               songs by how they sound and lets you search by vibe.
             </span>
           </label>
+          {enrichOnline && (
+            <label className="mt-2 ml-5 flex flex-wrap items-center gap-2 text-xs text-gray-300">
+              <span>Look up at most</span>
+              <input
+                type="number" min="1" max="50000" placeholder="1500" value={lookupLimit}
+                onChange={(e) => setLookupLimit(e.target.value)}
+                className="w-24 rounded border border-white/10 bg-black/30 px-2 py-0.5 text-xs text-white"
+              />
+              <span className="text-gray-400">
+                songs, most-played first. Songs without a lookup have no tempo or key, so they can&apos;t get hidden links.
+                New songs take about half a second each; songs looked up before are instant.
+              </span>
+            </label>
+          )}
           {enrichOnline && (
             <label className="mt-2 ml-5 flex items-start gap-2 text-xs text-gray-300">
               <input type="checkbox" checked={listenPreviews} onChange={(e) => setListenPreviews(e.target.checked)} className="mt-0.5 accent-fuchsia-500" />
@@ -578,6 +594,9 @@ export default function MapPage() {
                   <span className="shrink-0 text-xs text-gray-500">{c.size}</span>
                 </div>
                 <div className="mt-2"><SignalBar value={c.signal} color={colorFor(c.id)} /></div>
+                {c.top_artists?.length > 0 && (
+                  <div className="mt-1.5 truncate text-[11px] text-gray-400">{c.top_artists.slice(0, 3).map((a) => a.name).join(", ")}</div>
+                )}
                 <div className="mt-1.5 text-[11px] text-gray-500">
                   {c.lift != null
                     ? `${Math.round(c.listening_share * 100)}% of your plays · ${c.lift >= 1 ? `${c.lift}× more than its size` : `${c.lift}× its size`}`
@@ -592,7 +611,18 @@ export default function MapPage() {
                   Pairs from different clusters that still match musically: similar sound, same or neighbouring key, same or half/double tempo, similar mood.
                   Good for transitions and playlist bridges.
                 </p>
-                {data?.hidden_connections.length === 0 && <p className="text-sm text-gray-500">No strong cross-cluster matches yet. Add key, BPM or mood columns.</p>}
+                {data?.hidden_connections.length === 0 && (
+                  <p className="text-sm leading-6 text-gray-500">
+                    {(data.meta.musical_tracks ?? 0) === 0
+                      ? "None of these songs has a key or tempo, and hidden links are matches on key, tempo and sound. Import again with “Look up genre, tempo, key and energy online” ticked (and a higher look-up limit for a big library), or use a CSV with key and BPM columns."
+                      : `No strong cross-cluster matches among the ${data.meta.musical_tracks.toLocaleString()} songs that have a key or tempo. Looking up more songs online gives it more to work with.`}
+                  </p>
+                )}
+                {data?.hidden_connections.length > 0 && data.meta.musical_tracks != null && data.meta.musical_tracks < data.meta.count * 0.5 && (
+                  <p className="text-[11px] leading-5 text-gray-500">
+                    Only {data.meta.musical_tracks.toLocaleString()} of {data.meta.count.toLocaleString()} songs have a key or tempo, so links are found among those. Look up more songs online for more.
+                  </p>
+                )}
                 {data?.hidden_connections.map((h, i) => (
                   <div key={i} className="rounded-xl border border-fuchsia-400/15 bg-fuchsia-400/[0.03] p-3">
                     <TrackLine t={byId[h.source]} onClick={() => setSelectedId(h.source)} />
@@ -703,6 +733,31 @@ export default function MapPage() {
           Built from {data.meta.source === "sample" ? "the sample library" : data.meta.source} using{" "}
           {data.meta.features_used.join(", ")} · layout: {data.meta.method.toUpperCase()}
         </p>
+      )}
+
+      {data?.clusters?.length > 1 && (
+        <div className="mt-6">
+          <h2 className="text-lg font-semibold text-white">Your music, cluster by cluster</h2>
+          <p className="mb-3 text-xs text-gray-500">
+            What each part of the map is made of. Click a card to light it up on the map; click a song to fly to it.
+          </p>
+          <ClusterAtlas
+            clusters={data.clusters}
+            byId={byId}
+            focusCluster={clusterFocus}
+            onFocus={(id) => {
+              setSelectedId(null);
+              setTab("clusters");
+              setClusterFocus(clusterFocus === id ? null : id);
+              mapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+            onSelect={(id) => {
+              setClusterFocus(null);
+              setSelectedId(id);
+              mapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+          />
+        </div>
       )}
 
       {data?.stats && (

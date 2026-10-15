@@ -123,3 +123,33 @@ def test_stats_and_track_extras_from_listening_history():
     assert 0 in [x["id"] for x in s["lists"]["rediscover"]]
     t = r["tracks"][0]
     assert t["year"] and t["first_played"] and t["energy"] is not None and t["skips"] is not None
+
+
+def test_hidden_links_found_when_only_some_songs_have_key_and_tempo():
+    import numpy as np
+
+    rng = np.random.default_rng(7)
+    n = 400
+    df = pd.DataFrame({
+        "title": [f"Song {i}" for i in range(n)],
+        "artist": [f"Artist {i % 40}" for i in range(n)],
+        "genre": rng.choice(["pop", "hip hop", "rock", "jazz", "house"], n),
+        "year": rng.integers(1980, 2024, n),
+    })
+    has = rng.random(n) < 0.3  # like a big library where only the most-played were looked up
+    df["key"] = [rng.choice(["Am", "C", "Em", "G"]) if h else None for h in has]
+    df["bpm"] = np.where(has, rng.choice([90, 120, 128], n), np.nan)
+    r = build_map(df)
+    assert r["meta"]["musical_tracks"] == has.sum()
+    assert len(r["hidden_connections"]) > 0
+    assert all(has[h["source"]] and has[h["target"]] for h in r["hidden_connections"])
+
+
+def test_clusters_describe_their_contents():
+    from app.routes.map import SAMPLE_CSV
+
+    r = build_map(pd.read_csv(SAMPLE_CSV))
+    c = r["clusters"][0]
+    assert c["top_tracks"] and c["top_artists"]
+    names = [c["label"].split(" · ")[0] for c in r["clusters"]]
+    assert len(names) == len(set(names))

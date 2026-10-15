@@ -181,12 +181,13 @@ export async function uploadCsv(file) {
 }
 
 /** POST /map/import — Spotify / Apple Music exports (several files at once). Returns an import job. */
-export async function importLibrary(files, { enrich = true, listen = true, listenLimit = null } = {}) {
+export async function importLibrary(files, { enrich = true, listen = true, listenLimit = null, limit = null } = {}) {
   const form = new FormData();
   for (const f of files) form.append("files", f);
   form.append("enrich", enrich ? "true" : "false");
   form.append("listen", listen ? "true" : "false");
   if (listenLimit) form.append("listen_limit", String(listenLimit));
+  if (limit) form.append("limit", String(limit));
   return apiFetch("/map/import", { method: "POST", body: form });
 }
 

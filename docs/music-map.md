@@ -29,13 +29,15 @@ Position means similarity. Two stars close together sound alike on the things yo
 - a **similar mood** (energy, valence, danceability)
 - a **similar sound**: the two songs are among the closest 3% of pairs by their CLAP sound description (only for songs that have one, see below)
 
-They make good transitions, mashups and playlist bridges.
+They make good transitions, mashups and playlist bridges. Only songs with a key, a tempo or a sound description can have hidden links, so a big library where few songs were looked up online has few of them (the tab says how many songs qualify). Raise **Look up at most … songs** when importing to give it more to work with. The number of links grows with the library: 15 for a few thousand qualifying songs, up to 60.
 
 **For you.** This tab appears when your CSV has listening data. SuperMusic averages your most-played tracks into a "taste centre", then finds the least-played third of your library that sits closest to it. It favours clusters with high signal and never shows more than four picks from one cluster. Each pick says which favourite it resembles and why.
 
 **Songs you may like.** Click any star (or any song in a list) and the side panel shows up to 8 songs from your library you may like if you like that one. When both songs have a sound description, how alike they sound counts for most of the score; otherwise it uses the map's own features, so the sliders still shape the picks. One artist can't fill the list (two songs each at most), songs you rarely play get a small nudge up, and each pick says why. The YouTube and Spotify buttons next to each song open it there: a direct link when your CSV has one (a Spotify `uri` like `spotify:track:…`, or a `youtube_url` column), otherwise a search for the artist and title. Recommending songs you don't own yet needs an outside music catalogue (see [What's next](#whats-next)).
 
 **Search.** This tab appears when songs have a sound description. Type what you want to hear, such as *sad slow piano* or *aggressive distorted guitars*, and the 20 closest-sounding songs light up on the map.
+
+**Your music, cluster by cluster** (below the map) is the atlas: one card per cluster with its share of your plays, key, tempo and years, its main artists, its most-played (or most typical) songs, and for clusters of 250+ songs the smaller groups inside it, named by what sets them apart ("D minor · 85–95 BPM"). Click a card to light that cluster up on the map. On big maps clusters are drawn as separate islands with a soft glow behind each, and clusters that would share a name are told apart by their main artist.
 
 **Colour by** (top right of the map) recolours the same stars by one property at a time: genre, release year, when you first or last played a song, plays, skip rate, tempo, energy or mood. Only properties your files have are listed. Continuous ones run from dim blue (low) to bright (high), stretched over the middle 96% of your songs so one outlier can't wash the rest out; grey stars have no value. "First played" over a big history shows which parts of the map you found when.
 

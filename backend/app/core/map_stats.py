@@ -143,7 +143,7 @@ def library_stats(p, labels: np.ndarray, clusters: List[Dict[str, Any]], tracks:
         for r in rows:
             r["camelot"], r["name"] = r["name"], names[r["name"]]
         out["keys"] = sorted(rows, key=lambda r: (int(r["camelot"][:-1]), r["camelot"][-1]))
-        out["modes"] = _breakdown(["minor" if k.minor else "major" if k else None for k in p.keys], w)
+        out["modes"] = _breakdown([("minor" if k.minor else "major") if k else None for k in p.keys], w)
     if p.bpm is not None and np.isfinite(p.bpm).any():
         b = np.where((p.bpm >= 40) & (p.bpm <= 220), p.bpm, np.nan)
         rows = _breakdown([f"{int(x // 10 * 10)}" if np.isfinite(x) else None for x in b], w)

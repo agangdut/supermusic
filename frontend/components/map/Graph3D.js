@@ -304,11 +304,33 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
     lines.frustumCulled = false;
     const ring = new THREE.Sprite(new THREE.SpriteMaterial({ map: getRingTexture(), transparent: true, depthWrite: false }));
     ring.visible = false;
+    // A soft nebula behind each cluster, so 20,000 stars read as islands, not one fog
+    const nebulae = new THREE.Group();
+    const byCluster = new Map();
+    for (const t of data.tracks) {
+      const a = byCluster.get(t.cluster) || [];
+      a.push(t);
+      byCluster.set(t.cluster, a);
+    }
+    for (const [cid, ts] of byCluster) {
+      if (ts.length < 20) continue;
+      const c = ["x", "y", "z"].map((k) => ts.reduce((a, t) => a + t[k], 0) / ts.length);
+      const r = ts.reduce((a, t) => a + Math.hypot(t.x - c[0], t.y - c[1], t.z - c[2]), 0) / ts.length;
+      const neb = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: getGlowTexture(), color: colorFor(cid), transparent: true, depthWrite: false,
+        blending: THREE.AdditiveBlending, opacity: 0.16,
+      }));
+      neb.position.set(c[0], c[1], c[2]);
+      neb.scale.set(r * 4.5, r * 4.5, 1);
+      neb.userData.cluster = cid;
+      nebulae.add(neb);
+    }
     const scene = fg.scene();
-    scene.add(points, lines, ring);
-    cloud.current = { points, lines, ring, geometry };
+    scene.add(nebulae, points, lines, ring);
+    cloud.current = { points, lines, ring, geometry, nebulae };
     return () => {
-      scene.remove(points, lines, ring);
+      scene.remove(nebulae, points, lines, ring);
+      nebulae.children.forEach((n) => n.material.dispose());
       geometry.dispose(); material.dispose(); lines.geometry.dispose(); lines.material.dispose();
       cloud.current = null;
     };
@@ -340,6 +362,10 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
       sz.setX(i, t.id === selectedId ? s * 2.6 : isPick ? Math.max(s, 5) * 2 : s * 1.6);
     });
     col.needsUpdate = alpha.needsUpdate = sz.needsUpdate = true;
+    const litClusters = focus ? new Set(data.tracks.filter((t) => focus.has(t.id)).map((t) => t.cluster)) : null;
+    for (const neb of c.nebulae.children) {
+      neb.material.opacity = !litClusters ? 0.16 : litClusters.has(neb.userData.cluster) ? 0.22 : 0.04;
+    }
     const sel = selectedId != null ? data.tracks[selectedId] : null;
     c.ring.visible = !!sel;
     if (sel) {
@@ -374,7 +400,8 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
     c.lines.geometry.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     c.lines.geometry.setAttribute("color", new THREE.BufferAttribute(col, 3));
     // The overview shows tens of thousands of links: keep them a faint haze
-    c.lines.material.opacity = selectedId != null || focus ? 0.4 : 0.06;
+    // A focused cluster of a thousand songs is a hairball at full strength; fade by link count
+    c.lines.material.opacity = selectedId != null ? 0.5 : focus ? Math.min(0.4, Math.max(0.06, 60 / Math.sqrt(visible.length + 1) / 10)) : 0.06;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [large, data, selectedId, mode, focus, colorOf]);
 

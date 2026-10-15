@@ -422,6 +422,16 @@ def _compress(x: np.ndarray) -> np.ndarray:
     return PCA(n_components=LAYOUT_DIMS, random_state=42, svd_solver="randomized").fit_transform(x).astype(np.float32)
 
 
+def _has_musical(p: "_Prepared") -> np.ndarray:
+    """Songs with a key, a tempo or a sound description."""
+    ok = np.array([k is not None for k in p.keys], dtype=bool)
+    if p.bpm is not None:
+        ok |= np.isfinite(p.bpm) & (p.bpm > 0)
+    if p.sound is not None:
+        ok |= np.isfinite(p.sound[:, 0])
+    return ok
+
+
 def _sound_vectors(df: pd.DataFrame) -> Tuple[Optional[np.ndarray], float, Optional[np.ndarray]]:
     """(centred unit vectors with NaN rows, "sounds alike" threshold, feature block) from the sound column.
 
@@ -474,8 +484,15 @@ def _embed_3d(x: np.ndarray, n_neighbors: int = 15) -> Tuple[np.ndarray, str]:
     return emb / scale * 100.0, method
 
 
+BIG_MAP = 2500  # above this, clusters are drawn as dense islands with wide gaps between them
+
+
 def _spread_clusters(emb: np.ndarray, labels: np.ndarray) -> np.ndarray:
-    """UMAP packs each cluster into a tight knot; open them up so every track is visible."""
+    """UMAP packs each cluster into a tight knot; open them up so every track is visible.
+
+    Small maps open each cluster wide so every star can be clicked. Big maps keep clusters
+    denser and further apart, so 20,000 stars read as separate islands rather than one fog."""
+    big = len(labels) > BIG_MAP
     out = emb.copy()
     for c in set(labels.tolist()):
         idx = np.where(labels == c)[0]
@@ -484,10 +501,10 @@ def _spread_clusters(emb: np.ndarray, labels: np.ndarray) -> np.ndarray:
         centre = emb[idx].mean(axis=0)
         offsets = emb[idx] - centre
         radius = np.linalg.norm(offsets, axis=1).mean()
-        target = 8 + 2.4 * math.sqrt(len(idx))
+        target = 6 + 1.3 * math.sqrt(len(idx)) if big else 8 + 2.4 * math.sqrt(len(idx))
         if radius > 1e-6:
             out[idx] = centre + offsets * (target / radius)
-    return _separate_clusters(out, labels)
+    return _separate_clusters(out, labels, gap=40.0 if big else 10.0)
 
 
 def _separate_clusters(emb: np.ndarray, labels: np.ndarray, gap: float = 10.0) -> np.ndarray:
@@ -669,6 +686,53 @@ def _cluster_label(p: _Prepared, idx: np.ndarray) -> Tuple[str, Dict[str, Any]]:
     return " · ".join(parts) or f"Group of {len(idx)}", info
 
 
+def _typical(idx: np.ndarray, emb: np.ndarray, eng: Optional[np.ndarray], k: int) -> List[int]:
+    """The k songs that best represent a group: most played, or nearest its centre without plays."""
+    if eng is not None and eng[idx].max() > 0:
+        order = idx[np.argsort(-eng[idx], kind="stable")]
+    else:
+        order = idx[np.argsort(np.linalg.norm(emb[idx] - emb[idx].mean(axis=0), axis=1))]
+    return [int(i) for i in order[:k]]
+
+
+def _cluster_details(p: _Prepared, idx: np.ndarray, emb: np.ndarray, eng: Optional[np.ndarray],
+                     label: str) -> Dict[str, Any]:
+    """What a cluster actually contains: its artists, its most typical songs, its years, and
+    for big clusters the smaller groups inside it, so a 2,000-song cluster isn't just a name."""
+    out: Dict[str, Any] = {"top_tracks": _typical(idx, emb, eng, 6)}
+    artists = _share([p.artists[i] or None for i in idx], eng[idx] if eng is not None and eng[idx].sum() > 0 else None)
+    counts: Dict[str, int] = {}
+    for i in idx:
+        if p.artists[i]:
+            counts[p.artists[i]] = counts.get(p.artists[i], 0) + 1
+    out["top_artists"] = [{"name": a, "songs": counts.get(a, 0)} for a, _ in artists[:5]]
+    if p.cols["year"]:
+        yr = pd.to_numeric(p.df[p.cols["year"]].iloc[idx].astype(str).str[:4], errors="coerce").dropna()
+        yr = yr[(yr > 1900) & (yr < 2100)]
+        if len(yr) >= 3:
+            out["years"] = [int(yr.quantile(0.1)), int(yr.quantile(0.9))]
+    if len(idx) >= 250:
+        from sklearn.cluster import KMeans
+
+        k = int(min(5, max(2, round(len(idx) / 400))))
+        sub = KMeans(n_clusters=k, n_init=4, random_state=42).fit_predict(emb[idx])
+        parent = set(label.split(" · "))
+        groups = []
+        for s in range(k):
+            sidx = idx[sub == s]
+            if len(sidx) == 0:
+                continue
+            slabel, sinfo = _cluster_label(p, sidx)
+            # Name it by what sets it apart from the parent ("D minor · 85–95 BPM"), not what it shares
+            parts = [x for x in slabel.split(" · ") if x not in parent] or slabel.split(" · ")
+            g = {"label": " · ".join(parts[:2]), "size": int(len(sidx)), "top_tracks": _typical(sidx, emb, eng, 3)}
+            if eng is not None and eng[idx].sum() > 0:
+                g["listening_share"] = round(float(eng[sidx].sum() / eng[idx].sum()), 3)
+            groups.append(g)
+        out["subgroups"] = sorted(groups, key=lambda g: -g["size"])
+    return out
+
+
 def _pair_reasons(p: _Prepared, i: int, j: int) -> List[str]:
     reasons: List[str] = []
     if p.sound is not None and np.isfinite(p.sound[i, 0]) and np.isfinite(p.sound[j, 0]):
@@ -838,6 +902,20 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
             entry["lift"] = round(eng_share / size_share, 2)
         clusters.append(entry)
 
+    for c in clusters:
+        c.update(_cluster_details(p, np.where(labels == c["id"])[0], emb, eng, c["label"]))
+
+    # Two clusters both called "Jazz" tell you nothing; name repeats after their main artist
+    firsts: Dict[str, int] = {}
+    for c in clusters:
+        f = c["label"].split(" · ")[0]
+        firsts[f] = firsts.get(f, 0) + 1
+    for c in clusters:
+        parts = c["label"].split(" · ")
+        if firsts[parts[0]] > 1 and c.get("top_artists"):
+            parts[0] = f"{parts[0]}: {c['top_artists'][0]['name']}"
+            c["label"] = " · ".join(parts)
+
     if eng is not None and total_eng > 0:
         max_lift = max(c["lift"] for c in clusters) or 1
         for c in clusters:
@@ -893,15 +971,23 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
     # Tracks in different clusters (usually different genres) that still match
     # musically: same or neighbouring key, same or half/double tempo, similar mood.
     hidden = []
-    if p.musical is not None:
-        m = p.musical
-        km = max(1, min(25, n - 1))
+    # Only songs with a key, a tempo or a sound description can match musically. Songs with
+    # none of these all sit on the same spot in the musical space, so in a big library where
+    # only a few songs were looked up online, they would crowd everyone's nearest neighbours.
+    musical_ok = _has_musical(p)
+    hidden_cap = int(min(60, max(15, musical_ok.sum() // 300)))  # ~15 for 4,500 songs, 60 at 18,000+
+    if p.musical is not None and musical_ok.sum() >= 4:
+        rows = np.where(musical_ok)[0]
+        m = p.musical[rows]
+        km = max(1, min(25, len(rows) - 1))
         mdist, mind = NearestNeighbors(n_neighbors=km + 1).fit(m).kneighbors(m)
+        mind = rows[mind]  # back to library row numbers
         mscale = np.median(mdist[:, 1:]) or 1.0
         seen = set()
         candidates = []
-        for i in range(n):
-            for d, j in zip(mdist[i, 1:], mind[i, 1:]):
+        for r, i in enumerate(rows):
+            i = int(i)
+            for d, j in zip(mdist[r, 1:], mind[r, 1:]):
                 j = int(j)
                 if labels[i] == labels[j]:
                     continue
@@ -925,7 +1011,7 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
                              "kind": "hidden", "reasons": reasons}
             per_track[a] = per_track.get(a, 0) + 1
             per_track[b] = per_track.get(b, 0) + 1
-            if len(hidden) >= 15:
+            if len(hidden) >= hidden_cap:
                 break
     for e in edges.values():
         e.setdefault("kind", "similar")
@@ -965,6 +1051,8 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
             "features_used": p.feature_groups,
             "has_listening_data": eng is not None,
             "sound_tracks": int(np.isfinite(p.sound[:, 0]).sum()) if p.sound is not None else 0,
+            # songs with a key, tempo or sound description: what hidden connections can use
+            "musical_tracks": int(musical_ok.sum()),
             "columns": {k: v for k, v in p.cols.items() if v},
         },
     }
