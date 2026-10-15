@@ -297,7 +297,9 @@ def merge(frames: List[pd.DataFrame]) -> pd.DataFrame:
         df[c] = df[c].map(lambda v: None if v is None or (isinstance(v, float) and np.isnan(v)) or v == "" else str(v)[:10])
     agg = {c: "first" for c in CANONICAL if c not in sums and c != "source"}
     agg.update({c: "sum" for c in sums})
-    agg.update(first_played="min", last_played="max", added_at="min")
+    # Not "min"/"max": pandas 2 can't compare None with text in those
+    earliest = lambda s: min(s.dropna(), default=None)  # noqa: E731
+    agg.update(first_played=earliest, last_played=lambda s: max(s.dropna(), default=None), added_at=earliest)
     agg["source"] = lambda s: "+".join(sorted(set(map(str, s.dropna()))))
     agg["playlists"] = lambda s: "; ".join(dict.fromkeys(p.strip() for v in s.dropna() for p in str(v).split(";")
                                                          if p.strip())) or None
