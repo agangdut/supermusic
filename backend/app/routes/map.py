@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
+from app.core import map_share
 from app.core.music_map import MapOptions, build_map, similar_tracks, estimate_build_seconds
 
 router = APIRouter(prefix="/map", tags=["map"])
@@ -19,6 +20,7 @@ MAX_TRACKS = 50_000  # a 23,000-song library draws in about half a minute on a 4
 class MapRequest(BaseModel):
     csv_path: Optional[str] = Field(None, description="Server path from /upload/csv. Leave empty with sample=true.")
     sample: bool = Field(False, description="Use the bundled sample library instead of an upload.")
+    share_id: Optional[str] = Field(None, description="Use the library behind a shared map.")
     neighbors: int = Field(4, ge=1, le=15, description="Links drawn from each track to its closest matches.")
     clusters: Optional[int] = Field(None, ge=1, le=40, description="Fixed number of groups; empty picks one.")
     weights: Dict[str, float] = Field(
@@ -30,11 +32,7 @@ class MapRequest(BaseModel):
 @router.post("/build")
 async def build(req: MapRequest) -> dict:
     """Build a 3D taste map from a CSV of tracks. Fast enough to run inline."""
-    path = SAMPLE_CSV if req.sample else Path(req.csv_path or "")
-    if not req.sample and not req.csv_path:
-        raise HTTPException(status_code=400, detail="Send csv_path, or sample=true.")
-    if not path.exists():
-        raise HTTPException(status_code=404, detail=f"CSV file not found: {path}")
+    path = _library(req)
     try:
         df = pd.read_csv(path)
     except Exception as e:
@@ -51,8 +49,25 @@ async def build(req: MapRequest) -> dict:
         result = await run_in_threadpool(build_map, df, opts)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    result["meta"]["source"] = "sample" if req.sample else path.name
+    result["meta"]["source"] = "sample" if req.sample else "shared map" if req.share_id else path.name
     return result
+
+
+def _library(req) -> Path:
+    """The CSV a request is about: the sample, a shared map's songs, or an uploaded file."""
+    if req.sample:
+        return SAMPLE_CSV
+    if getattr(req, "share_id", None):
+        path = map_share.library_path(req.share_id)
+        if not path:
+            raise HTTPException(status_code=404, detail="This shared map has no song list to work from.")
+        return path
+    if not req.csv_path:
+        raise HTTPException(status_code=400, detail="Send csv_path, share_id, or sample=true.")
+    path = Path(req.csv_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"CSV file not found: {path}")
+    return path
 
 
 def warm_up() -> None:
@@ -356,6 +371,7 @@ def estimate(tracks: int) -> dict:
 class SearchRequest(BaseModel):
     csv_path: Optional[str] = Field(None, description="The map's library CSV (meta.library_csv or the uploaded path).")
     sample: bool = False
+    share_id: Optional[str] = None
     query: str = Field(..., min_length=1, max_length=200, description='What it should sound like, e.g. "sad slow piano".')
     limit: int = Field(20, ge=1, le=100)
 
@@ -363,9 +379,7 @@ class SearchRequest(BaseModel):
 @router.post("/search")
 async def search_sound(req: SearchRequest) -> dict:
     """Songs whose sound best matches a description. Needs a library imported with the CLAP service running."""
-    path = SAMPLE_CSV if req.sample else Path(req.csv_path or "")
-    if not path.exists():
-        raise HTTPException(status_code=404, detail=f"CSV file not found: {path}")
+    path = _library(req)
     df = pd.read_csv(path).dropna(how="all").reset_index(drop=True)  # same rows, same ids as /build
     if sound.matrix(df) is None:
         raise HTTPException(status_code=400, detail="This library has no sound data yet. Import it again with the CLAP service running.")
@@ -383,6 +397,7 @@ async def search_sound(req: SearchRequest) -> dict:
 class LikeRequest(BaseModel):
     csv_path: Optional[str] = Field(None, description="The map's library CSV (meta.library_csv or the uploaded path).")
     sample: bool = False
+    share_id: Optional[str] = None
     id: int = Field(..., ge=0, description="The clicked track's id from /build.")
     weights: Dict[str, float] = Field(default_factory=dict, description="The same slider weights used for the map.")
     limit: int = Field(8, ge=1, le=30)
@@ -391,12 +406,129 @@ class LikeRequest(BaseModel):
 @router.post("/like")
 async def like(req: LikeRequest) -> dict:
     """Songs from the same library that someone who likes this track may like."""
-    path = SAMPLE_CSV if req.sample else Path(req.csv_path or "")
-    if not path.exists():
-        raise HTTPException(status_code=404, detail=f"CSV file not found: {path}")
+    path = _library(req)
     df = pd.read_csv(path)
     opts = MapOptions(weights={k: max(0.0, min(2.0, float(v))) for k, v in req.weights.items()})
     try:
         return await run_in_threadpool(similar_tracks, df, req.id, opts, req.limit)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Sharing a map
+# ---------------------------------------------------------------------------
+
+class ShareRequest(BaseModel):
+    map: Dict = Field(..., description="The map as /map/build or an import returned it.")
+    title: str = Field(..., min_length=1, max_length=80)
+    by: Optional[str] = Field(None, max_length=40, description="Name shown on the share; empty for anonymous.")
+    listed: bool = Field(False, description="Show it on the public list of shared maps (/maps).")
+    include_listening: bool = Field(True, description="Keep play counts, likes and the stats built on them.")
+    weights: Dict[str, float] = Field(default_factory=dict, description="The slider weights the map was drawn with.")
+    csv_path: Optional[str] = Field(None, description="The map's library CSV, so visitors can Remap and play radio.")
+    sample: bool = False
+    share_id: Optional[str] = Field(None, description="Re-sharing a shared map: copy its library.")
+
+
+def _shareable_library(req: ShareRequest) -> Optional[Path]:
+    """Only the sample, another share, or a file SuperMusic itself wrote can go into a share,
+    so a crafted csv_path can't publish some other file from the server."""
+    if req.sample:
+        return SAMPLE_CSV
+    if req.share_id:
+        return map_share.library_path(req.share_id)
+    if req.csv_path:
+        path = Path(req.csv_path).resolve()
+        if path.suffix.lower() == ".csv" and path.is_file() and any(path.is_relative_to(r) for r in _library_roots()):
+            return path
+    return None
+
+
+def _library_roots() -> List[Path]:
+    """Where SuperMusic writes CSVs: imports, uploads and CSV enrichment results."""
+    from app.routes.upload import UPLOAD_DIR
+    from app.utils.storage import _ARTIFACT_DIR
+
+    return [p.resolve() for p in (settings.DATA_DIR, settings.PROCESSED_DIR, UPLOAD_DIR, _ARTIFACT_DIR)]
+
+
+@router.post("/share")
+async def share_map(req: ShareRequest) -> dict:
+    """Save a snapshot of a map under a short link. Returns the id and a secret delete token."""
+    tracks = req.map.get("tracks")
+    if isinstance(tracks, list) and len(tracks) > MAX_TRACKS:
+        raise HTTPException(status_code=400, detail=f"Maps are limited to {MAX_TRACKS:,} tracks.")
+    result = dict(req.map)
+    result["meta"] = {**(result.get("meta") or {}),
+                      "weights": {k: max(0.0, min(2.0, float(v))) for k, v in req.weights.items()}}
+    try:
+        return await run_in_threadpool(
+            map_share.create, result, title=req.title.strip(), by=(req.by or "").strip() or None,
+            listed=req.listed, include_listening=req.include_listening, library=_shareable_library(req))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/shared")
+def shared_maps(limit: int = 50) -> dict:
+    """Maps people chose to list publicly, newest first."""
+    return {"maps": map_share.list_public(max(1, min(limit, 200)))}
+
+
+@router.get("/shared/{share_id}")
+async def shared_map(share_id: str) -> dict:
+    found = await run_in_threadpool(map_share.get, share_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="This shared map doesn't exist, or its owner stopped sharing it.")
+    return found
+
+
+class UnshareRequest(BaseModel):
+    delete_token: str = Field(..., min_length=8, max_length=100)
+
+
+@router.post("/shared/{share_id}/delete")
+def unshare(share_id: str, req: UnshareRequest) -> dict:
+    if not map_share.read_meta(share_id):
+        raise HTTPException(status_code=404, detail="This shared map is already gone.")
+    if not map_share.delete(share_id, req.delete_token):
+        raise HTTPException(status_code=403, detail="Only the browser that shared this map can stop sharing it.")
+    return {"deleted": share_id}
+
+
+# ---------------------------------------------------------------------------
+# Map Radio: previews to play, and YouTube ids to make a playlist from
+# ---------------------------------------------------------------------------
+
+from app.core import listen_links  # noqa: E402
+
+
+@router.get("/preview")
+async def song_preview(title: str, artist: str = "") -> dict:
+    """A fresh 30-second preview link for one song, from Deezer."""
+    try:
+        return await run_in_threadpool(listen_links.preview, artist.strip(), title.strip())
+    except Exception as e:  # Deezer down or unreachable
+        raise HTTPException(status_code=502, detail=f"Couldn't reach Deezer for a preview: {e}")
+
+
+class YoutubeSong(BaseModel):
+    title: str
+    artist: Optional[str] = None
+    youtube_url: Optional[str] = None
+
+
+class YoutubeRequest(BaseModel):
+    songs: List[YoutubeSong] = Field(..., min_length=1, max_length=50)
+
+
+@router.post("/youtube-ids")
+async def youtube_ids(req: YoutubeRequest) -> dict:
+    """A YouTube video id for each song (None when nothing was found), in the same order.
+    Open them as a playlist with https://www.youtube.com/watch_videos?video_ids=a,b,c."""
+    try:
+        ids = await run_in_threadpool(listen_links.youtube_ids, [s.model_dump() for s in req.songs])
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {"ids": ids}

@@ -5,12 +5,14 @@ import { useRouter } from "next/router";
 
 import PageShell from "@/components/layout/PageShell";
 import { setBackgroundWork } from "@/lib/backgroundWork";
-import { buildMap, getImport, getMapEstimate, importLibrary, likeSongs, searchSound, skipListening } from "@/lib/api";
+import { buildMap, getImport, getMapEstimate, getSharedMap, importLibrary, likeSongs, searchSound, skipListening } from "@/lib/api";
 import { colorFor } from "@/components/map/colors";
 import ImportProgress, { BuildProgress } from "@/components/map/ImportProgress";
 import StatsPanel from "@/components/map/StatsPanel";
 import ClusterAtlas from "@/components/map/ClusterAtlas";
 import { availableLenses, buildLens, RAMP_CSS } from "@/components/map/lenses";
+import RadioPanel from "@/components/map/RadioPanel";
+import ShareDialog from "@/components/map/ShareDialog";
 
 const Graph3D = dynamic(() => import("@/components/map/Graph3D"), {
   ssr: false,
@@ -31,6 +33,7 @@ const TABS = [
   { id: "hidden", label: "Hidden links" },
   { id: "picks", label: "For you" },
   { id: "search", label: "Search", needsSound: true },
+  { id: "radio", label: "Radio" },
 ];
 
 const EXAMPLE_SEARCHES = ["sad slow piano", "aggressive distorted guitars", "smooth jazz with saxophone", "upbeat dance with heavy bass"];
@@ -110,6 +113,11 @@ export default function MapPage() {
   const startedRef = useRef(false);
 
   const [buildEstimate, setBuildEstimate] = useState(null); // seconds, when the track count is known
+  const [shared, setShared] = useState(null); // the shared map being viewed: { id, title, by, ... }
+  const [sharing, setSharing] = useState(false);
+  const [station, setStation] = useState(null); // Map Radio's current station
+  const [playingId, setPlayingId] = useState(null);
+  const [radioRequest, setRadioRequest] = useState(null);
 
   const load = useCallback(async (src, w, tracks) => {
     const req = ++requestRef.current;
@@ -133,11 +141,43 @@ export default function MapPage() {
     }
   }, []);
 
+  // /map?share=<id> opens someone's shared map, as they saw it
+  const openShared = useCallback(async (id) => {
+    const req = ++requestRef.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const s = await getSharedMap(id);
+      if (req !== requestRef.current) return;
+      const { map, ...meta } = s;
+      setShared(meta);
+      setData(map);
+      // Visitors can Remap, find similar songs and search only when the share kept its song list
+      setSource(meta.has_library ? { share_id: id } : null);
+      const w = map.meta?.weights;
+      mapWeightsRef.current = w || {};
+      if (w && Object.keys(w).length) setWeights((old) => ({ ...old, ...w }));
+      setFound(null);
+      setSelectedId(null);
+      setClusterFocus(null);
+      setTab("clusters");
+    } catch (e) {
+      if (req === requestRef.current) setError(e.message || String(e));
+    } finally {
+      if (req === requestRef.current) setLoading(false);
+    }
+  }, []);
+
   // /map?csv=<server path> opens a library (e.g. from CSV enrichment); otherwise the sample
   const router = useRouter();
   useEffect(() => {
     if (!router.isReady || startedRef.current) return; // React strict mode runs effects twice in dev
     startedRef.current = true;
+    const shareId = typeof router.query.share === "string" ? router.query.share : null;
+    if (shareId) {
+      openShared(shareId);
+      return;
+    }
     const csv = typeof router.query.csv === "string" ? router.query.csv : null;
     const src = csv ? { csv_path: csv } : { sample: true };
     setSource(src);
@@ -201,6 +241,7 @@ export default function MapPage() {
       setClusterFocus(null);
       setTab(job.result.recommendations?.length ? "picks" : "clusters");
       setSource({ csv_path: job.result.meta.library_csv }); // so Remap works on the imported library
+      setShared(null);
     } catch (err) {
       setError(err.message || String(err));
     } finally {
@@ -220,7 +261,7 @@ export default function MapPage() {
 
   const runSearch = async (text) => {
     const q = (text ?? query).trim();
-    if (!q) return;
+    if (!q || !source) return;
     setQuery(q);
     setSearching(true);
     setSearchError(null);
@@ -251,6 +292,7 @@ export default function MapPage() {
     }
     if (clusterFocus != null) return new Set(data.tracks.filter((t) => t.cluster === clusterFocus).map((t) => t.id));
     if (tab === "search" && found?.results.length) return new Set(found.results.map((r) => r.id));
+    if (tab === "radio" && station) return new Set(station.ids);
     if (tab === "hidden") return new Set(data.hidden_connections.flatMap((h) => [h.source, h.target]));
     if (tab === "picks" && data.recommendations.length) {
       const s = new Set();
@@ -258,14 +300,14 @@ export default function MapPage() {
       return s;
     }
     return null;
-  }, [data, selectedId, clusterFocus, tab, found]);
+  }, [data, selectedId, clusterFocus, tab, found, station]);
 
   const selected = selectedId != null ? byId[selectedId] : null;
 
   // "Songs you may like" for the clicked track, from the same library
   const [likes, setLikes] = useState(null); // { id, basis, results } | { id, error }
   useEffect(() => {
-    if (selectedId == null || !data) { setLikes(null); return; }
+    if (selectedId == null || !data || !source) { setLikes(null); return; }
     let stale = false;
     setLikes({ id: selectedId, loading: true });
     likeSongs({ ...source, id: selectedId, weights: mapWeightsRef.current })
@@ -303,6 +345,14 @@ export default function MapPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {data && (
+            <button
+              onClick={() => setSharing(true)}
+              className="rounded-xl border border-fuchsia-400/40 px-4 py-2 text-sm text-fuchsia-100 hover:bg-fuchsia-400/10"
+            >
+              Share
+            </button>
+          )}
           <input ref={fileRef} type="file" multiple accept=".csv,.json,.txt" onChange={onFile} className="hidden" />
           <button
             onClick={() => fileRef.current?.click()}
@@ -311,7 +361,7 @@ export default function MapPage() {
             Import Spotify / Apple Music
           </button>
           <button
-            onClick={() => { setSource({ sample: true }); load({ sample: true }, weights); }}
+            onClick={() => { setShared(null); setSource({ sample: true }); load({ sample: true }, weights); }}
             className="rounded-xl border border-white/15 px-4 py-2 text-sm text-gray-200 hover:bg-white/5"
           >
             Use sample library
@@ -321,6 +371,30 @@ export default function MapPage() {
           </a>
         </div>
       </div>
+
+      {sharing && data && (
+        <ShareDialog
+          data={data}
+          weights={mapWeightsRef.current}
+          source={source || {}}
+          defaultTitle={shared ? shared.title : undefined}
+          onClose={() => setSharing(false)}
+        />
+      )}
+
+      {shared && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-400/20 bg-indigo-400/[0.05] px-4 py-3">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-white">{shared.title}</div>
+            <div className="text-xs text-gray-400">
+              Shared by {shared.by || "someone"}
+              {shared.created ? ` on ${new Date(shared.created * 1000).toLocaleDateString()}` : ""}
+              {" · "}{(shared.songs || 0).toLocaleString()} songs. Try the Radio tab to listen through it.
+            </div>
+          </div>
+          <a href="/maps" className="shrink-0 text-xs text-indigo-200 hover:text-white">More shared maps →</a>
+        </div>
+      )}
 
       {pending && (
         <div className="mb-4 rounded-xl border border-fuchsia-400/20 bg-fuchsia-400/[0.04] p-4">
@@ -435,7 +509,7 @@ export default function MapPage() {
           {data && (
             <Graph3D
               data={data}
-              selectedId={selectedId}
+              selectedId={selectedId ?? (tab === "radio" ? playingId : null)}
               focusIds={focusIds}
               focusCluster={clusterFocus}
               picks={picks}
@@ -499,6 +573,12 @@ export default function MapPage() {
                 </div>
                 <button onClick={() => setSelectedId(null)} className="text-gray-500 hover:text-white" aria-label="Close">✕</button>
               </div>
+              <button
+                onClick={() => { setRadioRequest({ kind: "song", seedId: selected.id }); setTab("radio"); setSelectedId(null); }}
+                className="mt-2 rounded-md border border-fuchsia-400/30 px-2 py-0.5 text-[11px] text-fuchsia-200 hover:bg-fuchsia-400/10"
+              >
+                ▶ Start radio from this song
+              </button>
               <div className="mt-2 flex flex-wrap gap-1">
                 {selected.genre && <Chip>{selected.genre}</Chip>}
                 {selected.key && <Chip>{selected.key} · {selected.camelot}</Chip>}
@@ -634,6 +714,22 @@ export default function MapPage() {
               </>
             )}
 
+            {/* Kept mounted so the music keeps playing while you look at other tabs */}
+            <div className={tab === "radio" ? "" : "hidden"}>
+              {data && (
+                <RadioPanel
+                  data={data}
+                  byId={byId}
+                  selectedId={selectedId}
+                  clusterFocus={clusterFocus}
+                  request={radioRequest}
+                  onStation={setStation}
+                  onPlaying={setPlayingId}
+                  backUrl={shared ? `/map?share=${encodeURIComponent(shared.id)}` : source?.csv_path ? `/map?csv=${encodeURIComponent(source.csv_path)}` : "/map"}
+                />
+              )}
+            </div>
+
             {tab === "search" && (
               <>
                 <form onSubmit={(e) => { e.preventDefault(); runSearch(); }} className="flex gap-2">
@@ -704,7 +800,8 @@ export default function MapPage() {
               <span className="text-[11px] uppercase tracking-wider text-gray-500">Shape the map by</span>
               <button
                 onClick={() => load(source, weights, data?.tracks?.length)}
-                disabled={loading}
+                disabled={loading || !source}
+                title={source ? undefined : "This shared map came without its song list, so it can't be redrawn"}
                 className="rounded-lg bg-white/10 px-2.5 py-1 text-xs text-white hover:bg-white/15 disabled:opacity-40"
               >
                 Remap

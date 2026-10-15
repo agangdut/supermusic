@@ -41,6 +41,7 @@ export default function PageShell({ children }) {
           {[
             { href: "/upload", label: "Workspace" },
             { href: "/map", label: "Music Map" },
+            { href: "/maps", label: "Shared maps" },
           ].map((l) => (
             <Link
               key={l.href}

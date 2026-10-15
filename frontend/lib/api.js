@@ -158,18 +158,48 @@ export async function runAndWait(makeJobFn, { onUpdate, ...pollOpts } = {}) {
 // --- Music map ---------------------------------------------------------------
 
 /** POST /map/build — returns { tracks, edges, clusters, hidden_connections, insights, recommendations, meta } */
-export async function buildMap({ csv_path, sample = false, neighbors = 4, clusters = null, weights = {} }) {
-  return postJSON("/map/build", { csv_path, sample, neighbors, clusters, weights });
+export async function buildMap({ csv_path, sample = false, share_id, neighbors = 4, clusters = null, weights = {} }) {
+  return postJSON("/map/build", { csv_path, sample, share_id, neighbors, clusters, weights });
 }
 
 /** "Songs you may like" for one track of the map (same library, same slider weights). */
-export async function likeSongs({ csv_path, sample = false, id, weights = {}, limit = 8 }) {
-  return postJSON("/map/like", { csv_path, sample, id, weights, limit });
+export async function likeSongs({ csv_path, sample = false, share_id, id, weights = {}, limit = 8 }) {
+  return postJSON("/map/like", { csv_path, sample, share_id, id, weights, limit });
 }
 
 /** Songs whose sound matches a typed description (needs sound data from an import with CLAP running). */
-export async function searchSound({ csv_path, sample = false, query, limit = 20 }) {
-  return postJSON("/map/search", { csv_path, sample, query, limit });
+export async function searchSound({ csv_path, sample = false, share_id, query, limit = 20 }) {
+  return postJSON("/map/search", { csv_path, sample, share_id, query, limit });
+}
+
+/** Save a snapshot of a map under a short link. Returns { id, delete_token, ... }. */
+export async function shareMap({ map, title, by, listed = false, include_listening = true, weights = {}, source = {} }) {
+  return postJSON("/map/share", { map, title, by, listed, include_listening, weights, ...source });
+}
+
+/** A shared map: { id, title, by, created, songs, has_library, map }. */
+export async function getSharedMap(id) {
+  return apiFetch(`/map/shared/${encodeURIComponent(id)}`);
+}
+
+/** Maps people chose to list publicly. */
+export async function listSharedMaps() {
+  return apiFetch("/map/shared");
+}
+
+export async function unshareMap(id, delete_token) {
+  return postJSON(`/map/shared/${encodeURIComponent(id)}/delete`, { delete_token });
+}
+
+/** A fresh 30-second Deezer preview for one song: { preview, deezer_url, cover }. */
+export async function getPreview({ artist, title }) {
+  const q = new URLSearchParams({ title, artist: artist || "" });
+  return apiFetch(`/map/preview?${q}`);
+}
+
+/** One YouTube video id (or null) per song, in order. At most 50 songs. */
+export async function getYoutubeIds(songs) {
+  return postJSON("/map/youtube-ids", { songs });
 }
 
 /** Upload a CSV and return its server path. */

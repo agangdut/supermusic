@@ -26,7 +26,7 @@ _October 2026._ New here? Read this, then **[How it works](docs/how-it-works.md)
 - **Audio → MIDI works.** **MuScriptor** is the default full-band engine: on real pop songs it scores 0.47 overall F1, against 0.35 for YourMT3+ and 0.14 for Basic Pitch. Solo piano is near perfect (0.97) with the Piano model. ([benchmarks](docs/transcription-accuracy.md))
 - **Voices** get their own clean "Lead vocal" track, transcribed by **GAME**, a singing-only model. It gets about 70% more sung notes right than MuScriptor's own voice track (vocal F1 0.25 vs 0.15), though singing is still the hardest part.
 - **Playable piano** works: "Playable by two hands", Piano cover (Pop2Piano), and a piano MP3 preview of every result.
-- **Music Map** works from a CSV or Spotify / Apple Music exports. Genres roll Spotify's detailed tags into ~20 broad ones, with an online lookup for songs that have none.
+- **Music Map** works from a CSV or Spotify / Apple Music exports. Genres roll Spotify's detailed tags into ~20 broad ones, with an online lookup for songs that have none. Maps can be **shared by link** (play counts stay private unless you include them), and **Map Radio** plays a station that walks through the map, which you can send to Spotify, YouTube or a CSV.
 - **Research:** learned music models group songs by genre far better than the map's own features: CLAP 39%, MERT 29%, the map 16% same-genre neighbours. Adding a CLAP vector per song to the map is the likely next step. We also checked our MuScriptor service against the authors' official server: same accuracy.
 - **Not done yet:** jobs and accounts are lost on restart, no job queue, no login screen, no YouTube screen, no deploy setup. See the [roadmap](docs/roadmap.md).
 
@@ -40,7 +40,7 @@ _October 2026._ New here? Read this, then **[How it works](docs/how-it-works.md)
 | 🥁 **Stem separation** | Splits a mix into vocals, drums, bass and other | [Demucs](https://github.com/facebookresearch/demucs) |
 | 🧾 **CSV enrichment** | Combines any number of CSVs and Spotify / Apple Music exports (JSON included) into one deduplicated track list, and looks up missing genre, year, tempo, key and energy | librosa |
 | ⬇️ **Track download** | Grabs the audio from a YouTube (or similar) link (API only for now) | [yt-dlp](https://github.com/yt-dlp/yt-dlp) |
-| 🌌 **Music Map** | Turns your library (a CSV, or Spotify / Apple Music exports) into a 3D constellation: taste clusters, hidden connections between genres, picks you've been missing, and search by how songs sound | UMAP, scikit-learn, three.js, CLAP |
+| 🌌 **Music Map** | Turns your library (a CSV, or Spotify / Apple Music exports) into a 3D constellation: taste clusters, hidden connections between genres, picks you've been missing, and search by how songs sound. Share it by link, or start a radio station from any part of it and send it to Spotify or YouTube ([guide](docs/music-map.md#map-radio)) | UMAP, scikit-learn, three.js, CLAP |
 | 📦 **Batch and export** | Runs many files at once and zips up the results | FastAPI |
 
 Every task runs as a **job**. You start it, the page shows its progress and time left, and the finished files appear as downloads.

@@ -82,7 +82,10 @@ The UI covers MIDI, stems, CSV and the Music Map. These work in the API but have
 - [ ] Recommend songs **outside** your library (e.g. MusicBrainz, Spotify or Last.fm "similar tracks", placed on your map)
 - [ ] Import listening history straight from the Spotify or Last.fm API (file exports already work)
 - [ ] Save maps and watch your taste drift over time
-- [ ] Turn a hidden connection or a cluster into a playlist with one click
+- [x] Turn a cluster or a path between two songs into a station, and send it to Spotify, YouTube or a CSV (Map Radio)
+- [x] Share a map by link, optionally listed on a public Shared maps page
+- [ ] Accounts for shared maps (today the sharing browser keeps the delete key)
+- [ ] Full-length playback inside SuperMusic for Spotify Premium listeners (Spotify Web Playback SDK)
 - [ ] Play a 30-second preview when you click a star
 
 ## 💡 Ideas from the first prototype
