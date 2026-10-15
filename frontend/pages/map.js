@@ -180,20 +180,28 @@ export default function MapPage() {
 
   // /map?csv=<server path> opens a library (e.g. from CSV enrichment); otherwise the sample
   const router = useRouter();
+  // This page stays mounted when you go to other pages (see _app.js), so a link like
+  // /maps -> /map?share=<id> arrives as a new query, not a fresh page: follow it.
+  // Plain /map keeps whatever map is open (or opens the sample the first time).
+  const openedRef = useRef(null);
+  const shareQuery = typeof router.query.share === "string" ? router.query.share : null;
+  const csvQuery = typeof router.query.csv === "string" ? router.query.csv : null;
   useEffect(() => {
-    if (!router.isReady || startedRef.current) return; // React strict mode runs effects twice in dev
+    if (!router.isReady) return;
+    const want = shareQuery ? `share:${shareQuery}` : csvQuery ? `csv:${csvQuery}` : null;
+    if (want ? openedRef.current === want : startedRef.current) return; // also: strict mode runs effects twice in dev
     startedRef.current = true;
-    const shareId = typeof router.query.share === "string" ? router.query.share : null;
-    if (shareId) {
-      openShared(shareId);
+    openedRef.current = want;
+    if (shareQuery) {
+      openShared(shareQuery);
       return;
     }
-    const csv = typeof router.query.csv === "string" ? router.query.csv : null;
-    const src = csv ? { csv_path: csv } : { sample: true };
+    setShared(null);
+    const src = csvQuery ? { csv_path: csvQuery } : { sample: true };
     setSource(src);
     load(src, weights);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router.isReady]);
+  }, [router.isReady, shareQuery, csvQuery]);
 
   const [pending, setPending] = useState(null); // files picked, waiting for "Build my map"
   const [enrichOnline, setEnrichOnline] = useState(true);
@@ -252,6 +260,7 @@ export default function MapPage() {
       setTab(job.result.recommendations?.length ? "picks" : "clusters");
       setSource({ csv_path: job.result.meta.library_csv }); // so Remap works on the imported library
       setShared(null);
+      openedRef.current = null; // following a share link again should reopen it
     } catch (err) {
       setError(err.message || String(err));
     } finally {
@@ -380,7 +389,7 @@ export default function MapPage() {
             Import Spotify / Apple Music
           </button>
           <button
-            onClick={() => { setShared(null); setSource({ sample: true }); load({ sample: true }, weights); }}
+            onClick={() => { setShared(null); openedRef.current = null; setSource({ sample: true }); load({ sample: true }, weights); }}
             className="rounded-xl border border-white/15 px-4 py-2 text-sm text-gray-200 hover:bg-white/5"
           >
             Use sample library
