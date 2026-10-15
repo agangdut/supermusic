@@ -16,6 +16,7 @@ export default function ResultsConsole({ latestMidi, latestStems, latestCsv, onS
   // Jump to whichever result arrived most recently
   useEffect(() => { if (latestMidi) setTab("midi"); }, [latestMidi]);
   useEffect(() => { if (latestStems) setTab("stems"); }, [latestStems]);
+  useEffect(() => { if (latestCsv) setTab("csv"); }, [latestCsv]);
 
   const midi = typeof latestMidi === "string" ? { midi: latestMidi } : latestMidi;
   const tabs = [
@@ -67,12 +68,89 @@ export default function ResultsConsole({ latestMidi, latestStems, latestCsv, onS
           </div>
         ) : <Empty what="stem" />)}
 
-        {tab === "csv" && (latestCsv ? (
-          <a href={latestCsv} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-400 underline hover:text-indigo-300">
+        {tab === "csv" && (latestCsv ? <CsvSummary csv={latestCsv} /> : <Empty what="CSV" />)}
+      </div>
+    </div>
+  );
+}
+
+const FIELD_LABELS = {
+  genre: "Genre", year: "Year", bpm: "Tempo", key: "Key", energy: "Energy",
+  play_count: "Play count", first_played: "Play dates", liked: "Liked", playlists: "Playlists",
+};
+
+// What the merge and lookup did, with links to the file and the Music Map
+function CsvSummary({ csv }) {
+  const c = typeof csv === "string" ? { url: csv } : csv; // older saved results were just a link
+  const m = c.metrics;
+  const before = m?.coverage_before || {};
+  const after = m?.coverage_after || {};
+  return (
+    <div className="space-y-4 text-sm">
+      {m && (
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            <Stat value={m.songs?.toLocaleString()} label="songs" />
+            <Stat value={m.files?.length} label={m.files?.length === 1 ? "file" : "files"} />
+            <Stat value={m.duplicates_merged?.toLocaleString()} label="duplicates merged" />
+          </div>
+          {m.files?.length > 0 && (
+            <ul className="space-y-1 text-xs">
+              {m.files.map((f) => (
+                <li key={f.file} className="flex justify-between gap-3 text-gray-400">
+                  <span className="min-w-0 truncate text-gray-200" title={f.file}>{f.file}</span>
+                  <span className="shrink-0">{f.type} · {f.songs.toLocaleString()} songs</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {Object.keys(after).length > 0 && (
+            <div>
+              <div className="mb-1.5 text-[11px] uppercase tracking-wider text-gray-500">Songs with each detail</div>
+              <div className="space-y-1">
+                {Object.keys(after).map((k) => (
+                  <div key={k} className="flex items-center gap-2 text-xs">
+                    <span className="w-20 shrink-0 text-gray-400">{FIELD_LABELS[k] || k}</span>
+                    <div className="relative h-1.5 flex-1 rounded-full bg-white/5">
+                      <div className="absolute h-1.5 rounded-full bg-indigo-400/80" style={{ width: `${after[k] * 100}%` }} />
+                      <div className="absolute h-1.5 rounded-full bg-gray-500" style={{ width: `${(before[k] || 0) * 100}%` }} />
+                    </div>
+                    <span className="w-24 shrink-0 text-right tabular-nums text-gray-400">
+                      {before[k] != null && Math.round(before[k] * 100) !== Math.round(after[k] * 100)
+                        ? `${Math.round(before[k] * 100)}% → ${Math.round(after[k] * 100)}%`
+                        : `${Math.round(after[k] * 100)}%`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {m.matched_online != null && (
+                <p className="mt-1.5 text-[11px] text-gray-500">{m.matched_online.toLocaleString()} songs found online. Grey = before, blue = added.</p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+      <div className="flex flex-wrap gap-3">
+        {c.url && (
+          <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline hover:text-indigo-300">
             Download the enriched CSV
           </a>
-        ) : <Empty what="CSV" />)}
+        )}
+        {c.library_csv && (
+          <a href={`/map?csv=${encodeURIComponent(c.library_csv)}`} className="text-fuchsia-300 underline hover:text-fuchsia-200">
+            Open it in the Music Map
+          </a>
+        )}
       </div>
+    </div>
+  );
+}
+
+function Stat({ value, label }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+      <div className="text-lg font-semibold tabular-nums text-white">{value ?? "–"}</div>
+      <div className="text-[11px] text-gray-500">{label}</div>
     </div>
   );
 }

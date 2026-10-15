@@ -102,3 +102,31 @@ def test_midi_convert_reuses_a_finished_stem_job(tmp_path, monkeypatch):
     job = client.get(f"/midi/jobs/{r.json()['id']}").json()
     assert job["status"] == "done", job
     assert seen == {"audio": str(song), "only": ["vocals"], "stems": {"vocals": str(vocals)}}
+
+
+def test_enrich_files_merges_several_exports_into_one_csv():
+    import time
+    from pathlib import Path
+
+    import pandas as pd
+
+    fx = Path(__file__).parent / "fixtures" / "exports"
+    names = ["exportify.csv", "StreamingHistory_music_0.json", "YourLibrary.json", "Playlist1.json"]
+    r = client.post(
+        "/csv/enrich-files",
+        files=[("files", (n, (fx / n).read_bytes())) for n in names],
+        data={"lookup": "false"},
+    )
+    assert r.status_code == 200, r.text
+    job_id = r.json()["id"]
+    for _ in range(50):
+        job = client.get(f"/csv/jobs/{job_id}").json()
+        if job["status"] != "running":
+            break
+        time.sleep(0.1)
+    assert job["status"] == "done", job
+    m = job["result"]["metrics"]
+    assert [f["type"] for f in m["files"]][2].startswith("Spotify liked")
+    assert m["duplicates_merged"] > 0
+    df = pd.read_csv(job["result"]["library_csv"])
+    assert (df["title"] == "Here").sum() == 1 and "Snooze" in set(df["title"])

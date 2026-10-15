@@ -13,13 +13,14 @@ from app.core.music_map import MapOptions, build_map, similar_tracks, estimate_b
 router = APIRouter(prefix="/map", tags=["map"])
 
 SAMPLE_CSV = Path(__file__).resolve().parents[1] / "sample_data" / "sample_library.csv"
+MAX_TRACKS = 50_000  # a 23,000-song library draws in about half a minute on a 4-core CPU
 
 
 class MapRequest(BaseModel):
     csv_path: Optional[str] = Field(None, description="Server path from /upload/csv. Leave empty with sample=true.")
     sample: bool = Field(False, description="Use the bundled sample library instead of an upload.")
     neighbors: int = Field(4, ge=1, le=15, description="Links drawn from each track to its closest matches.")
-    clusters: Optional[int] = Field(None, ge=1, le=20, description="Fixed number of groups; empty picks one.")
+    clusters: Optional[int] = Field(None, ge=1, le=40, description="Fixed number of groups; empty picks one.")
     weights: Dict[str, float] = Field(
         default_factory=dict,
         description="How much each aspect shapes the map: key, tempo, genre, mood, artist, era, sound (0-2).",
@@ -38,8 +39,8 @@ async def build(req: MapRequest) -> dict:
         df = pd.read_csv(path)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Couldn't read that CSV: {e}")
-    if len(df) > 5000:
-        raise HTTPException(status_code=400, detail="Maps are limited to 5,000 tracks for now.")
+    if len(df) > MAX_TRACKS:
+        raise HTTPException(status_code=400, detail=f"Maps are limited to {MAX_TRACKS:,} tracks for now.")
 
     opts = MapOptions(
         neighbors=req.neighbors,
@@ -55,9 +56,16 @@ async def build(req: MapRequest) -> dict:
 
 
 def warm_up() -> None:
-    """UMAP compiles itself on first use (~10s). Do that at startup, not on the first click."""
+    """UMAP compiles itself on first use (~10s, and another ~20s the first time it sees more
+    than 4,096 songs, when it switches to its approximate neighbour search). Do both at
+    startup, not on the first click."""
     try:
         build_map(pd.read_csv(SAMPLE_CSV), MapOptions())
+        import numpy as np
+        import umap
+
+        x = np.random.default_rng(0).normal(size=(4200, 8)).astype(np.float32)
+        umap.UMAP(n_components=3, n_epochs=5, random_state=42).fit_transform(x)
     except Exception:
         pass
 
@@ -251,8 +259,8 @@ async def import_library(
     files: List[UploadFile] = File(..., description="Spotify / Apple Music exports or CSVs; several at once is fine."),
     enrich: bool = Form(True, description="Look songs up online (genre from Last.fm/MusicBrainz tags, year from Deezer) and analyse 30 s previews for tempo/key/energy."),
     listen: bool = Form(True, description="Also run each preview through CLAP for a 'sound' description (the slow 'Listen to previews' step). Needs enrich and the CLAP service."),
-    limit: int = Form(1500, ge=1, le=5000),
-    listen_limit: Optional[int] = Form(None, ge=1, le=5000, description="Listen to at most this many previews (most-played songs first). Defaults to `limit`."),
+    limit: int = Form(1500, ge=1, le=50_000),
+    listen_limit: Optional[int] = Form(None, ge=1, le=50_000, description="Listen to at most this many previews (most-played songs first). Defaults to `limit`."),
 ) -> dict:
     parsed, detected = [], []
     for f in files:
