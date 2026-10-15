@@ -142,7 +142,51 @@ def test_hidden_links_found_when_only_some_songs_have_key_and_tempo():
     r = build_map(df)
     assert r["meta"]["musical_tracks"] == has.sum()
     assert len(r["hidden_connections"]) > 0
-    assert all(has[h["source"]] and has[h["target"]] for h in r["hidden_connections"])
+    sound = [h for h in r["hidden_connections"] if h["via"] == "sound"]
+    assert sound and all(has[h["source"]] and has[h["target"]] for h in sound)
+
+
+def test_hidden_links_without_any_key_or_tempo():
+    """A big export with no audio features still has hidden links: songs played back to
+    back, songs on the same small playlists, and songs sharing a rare tag."""
+    import numpy as np
+
+    from app.core.library_import import song_key
+
+    rng = np.random.default_rng(3)
+    n = 600
+    broad = rng.choice(["pop", "hip hop", "rock", "jazz", "house"], n)
+    df = pd.DataFrame({
+        "title": [f"Song {i}" for i in range(n)],
+        "artist": [f"Artist {i % 60}" for i in range(n)],
+        "genre": broad,
+        "year": rng.integers(1980, 2024, n),
+        "play_count": rng.integers(1, 50, n),
+    })
+    # a rare style on two songs of different genres
+    a, b = int(np.where(broad == "jazz")[0][0]), int(np.where(broad == "house")[0][0])
+    df.loc[a, "genre"], df.loc[b, "genre"] = "jazz, nu jazz", "house, nu jazz"
+    # a small playlist mixing genres
+    mix = [int(np.where(broad == g)[0][1]) for g in ["pop", "rock", "jazz"]]
+    df["playlists"] = None
+    for i in mix:
+        df.loc[i, "playlists"] = "Sunday morning"
+    df.loc[range(200), "playlists"] = df.loc[range(200), "playlists"].fillna("Everything")
+    # two songs of different genres played back to back
+    x, y = int(np.where(broad == "pop")[0][5]), int(np.where(broad == "hip hop")[0][5])
+    df["played_with"] = None
+    df.loc[x, "played_with"] = f"{song_key(df.artist[y], df.title[y])} x6"
+    df.loc[y, "played_with"] = f"{song_key(df.artist[x], df.title[x])} x6"
+
+    r = build_map(df)
+    assert r["meta"]["musical_tracks"] == 0
+    by = {}
+    for h in r["hidden_connections"]:
+        by.setdefault(h["via"], []).append(h)
+    assert {"listening", "playlists", "tags"} <= set(by), r["meta"]["hidden_by"]
+    assert any({h["source"], h["target"]} == {x, y} and "back to back (6×)" in h["reasons"][0] for h in by["listening"])
+    assert all("Sunday morning" in h["reasons"][0] for h in by["playlists"])  # "Everything" is too broad alone
+    assert any({h["source"], h["target"]} == {a, b} and "nu jazz" in h["reasons"][0] for h in by["tags"])
 
 
 def test_clusters_describe_their_contents():

@@ -90,7 +90,25 @@ def test_merge_dedupes_a_whole_spotify_account_export():
     assert (m["title"] == "Here").sum() == 1
     assert here["play_count"] == 2 + 1 and here["skip_count"] == 1
     assert here["first_played"] == "2024-03-01" and here["last_played"] == "2026-01-02"
-    assert bool(here["liked"]) and here["playlists"] == "Late night; Gym"
+    # an Exportify file is one playlist, named after the file
+    assert bool(here["liked"]) and here["playlists"] == "exportify; Late night; Gym"
     assert here["bpm"] == 120.2 and here["uri"] == "spotify:track:1"
     snooze = m[m["title"] == "Snooze"].iloc[0]
     assert bool(snooze["liked"]) and pd.isna(snooze["play_count"]) or snooze["play_count"] == 0
+
+
+def test_history_records_songs_played_back_to_back():
+    rows = [("A", "x", None, 200000, False, "2024-01-01T10:00:00Z"),
+            ("B", "y", None, 200000, False, "2024-01-01T10:04:00Z"),
+            ("A", "x", None, 200000, False, "2024-01-02T10:00:00Z"),
+            ("B", "y", None, 5000, True, "2024-01-02T10:01:00Z"),  # a skip is not a pairing
+            ("B", "y", None, 200000, False, "2024-01-02T10:03:00Z"),
+            ("C", "z", None, 200000, False, "2024-01-02T12:03:00Z")]  # new session: not paired with B
+    from app.core.library_import import _aggregate_plays, parse_partners
+
+    df = _aggregate_plays(rows, "test").set_index("title")
+    assert parse_partners(df.loc["A", "played_with"]) == {"y|b": 2}
+    assert pd.isna(df.loc["C", "played_with"])
+    # merging two histories adds the counts up
+    m = merge([df.reset_index(), df.reset_index()]).set_index("title")
+    assert parse_partners(m.loc["A", "played_with"]) == {"y|b": 4}
