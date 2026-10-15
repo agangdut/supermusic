@@ -1,7 +1,7 @@
 // The "Atlas": every cluster as a card with the music inside it (artists, typical songs,
 // sub-groups), instead of a name and a bar. Made for big libraries, where the 3D view
 // alone is a cloud of 20,000 stars.
-import { clusterName, colorFor } from "./colors";
+import { clusterName, colorFor, galaxyTitle } from "./colors";
 
 const pct = (v) => `${v < 0.01 && v > 0 ? "<1" : Math.round(v * 100)}%`;
 
@@ -31,7 +31,7 @@ function ClusterCard({ c, byId, maxSize, onFocus, onSelect, focused }) {
           <div className="flex min-w-0 items-center gap-2">
             <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: color, boxShadow: `0 0 12px ${color}` }} />
             <span className="min-w-0">
-              <span className="block text-sm font-semibold leading-snug text-white">{clusterName(c)}</span>
+              <span className="block text-sm font-semibold leading-snug text-white" title={galaxyTitle(c)}>{clusterName(c)}</span>
               {c.name && <span className="block truncate text-[11px] text-gray-400">{c.label.split(" · ")[0]}</span>}
             </span>
           </div>

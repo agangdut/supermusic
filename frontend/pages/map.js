@@ -6,7 +6,7 @@ import { useRouter } from "next/router";
 import PageShell from "@/components/layout/PageShell";
 import { setBackgroundWork } from "@/lib/backgroundWork";
 import { buildMap, getImport, getMapEstimate, getSharedMap, importLibrary, likeSongs, searchSound, skipListening } from "@/lib/api";
-import { clusterGenre, clusterName, colorFor } from "@/components/map/colors";
+import { clusterGenre, clusterName, colorFor, galaxyTitle } from "@/components/map/colors";
 import ImportProgress, { BuildProgress } from "@/components/map/ImportProgress";
 import StatsPanel from "@/components/map/StatsPanel";
 import ClusterAtlas from "@/components/map/ClusterAtlas";
@@ -697,7 +697,7 @@ export default function MapPage() {
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorFor(c.id), boxShadow: `0 0 10px ${colorFor(c.id)}` }} />
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-white">{clusterName(c)}</span>
+                      <span className="block truncate text-sm font-medium text-white" title={galaxyTitle(c)}>{clusterName(c)}</span>
                       {c.name && <span className="block truncate text-[11px] text-gray-400">{clusterGenre(c)}</span>}
                     </span>
                   </div>

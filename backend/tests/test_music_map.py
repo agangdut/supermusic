@@ -204,7 +204,9 @@ def test_clusters_are_named_after_galaxies():
 
     r = client.post("/map/build", json={"sample": True}).json()
     names = [c["name"] for c in r["clusters"]]
-    assert len(set(names)) == len(names) and set(names) <= set(GALAXIES)
-    home = max(r["clusters"], key=lambda c: (c.get("listening_share") or 0, c["size"]))
-    assert home["name"] == "Milky Way"
-    assert len(GALAXIES) >= 40  # the most clusters a map can ask for
+    assert len(set(names)) == len(names) and set(names) <= {g for g, _ in GALAXIES}
+    # the bigger the cluster, the bigger its galaxy
+    by_size = sorted(r["clusters"], key=lambda c: (-c["size"], c["id"]))
+    assert [c["galaxy_ly"] for c in by_size] == sorted((c["galaxy_ly"] for c in by_size), reverse=True)
+    assert by_size[0]["name"] == "IC 1101" and by_size[-1]["name"] == "Segue 1"
+    assert len(GALAXIES) >= 40 and [ly for _, ly in GALAXIES] == sorted((ly for _, ly in GALAXIES), reverse=True)
