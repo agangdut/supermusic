@@ -210,3 +210,28 @@ def test_clusters_are_named_after_galaxies():
     assert [c["galaxy_ly"] for c in by_size] == sorted((c["galaxy_ly"] for c in by_size), reverse=True)
     assert by_size[0]["name"] == "IC 1101" and by_size[-1]["name"] == "Segue 1"
     assert len(GALAXIES) >= 40 and [ly for _, ly in GALAXIES] == sorted((ly for _, ly in GALAXIES), reverse=True)
+
+
+def test_hidden_links_from_a_bare_title_and_artist_list():
+    """Nothing but titles, artists and albums still gives hidden links: collaborations,
+    an artist split across clusters, a shared album, or neighbours across a border."""
+    import numpy as np
+
+    rng = np.random.default_rng(11)
+    n = 500
+    artist = [f"Artist {i % 50}" for i in range(n)]
+    df = pd.DataFrame({
+        "title": [f"Song {i}" for i in range(n)],
+        "artist": artist,
+        "album": [f"Album {i % 120}" for i in range(n)],
+        "genre": rng.choice(["pop", "hip hop", "rock", "jazz", "house"], n),
+    })
+    df.loc[7, "title"] = "Song 7 (feat. Artist 33)"
+    r = build_map(df)
+    assert len(r["clusters"]) > 1
+    hidden = r["hidden_connections"]
+    assert len(hidden) >= 15
+    assert all(r["tracks"][h["source"]]["cluster"] != r["tracks"][h["target"]]["cluster"] for h in hidden)
+    assert {"artist", "album", "border"} & {h["via"] for h in hidden}
+    feat = [h for h in hidden if h["via"] == "features"]
+    assert all(7 in (h["source"], h["target"]) and "Artist 33" in h["reasons"][0] for h in feat)

@@ -923,12 +923,119 @@ def _rare_tag_pairs(p: _Prepared, labels: np.ndarray, eng: Optional[np.ndarray])
     return sorted(out, reverse=True)
 
 
-def _pick_hidden(p: _Prepared, sources: Dict[str, List[_Pair]], cap: int) -> List[Dict[str, Any]]:
+def _top_rows(rows: List[int], eng: Optional[np.ndarray]) -> List[int]:
+    """Rows, most-played first (library order when there is no listening data)."""
+    return sorted(rows, key=lambda i: -(eng[i] if eng is not None else 0))
+
+
+_FEAT = re.compile(r"[\(\[](?:feat\.?|ft\.?|featuring|with)\s+([^\)\]]+)[\)\]]|\s(?:feat\.?|ft\.?|featuring)\s+(.+)$", re.I)
+_SPLIT_ARTISTS = re.compile(r"\s*(?:,|&|;|\band\b|\sx\s|\s/\s)\s*", re.I)
+
+
+def _featuring_pairs(p: _Prepared, labels: np.ndarray, eng: Optional[np.ndarray]) -> List[_Pair]:
+    """A song featuring (or credited with) an artist whose own songs sit in another cluster:
+    the collaboration is the bridge. Needs only titles and artists."""
+    if not p.cols["title"]:
+        return []
+    by_artist: Dict[str, List[int]] = {}
+    for i, a in enumerate(p.artists):
+        if a:
+            by_artist.setdefault(_SPLIT_ARTISTS.split(a)[0].strip().lower(), []).append(i)
+    titles = p.df[p.cols["title"]].astype(str).tolist()
+    best: Dict[Tuple[int, int], _Pair] = {}
+    for i, (title, artist) in enumerate(zip(titles, p.artists)):
+        names = []
+        for m in _FEAT.finditer(title):
+            names += _SPLIT_ARTISTS.split(m.group(1) or m.group(2) or "")
+        parts = _SPLIT_ARTISTS.split(artist) if artist else []
+        names += parts[1:]  # "Drake, Rihanna": the other credited artists
+        main = parts[0].strip().lower() if parts else ""
+        for name in dict.fromkeys(n.strip() for n in names if n and n.strip()):
+            rows = by_artist.get(name.lower())
+            if not rows or name.lower() == main:
+                continue
+            other = [j for j in _top_rows(rows, eng) if labels[j] != labels[i]]
+            if not other:
+                continue
+            j = other[0]
+            a, b = (i, j) if i < j else (j, i)
+            score = 1.0 + (float(eng[i] + eng[j]) if eng is not None else 0.0)
+            if (a, b) not in best or best[(a, b)][0] < score:
+                best[(a, b)] = (score, a, b, f"features {p.artists[j] or name}")
+    return sorted(best.values(), reverse=True)
+
+
+def _split_artist_pairs(p: _Prepared, labels: np.ndarray, eng: Optional[np.ndarray]) -> List[_Pair]:
+    """An artist whose songs landed in two different clusters: their song from each side.
+    Artists with plenty of songs on both sides come first."""
+    by_artist: Dict[str, List[int]] = {}
+    for i, a in enumerate(p.artists):
+        if a:
+            by_artist.setdefault(a.lower(), []).append(i)
+    out = []
+    for rows in by_artist.values():
+        if len(rows) < 2:
+            continue
+        per: Dict[int, List[int]] = {}
+        for i in rows:
+            per.setdefault(int(labels[i]), []).append(i)
+        if len(per) < 2:
+            continue
+        (c1, r1), (c2, r2) = sorted(per.items(), key=lambda kv: -len(kv[1]))[:2]
+        a, b = _top_rows(r1, eng)[0], _top_rows(r2, eng)[0]
+        out.append((float(min(len(r1), len(r2))) + len(r2) / (len(r1) + 1), min(a, b), max(a, b),
+                    f"same artist ({p.artists[a]}) in two corners of your map"))
+    return sorted(out, reverse=True)
+
+
+def _shared_album_pairs(p: _Prepared, labels: np.ndarray, eng: Optional[np.ndarray]) -> List[_Pair]:
+    """Two songs from the same album (a soundtrack, a compilation, a genre-hopping record)
+    that ended up in different clusters."""
+    if not p.cols["album"]:
+        return []
+    by_album: Dict[str, List[int]] = {}
+    for i, v in enumerate(p.df[p.cols["album"]]):
+        if pd.notna(v) and str(v).strip():
+            by_album.setdefault(str(v).strip().lower(), []).append(i)
+    out = []
+    for rows in by_album.values():
+        if not 2 <= len(rows) <= 60:
+            continue
+        rows = _top_rows(rows, eng)
+        a = rows[0]
+        other = [j for j in rows if labels[j] != labels[a]]
+        if not other:
+            continue
+        b = other[0]
+        album = str(p.df[p.cols["album"]].iloc[a]).strip()
+        out.append((1.0 / math.log2(len(rows) + 1), min(a, b), max(a, b), f"both from the album “{album}”"))
+    return sorted(out, reverse=True)
+
+
+def _border_pairs(edges: Dict[Tuple[int, int], Dict[str, Any]], labels: np.ndarray,
+                  names: Dict[int, str]) -> List[_Pair]:
+    """The closest neighbours across a cluster border: always there, the last resort."""
+    best: Dict[Tuple[int, int], _Pair] = {}  # one pair per two clusters, so they spread over the map
+    for (a, b), e in edges.items():
+        if not e.get("bridge") or e.get("kind") == "hidden":
+            continue
+        pair = tuple(sorted((int(labels[a]), int(labels[b]))))
+        if pair not in best or best[pair][0] < e["strength"]:
+            best[pair] = (float(e["strength"]), a, b,
+                          f"neighbours across the border of {names.get(int(labels[a]), '?')} and {names.get(int(labels[b]), '?')}")
+    return sorted(best.values(), reverse=True)
+
+
+def _pick_hidden(p: _Prepared, sources: Dict[str, List[_Pair]], cap: int,
+                 taken: Sequence[Dict[str, Any]] = ()) -> List[Dict[str, Any]]:
     """Take the best pairs from each kind of evidence in turn, so one kind can't crowd out
-    the rest; each song gets at most two hidden links."""
+    the rest; each song gets at most two hidden links (counting the `taken` ones)."""
     picked: List[Dict[str, Any]] = []
-    used: set = set()
+    used: set = {(h["source"], h["target"]) for h in taken}
     per_track: Dict[int, int] = {}
+    for h in taken:
+        for t in (h["source"], h["target"]):
+            per_track[t] = per_track.get(t, 0) + 1
     pos = {k: 0 for k in sources}
     tops = {k: (v[0][0] if v else 1.0) or 1.0 for k, v in sources.items()}
     while len(picked) < cap and any(pos[k] < len(v) for k, v in sources.items()):
@@ -943,7 +1050,7 @@ def _pick_hidden(p: _Prepared, sources: Dict[str, List[_Pair]], cap: int) -> Lis
                     if len([r for r in reasons if not r.startswith(("both ", "same artist"))]) < 2:
                         continue
                 else:
-                    reasons = [why] + reasons
+                    reasons = [why] + [r for r in reasons if not (via == "artist" and r.startswith("same artist"))]
                 used.add((a, b))
                 per_track[a] = per_track.get(a, 0) + 1
                 per_track[b] = per_track.get(b, 0) + 1
@@ -1170,9 +1277,12 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
     step("Finding hidden connections")
     # ---- hidden connections ------------------------------------------------------
     # Pairs of songs in different clusters (usually different genres) that belong together
-    # anyway. Four kinds of evidence, so a big library finds some even without key or tempo:
-    # you play them back to back, you put them on the same small playlists, they match
-    # musically (key, tempo, sound, mood), or they share a tag almost nothing else has.
+    # anyway. The strong kinds of evidence go first: you play them back to back, you put
+    # them on the same small playlists, they match musically (key, tempo, sound, mood),
+    # they share a tag almost nothing else has, or one features the other's artist.
+    # If those run short (a bare title + artist list has none of them), links that every
+    # library has fill the rest: an artist split across two clusters, a shared album, and
+    # the closest neighbours across a cluster border. So the tab is never empty.
     musical_ok = _has_musical(p)
     hidden_cap = int(min(60, max(15, n // 300)))  # ~15 for 4,500 songs, 60 at 18,000+
     sources = {
@@ -1180,8 +1290,17 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
         "playlists": _playlist_pairs(p, labels),
         "sound": _musical_pairs(p, labels, musical_ok),
         "tags": _rare_tag_pairs(p, labels, eng),
+        "features": _featuring_pairs(p, labels, eng),
+    }
+    names = {c["id"]: c.get("name") or c["label"].split(" · ")[0] for c in clusters}
+    fallback = {
+        "artist": _split_artist_pairs(p, labels, eng),
+        "album": _shared_album_pairs(p, labels, eng),
+        "border": _border_pairs(edges, labels, names),
     }
     hidden = _pick_hidden(p, sources, hidden_cap)
+    if len(hidden) < hidden_cap:
+        hidden += _pick_hidden(p, fallback, hidden_cap - len(hidden), taken=hidden)
     for h in hidden:
         a, b = h["source"], h["target"]
         edges[(a, b)] = {"source": a, "target": b, "strength": h["strength"], "bridge": True,
@@ -1229,7 +1348,7 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
             # what else hidden links could use, and how many each kind found
             "played_with_tracks": int(p.df[p.cols["played_with"]].notna().sum()) if p.cols["played_with"] else 0,
             "playlist_tracks": int(p.df[p.cols["playlists"]].notna().sum()) if p.cols["playlists"] else 0,
-            "hidden_by": {k: sum(h["via"] == k for h in hidden) for k in sources},
+            "hidden_by": {k: sum(h["via"] == k for h in hidden) for k in [*sources, *fallback]},
             "columns": {k: v for k, v in p.cols.items() if v},
         },
     }

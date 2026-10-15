@@ -40,7 +40,10 @@ const TABS = [
 ];
 
 // What each hidden link was found from (meta.hidden_by keys)
-const HIDDEN_VIA = { listening: "played together", playlists: "same playlists", sound: "musical match", tags: "rare tag" };
+const HIDDEN_VIA = {
+  listening: "played together", playlists: "same playlists", sound: "musical match", tags: "rare tag",
+  features: "collaboration", artist: "same artist", album: "same album", border: "next door",
+};
 
 const EXAMPLE_SEARCHES = ["sad slow piano", "aggressive distorted guitars", "smooth jazz with saxophone", "upbeat dance with heavy bass"];
 
@@ -718,20 +721,18 @@ export default function MapPage() {
             {tab === "hidden" && (
               <>
                 <p className="text-xs leading-5 text-gray-400">
-                  Pairs from different clusters that belong together anyway: songs you play back to back, songs you keep
-                  putting on the same playlists, songs that match musically (sound, key, tempo, mood), and songs sharing a
-                  tag almost nothing else in your library has.
+                  Pairs from different clusters that belong together anyway: songs you play back to back, songs on the same
+                  playlists, musical matches (sound, key, tempo, mood), rare shared tags and collaborations. When those run
+                  short, it adds an artist split across two clusters, songs from one album, and the closest neighbours
+                  across a cluster border.
                 </p>
                 {data?.hidden_connections.length === 0 && (
-                  <p className="text-sm leading-6 text-gray-500">
-                    Nothing to go on yet. Add your Spotify streaming history (Streaming_History_Audio files) and playlist
-                    files when you import, or tick “Look up genre, tempo, key and energy online”.
-                  </p>
+                  <p className="text-sm leading-6 text-gray-500">This map has only one cluster, so there is nothing to bridge.</p>
                 )}
                 {data?.hidden_connections.length > 0 && data.meta.hidden_by && (
                   <p className="text-[11px] leading-5 text-gray-500">
                     {Object.entries(data.meta.hidden_by).filter(([, c]) => c).map(([k, c]) => `${c} ${HIDDEN_VIA[k]}`).join(" · ")}
-                    {!data.meta.played_with_tracks && " · add your streaming history to find songs you play back to back"}
+                    {!data.meta.played_with_tracks && " · import your Streaming_History_Audio files too to find songs you play back to back"}
                   </p>
                 )}
                 {data?.hidden_connections.map((h, i) => (

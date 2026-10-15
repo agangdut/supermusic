@@ -29,6 +29,10 @@ Position means similarity. Two stars close together sound alike on the things yo
 - **Musical match**: at least two musical traits in common: the **same or a neighbouring key** on the Camelot wheel (A minor sits next to E minor and D minor), the **same tempo or half/double time** (87 BPM neo-soul next to 174 BPM drum & bass), a **similar mood** (energy, valence, danceability), or a **similar sound** (among the closest 3% of pairs by CLAP sound description). Only songs that were looked up online, or came with key and BPM columns, can match this way.
 - **Rare tag**: two songs that share a detailed genre tag almost nothing else in your library has ("nu jazz" on one jazz and one house song), from the same decade when possible.
 
+- **Collaboration**: a song featuring (or credited with) an artist whose own songs sit in another cluster.
+
+When those run short (a plain list of titles and artists has none of the first four), links that every library has fill the rest: **same artist** (an artist whose songs landed in two clusters), **same album** (a soundtrack or compilation split across clusters), and **next door** (the closest neighbours across a cluster border, one pair per two clusters). So the tab always has links once a map has two clusters.
+
 They make good transitions, mashups and playlist bridges. The number of links grows with the library: 15 for a few thousand songs, up to 60. A library with no key or tempo still gets links from plays, playlists and tags, so import your streaming history and playlist files along with the library.
 
 **For you.** This tab appears when your CSV has listening data. SuperMusic averages your most-played tracks into a "taste centre", then finds the least-played third of your library that sits closest to it. It favours clusters with high signal and never shows more than four picks from one cluster. Each pick says which favourite it resembles and why.
