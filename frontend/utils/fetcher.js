@@ -6,14 +6,34 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 export { API_BASE };
 
 /**
+ * A random id for this browser, sent with every request, so song edits count as one
+ * listener's (and your own edits show on your maps) without needing an account.
+ */
+export function listenerId() {
+  if (typeof window === "undefined") return null;
+  try {
+    let id = window.localStorage.getItem("sm-listener-id");
+    if (!id) {
+      id = (window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`).replace(/[^A-Za-z0-9_-]/g, "");
+      window.localStorage.setItem("sm-listener-id", id);
+    }
+    return id;
+  } catch {
+    return null; // private window or blocked storage: edits need a listener id, everything else works
+  }
+}
+
+/**
  * Fetch from the backend API
  */
 export async function apiFetch(path, options = {}) {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
   
+  const lid = url.startsWith(API_BASE) ? listenerId() : null; // only our own server gets it
   const defaultOptions = {
     headers: {
       "Content-Type": "application/json",
+      ...(lid ? { "X-Listener-Id": lid } : {}),
       ...options.headers,
     },
   };

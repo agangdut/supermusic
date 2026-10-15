@@ -4,11 +4,12 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from app.core import map_share
+from app.core import community, map_share
+from app.routes.community import listener
 from app.core.music_map import MapOptions, build_map, similar_tracks, estimate_build_seconds
 
 router = APIRouter(prefix="/map", tags=["map"])
@@ -30,8 +31,10 @@ class MapRequest(BaseModel):
 
 
 @router.post("/build")
-async def build(req: MapRequest) -> dict:
-    """Build a 3D taste map from a CSV of tracks. Fast enough to run inline."""
+async def build(req: MapRequest, voter: Optional[str] = Depends(listener)) -> dict:
+    """Build a 3D taste map from a CSV of tracks. Fast enough to run inline.
+
+    Song stats listeners agreed on (and your own corrections) replace the file's."""
     path = _library(req)
     try:
         df = pd.read_csv(path)
@@ -39,6 +42,7 @@ async def build(req: MapRequest) -> dict:
         raise HTTPException(status_code=400, detail=f"Couldn't read that CSV: {e}")
     if len(df) > MAX_TRACKS:
         raise HTTPException(status_code=400, detail=f"Maps are limited to {MAX_TRACKS:,} tracks for now.")
+    df, corrected = await run_in_threadpool(community.apply, df, voter)
 
     opts = MapOptions(
         neighbors=req.neighbors,
@@ -50,6 +54,7 @@ async def build(req: MapRequest) -> dict:
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     result["meta"]["source"] = "sample" if req.sample else "shared map" if req.share_id else path.name
+    result["meta"]["community_corrected"] = corrected
     return result
 
 
@@ -276,6 +281,7 @@ async def import_library(
     listen: bool = Form(True, description="Also run each preview through CLAP for a 'sound' description (the slow 'Listen to previews' step). Needs enrich and the CLAP service."),
     limit: int = Form(1500, ge=1, le=50_000),
     listen_limit: Optional[int] = Form(None, ge=1, le=50_000, description="Listen to at most this many previews (most-played songs first). Defaults to `limit`."),
+    voter: Optional[str] = Depends(listener),
 ) -> dict:
     parsed, detected = [], []
     for f in files:
@@ -313,6 +319,9 @@ async def import_library(
             out.mkdir(parents=True, exist_ok=True)
             csv_path = out / f"library_{job.id[:8]}.csv"
             df.to_csv(csv_path, index=False)
+            # Listeners' corrections go on the drawing, not into the saved file, so taking
+            # one back (or new agreement) shows up on the next Remap
+            df, corrected = community.apply(df, voter)
             # Columns nobody filled in would otherwise look like (empty) data
             df = df.dropna(axis=1, how="all")
             job.start_drawing(len(df))
@@ -323,6 +332,7 @@ async def import_library(
             result = build_map(df, MapOptions(), progress=step)
             result["meta"]["source"] = ", ".join(d["type"] for d in detected)
             result["meta"]["library_csv"] = str(csv_path)
+            result["meta"]["community_corrected"] = corrected
             if found is not None:
                 result["meta"]["matched_online"] = found
             job.result = result
@@ -404,10 +414,10 @@ class LikeRequest(BaseModel):
 
 
 @router.post("/like")
-async def like(req: LikeRequest) -> dict:
+async def like(req: LikeRequest, voter: Optional[str] = Depends(listener)) -> dict:
     """Songs from the same library that someone who likes this track may like."""
     path = _library(req)
-    df = pd.read_csv(path)
+    df, _ = community.apply(pd.read_csv(path), voter)  # the same stats the map was drawn with
     opts = MapOptions(weights={k: max(0.0, min(2.0, float(v))) for k, v in req.weights.items()})
     try:
         return await run_in_threadpool(similar_tracks, df, req.id, opts, req.limit)
@@ -532,3 +542,23 @@ async def youtube_ids(req: YoutubeRequest) -> dict:
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     return {"ids": ids}
+
+
+# ---------------------------------------------------------------------------
+# Listeners like you
+# ---------------------------------------------------------------------------
+
+class TasteMatchRequest(BaseModel):
+    csv_path: Optional[str] = None
+    sample: bool = False
+    share_id: Optional[str] = None
+    limit: int = Field(10, ge=1, le=50)
+
+
+@router.post("/taste-match")
+async def taste_match(req: TasteMatchRequest) -> dict:
+    """Public shared maps closest to this library (by the artists both play), with songs to try from each."""
+    from app.core import taste_match as tm
+
+    df = pd.read_csv(_library(req))
+    return {"matches": await run_in_threadpool(tm.matches, df, req.share_id, req.limit)}

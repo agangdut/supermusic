@@ -805,6 +805,9 @@ def _track_extras(p: "_Prepared") -> Dict[str, list]:
         d = _dates(df, cols[name])
         if d is not None and any(d):
             out[name] = d
+    vibes_col = next((c for c in df.columns if str(c).lower() == "vibes"), None)
+    if vibes_col:  # listeners' vibe tags ("late night", "gym"), from app/core/community.py
+        out["vibes"] = [_split_tags(v) or None for v in df[vibes_col]]
     if cols["skips"]:
         sk = pd.to_numeric(df[cols["skips"]], errors="coerce")
         out["skips"] = [int(v) if pd.notna(v) else None for v in sk]

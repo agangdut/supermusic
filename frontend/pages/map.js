@@ -13,6 +13,8 @@ import ClusterAtlas from "@/components/map/ClusterAtlas";
 import { availableLenses, buildLens, RAMP_CSS } from "@/components/map/lenses";
 import RadioPanel from "@/components/map/RadioPanel";
 import ShareDialog from "@/components/map/ShareDialog";
+import SongStatsEditor from "@/components/map/SongStatsEditor";
+import PeoplePanel from "@/components/map/PeoplePanel";
 
 const Graph3D = dynamic(() => import("@/components/map/Graph3D"), {
   ssr: false,
@@ -34,6 +36,7 @@ const TABS = [
   { id: "picks", label: "For you" },
   { id: "search", label: "Search", needsSound: true },
   { id: "radio", label: "Radio" },
+  { id: "people", label: "People" },
 ];
 
 const EXAMPLE_SEARCHES = ["sad slow piano", "aggressive distorted guitars", "smooth jazz with saxophone", "upbeat dance with heavy bass"];
@@ -276,7 +279,14 @@ export default function MapPage() {
     }
   };
 
-  const byId = useMemo(() => Object.fromEntries((data?.tracks || []).map((t) => [t.id, t])), [data]);
+  // Song edits ("Fix stats") show on the labels straight away, without redrawing the 3D view; Remap moves the star
+  const [patches, setPatches] = useState({});
+  useEffect(() => { setPatches({}); }, [data]);
+  const patchTrack = (id, patch) => setPatches((p) => ({ ...p, [id]: { ...p[id], ...patch } }));
+  const byId = useMemo(
+    () => Object.fromEntries((data?.tracks || []).map((t) => [t.id, patches[t.id] ? { ...t, ...patches[t.id] } : t])),
+    [data, patches],
+  );
   const clusterById = useMemo(() => Object.fromEntries((data?.clusters || []).map((c) => [c.id, c])), [data]);
 
   // Which nodes stay bright: a selected track and its links, a cluster, or a tab's subset
@@ -303,6 +313,8 @@ export default function MapPage() {
   }, [data, selectedId, clusterFocus, tab, found, station]);
 
   const selected = selectedId != null ? byId[selectedId] : null;
+  const [editing, setEditing] = useState(false); // "Fix stats" open on the selected song
+  useEffect(() => { setEditing(false); }, [selectedId]);
 
   // "Songs you may like" for the clicked track, from the same library
   const [likes, setLikes] = useState(null); // { id, basis, results } | { id, error }
@@ -565,7 +577,7 @@ export default function MapPage() {
 
           {/* Selected track card */}
           {selected && (
-            <div className="absolute bottom-3 right-3 w-[300px] max-w-[calc(100%-24px)] rounded-xl border border-white/10 bg-[#0b1121]/90 p-4 backdrop-blur">
+            <div className="absolute bottom-3 right-3 max-h-[calc(100%-24px)] w-[300px] max-w-[calc(100%-24px)] overflow-y-auto rounded-xl border border-white/10 bg-[#0b1121]/90 p-4 backdrop-blur">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="truncate font-semibold text-white">{selected.title}</div>
@@ -581,10 +593,22 @@ export default function MapPage() {
               </button>
               <div className="mt-2 flex flex-wrap gap-1">
                 {selected.genre && <Chip>{selected.genre}</Chip>}
-                {selected.key && <Chip>{selected.key} · {selected.camelot}</Chip>}
+                {selected.key && <Chip>{selected.camelot ? `${selected.key} · ${selected.camelot}` : selected.key}</Chip>}
                 {selected.bpm && <Chip>{Math.round(selected.bpm)} BPM</Chip>}
+                {selected.energy != null && <Chip>energy {Math.round(selected.energy * 100)}</Chip>}
+                {selected.year && <Chip>{selected.year}</Chip>}
                 {selected.plays != null && <Chip>{selected.plays} plays</Chip>}
+                {selected.vibes?.map((v) => (
+                  <span key={v} className="rounded-md border border-sky-300/20 bg-sky-300/[0.06] px-1.5 py-0.5 text-[11px] text-sky-200">{v}</span>
+                ))}
               </div>
+              <button
+                onClick={() => setEditing((e) => !e)}
+                className="mt-2 text-[11px] text-sky-300 hover:underline"
+              >
+                {editing ? "Hide song stats" : "✎ Fix stats or add a vibe"}
+              </button>
+              {editing && <SongStatsEditor track={selected} onChange={(patch) => patchTrack(selected.id, patch)} />}
               <div className="mt-3 text-[11px] uppercase tracking-wider text-gray-500">Connected to</div>
               <div className="mt-1 max-h-40 space-y-2 overflow-y-auto pr-1">
                 {selectedLinks.map((l) => (
@@ -763,6 +787,16 @@ export default function MapPage() {
                   <TrackLine key={r.id} t={byId[r.id]} onClick={() => setSelectedId(r.id)} />
                 ))}
               </>
+            )}
+
+            {tab === "people" && (
+              <PeoplePanel
+                source={source}
+                onSongTitle={(title, artist) => {
+                  const t = data?.tracks.find((x) => x.title === title && (!artist || x.artist === artist));
+                  if (t) setSelectedId(t.id);
+                }}
+              />
             )}
 
             {tab === "picks" && (

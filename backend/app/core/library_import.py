@@ -403,6 +403,7 @@ def _pick_hit(hits: List[dict], artist: str, title: str) -> Optional[dict]:
 def lookup(artist: str, title: str, analyse: bool = True) -> dict:
     """Genre, year (and preview features) for one song, cached on disk."""
     cache = _song_cache(artist, title)
+    fresh = False
     if cache.exists():
         info = json.loads(cache.read_text())
     else:
@@ -434,6 +435,7 @@ def lookup(artist: str, title: str, analyse: bool = True) -> dict:
             info["error"] = str(e)[:120]
         if "error" not in info:
             cache.write_text(json.dumps(info))
+            fresh = True
     # Genre comes from listener tags (Last.fm / MusicBrainz) first, Deezer's album genre last.
     # Older cache files stored Deezer's raw genre as "genre"; it is ignored now.
     info = {k: v for k, v in info.items() if k != "genre"}
@@ -441,6 +443,8 @@ def lookup(artist: str, title: str, analyse: bool = True) -> dict:
     if found:
         info["genre"] = ";".join(found)
         info["genre_source"] = source
+    from app.core import community  # shared with everyone's imports (imported here: it imports us)
+    community.record_lookup(artist, title, info, only_if_new=not fresh)
     return info
 
 
