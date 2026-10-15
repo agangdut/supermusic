@@ -43,7 +43,7 @@ export default function ShareDialog({ data, weights, source, defaultTitle, onClo
   const [title, setTitle] = useState(defaultTitle || "My music map");
   const [by, setBy] = useState("");
   const [listed, setListed] = useState(false);
-  const [includeListening, setIncludeListening] = useState(false);
+  const [includeListening, setIncludeListening] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [shared, setShared] = useState(null);
@@ -103,11 +103,11 @@ export default function ShareDialog({ data, weights, source, defaultTitle, onClo
             {hasListening && (
               <label className="flex items-start gap-2 text-xs text-gray-300">
                 <input type="checkbox" checked={includeListening} onChange={(e) => setIncludeListening(e.target.checked)} className="mt-0.5 accent-fuchsia-500" />
-                <span>Include how often I play each song (play counts, likes, &ldquo;For you&rdquo; picks and stats). Unticked, people see the songs and clusters only.</span>
+                <span>Include my listening data (play counts, likes, &ldquo;For you&rdquo; picks, insights and stats), so people see the map exactly as I do. Untick to share only the songs and clusters.</span>
               </label>
             )}
             <p className="text-[11px] leading-5 text-gray-500">
-              People who open the link see this map, can click around, Remap it and start a radio station from it. They can&apos;t change your copy.
+              People who open the link see this map with everything it was built from, can click around, Remap it and start a radio station from it. They can&apos;t change your copy.
             </p>
             {error && <p className="text-xs text-rose-300">{error}</p>}
             <button disabled={busy || !title.trim()}
