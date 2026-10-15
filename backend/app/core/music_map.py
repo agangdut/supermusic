@@ -54,6 +54,7 @@ ALIASES: Dict[str, Sequence[str]] = {
     "last_played": ("last_played",),
     "added": ("added_at", "date_added"),
     "playlists": ("playlists", "playlist"),
+    "played_with": ("played_with",),
 }
 
 # Audio descriptors we use as-is when present (Spotify-style, 0..1 mostly)
@@ -766,6 +767,178 @@ def _pair_reasons(p: _Prepared, i: int, j: int) -> List[str]:
 
 
 # ---------------------------------------------------------------------------
+# Hidden connections: candidate pairs from each kind of evidence
+# ---------------------------------------------------------------------------
+# Each finder returns (score, a, b, first reason) for pairs in different clusters, best first.
+
+_Pair = Tuple[float, int, int, str]
+
+
+def _played_together_pairs(p: _Prepared, labels: np.ndarray) -> List[_Pair]:
+    """Songs you play back to back (from the played_with column the library import writes)."""
+    col = p.cols["played_with"]
+    if not col or not p.cols["artist"] or not p.cols["title"]:
+        return []
+    from app.core.library_import import parse_partners, song_key
+
+    row_of: Dict[str, int] = {}
+    for i, (a, t) in enumerate(zip(p.df[p.cols["artist"]], p.df[p.cols["title"]])):
+        row_of.setdefault(song_key(a, t), i)
+    best: Dict[Tuple[int, int], int] = {}
+    for i, v in enumerate(p.df[col]):
+        for key, times in parse_partners(v).items():
+            j = row_of.get(key)
+            if j is None or j == i or labels[i] == labels[j]:
+                continue
+            ab = (i, j) if i < j else (j, i)
+            best[ab] = max(best.get(ab, 0), times)
+    out = [(float(c), a, b, f"often played back to back ({c}×)") for (a, b), c in best.items() if c >= 2]
+    return sorted(out, reverse=True)
+
+
+PLAYLIST_MAX = 200  # bigger playlists (Liked Songs, "everything") say little about any one pair
+
+
+def _playlist_pairs(p: _Prepared, labels: np.ndarray) -> List[_Pair]:
+    """Songs you keep putting on the same playlists. A shared small playlist counts for more
+    than a shared big one (each playlist adds 1 / log2(size + 1))."""
+    col = p.cols["playlists"]
+    if not col:
+        return []
+    members: Dict[str, List[int]] = {}
+    for i, v in enumerate(p.df[col]):
+        if pd.notna(v):
+            for name in dict.fromkeys(x.strip() for x in str(v).split(";") if x.strip()):
+                members.setdefault(name, []).append(i)
+    weight: Dict[Tuple[int, int], float] = {}
+    shared: Dict[Tuple[int, int], List[str]] = {}
+    for name, rows in members.items():
+        if not 2 <= len(rows) <= PLAYLIST_MAX:
+            continue
+        w = 1.0 / math.log2(len(rows) + 1)
+        for x in range(len(rows)):
+            for y in range(x + 1, len(rows)):
+                a, b = rows[x], rows[y]
+                if labels[a] == labels[b]:
+                    continue
+                weight[(a, b)] = weight.get((a, b), 0.0) + w
+                shared.setdefault((a, b), []).append(name)
+    out = []
+    for (a, b), w in weight.items():
+        names = shared[(a, b)]
+        # one shared playlist only counts when it is small (about 40 songs or fewer)
+        if len(names) < 2 and w < 0.18:
+            continue
+        smallest = min(names, key=lambda nm: len(members[nm]))
+        why = f"both on your playlist “{smallest}”" if len(names) == 1 else \
+            f"on {len(names)} of the same playlists (e.g. “{smallest}”)"
+        out.append((w, a, b, why))
+    return sorted(out, reverse=True)
+
+
+def _musical_pairs(p: _Prepared, labels: np.ndarray, musical_ok: np.ndarray) -> List[_Pair]:
+    """Same or neighbouring key, same or half/double tempo, similar sound or mood.
+
+    Only songs with a key, a tempo or a sound description take part: songs with none of these
+    all sit on the same spot in the musical space and would crowd everyone's neighbours."""
+    if p.musical is None or musical_ok.sum() < 4:
+        return []
+    from sklearn.neighbors import NearestNeighbors
+
+    rows = np.where(musical_ok)[0]
+    m = p.musical[rows]
+    km = max(1, min(25, len(rows) - 1))
+    mdist, mind = NearestNeighbors(n_neighbors=km + 1).fit(m).kneighbors(m)
+    mind = rows[mind]
+    mscale = float(np.median(mdist[:, 1:])) or 1.0
+    seen = set()
+    out = []
+    for r, i in enumerate(rows):
+        i = int(i)
+        for d, j in zip(mdist[r, 1:], mind[r, 1:]):
+            j = int(j)
+            a, b = (i, j) if i < j else (j, i)
+            if labels[a] == labels[b] or (a, b) in seen:
+                continue
+            seen.add((a, b))
+            out.append((math.exp(-float(d) / mscale), a, b, ""))
+    return sorted(out, reverse=True)
+
+
+def _rare_tag_pairs(p: _Prepared, labels: np.ndarray, eng: Optional[np.ndarray]) -> List[_Pair]:
+    """Two songs in different clusters that share a detailed tag almost nothing else in the
+    library has ("shoegaze" on one indie song and one electronic one). One pair per tag:
+    the two most-played songs from different clusters, from the same decade when possible."""
+    n = len(labels)
+    holders: Dict[str, List[int]] = {}
+    for i, tags in enumerate(p.styles):
+        for t in set(tags):
+            holders.setdefault(t, []).append(i)
+    if not holders:
+        return []
+    rare_max = max(8, int(n * 0.002))  # 46 songs in a 23,000-song library
+    year = pd.to_numeric(p.df[p.cols["year"]], errors="coerce").to_numpy(dtype=float) if p.cols["year"] else None
+    broad = {g for gs in p.genres for g in gs}
+    out = []
+    for tag, rows in holders.items():
+        if not 2 <= len(rows) <= rare_max or tag in broad:
+            continue
+        rows = sorted(rows, key=lambda i: -(eng[i] if eng is not None else 0))
+        pair = None
+        for x in range(len(rows)):
+            for y in range(x + 1, len(rows)):
+                a, b = rows[x], rows[y]
+                if labels[a] == labels[b] or (p.artists[a] and p.artists[a].lower() == p.artists[b].lower()):
+                    continue
+                same_decade = year is not None and np.isfinite(year[a]) and np.isfinite(year[b]) \
+                    and int(year[a]) // 10 == int(year[b]) // 10
+                if pair is None or (same_decade and not pair[1]):
+                    pair = ((min(a, b), max(a, b)), same_decade)
+                if same_decade:
+                    break
+            if pair and pair[1]:
+                break
+        if pair:
+            (a, b), same_decade = pair
+            score = 1.0 / math.log2(len(rows) + 1) + (0.2 if same_decade else 0.0)
+            why = f"both tagged “{p.style_names.get(tag, tag)}” (only {len(rows)} of your songs)"
+            out.append((score, a, b, why))
+    return sorted(out, reverse=True)
+
+
+def _pick_hidden(p: _Prepared, sources: Dict[str, List[_Pair]], cap: int) -> List[Dict[str, Any]]:
+    """Take the best pairs from each kind of evidence in turn, so one kind can't crowd out
+    the rest; each song gets at most two hidden links."""
+    picked: List[Dict[str, Any]] = []
+    used: set = set()
+    per_track: Dict[int, int] = {}
+    pos = {k: 0 for k in sources}
+    tops = {k: (v[0][0] if v else 1.0) or 1.0 for k, v in sources.items()}
+    while len(picked) < cap and any(pos[k] < len(v) for k, v in sources.items()):
+        for via, cands in sources.items():
+            while pos[via] < len(cands):
+                score, a, b, why = cands[pos[via]]
+                pos[via] += 1
+                if (a, b) in used or per_track.get(a, 0) >= 2 or per_track.get(b, 0) >= 2:
+                    continue
+                reasons = _pair_reasons(p, a, b)
+                if via == "sound":
+                    if len([r for r in reasons if not r.startswith(("both ", "same artist"))]) < 2:
+                        continue
+                else:
+                    reasons = [why] + reasons
+                used.add((a, b))
+                per_track[a] = per_track.get(a, 0) + 1
+                per_track[b] = per_track.get(b, 0) + 1
+                picked.append({"source": a, "target": b, "via": via, "reasons": reasons,
+                               "strength": round(0.4 + 0.6 * min(1.0, score / tops[via]), 3)})
+                break
+            if len(picked) >= cap:
+                break
+    return picked
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -971,51 +1144,23 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
 
     step("Finding hidden connections")
     # ---- hidden connections ------------------------------------------------------
-    # Tracks in different clusters (usually different genres) that still match
-    # musically: same or neighbouring key, same or half/double tempo, similar mood.
-    hidden = []
-    # Only songs with a key, a tempo or a sound description can match musically. Songs with
-    # none of these all sit on the same spot in the musical space, so in a big library where
-    # only a few songs were looked up online, they would crowd everyone's nearest neighbours.
+    # Pairs of songs in different clusters (usually different genres) that belong together
+    # anyway. Four kinds of evidence, so a big library finds some even without key or tempo:
+    # you play them back to back, you put them on the same small playlists, they match
+    # musically (key, tempo, sound, mood), or they share a tag almost nothing else has.
     musical_ok = _has_musical(p)
-    hidden_cap = int(min(60, max(15, musical_ok.sum() // 300)))  # ~15 for 4,500 songs, 60 at 18,000+
-    if p.musical is not None and musical_ok.sum() >= 4:
-        rows = np.where(musical_ok)[0]
-        m = p.musical[rows]
-        km = max(1, min(25, len(rows) - 1))
-        mdist, mind = NearestNeighbors(n_neighbors=km + 1).fit(m).kneighbors(m)
-        mind = rows[mind]  # back to library row numbers
-        mscale = np.median(mdist[:, 1:]) or 1.0
-        seen = set()
-        candidates = []
-        for r, i in enumerate(rows):
-            i = int(i)
-            for d, j in zip(mdist[r, 1:], mind[r, 1:]):
-                j = int(j)
-                if labels[i] == labels[j]:
-                    continue
-                a, b = (i, j) if i < j else (j, i)
-                if (a, b) in seen:
-                    continue
-                seen.add((a, b))
-                candidates.append((float(d), a, b))
-        candidates.sort()
-        per_track: Dict[int, int] = {}
-        for d, a, b in candidates:
-            if per_track.get(a, 0) >= 2 or per_track.get(b, 0) >= 2:
-                continue
-            reasons = _pair_reasons(p, a, b)
-            musical_reasons = [r for r in reasons if not r.startswith(("both ", "same artist"))]
-            if len(musical_reasons) < 2:
-                continue
-            strength = round(float(math.exp(-d / mscale)), 3)
-            hidden.append({"source": a, "target": b, "strength": strength, "reasons": reasons})
-            edges[(a, b)] = {"source": a, "target": b, "strength": strength, "bridge": True,
-                             "kind": "hidden", "reasons": reasons}
-            per_track[a] = per_track.get(a, 0) + 1
-            per_track[b] = per_track.get(b, 0) + 1
-            if len(hidden) >= hidden_cap:
-                break
+    hidden_cap = int(min(60, max(15, n // 300)))  # ~15 for 4,500 songs, 60 at 18,000+
+    sources = {
+        "listening": _played_together_pairs(p, labels),
+        "playlists": _playlist_pairs(p, labels),
+        "sound": _musical_pairs(p, labels, musical_ok),
+        "tags": _rare_tag_pairs(p, labels, eng),
+    }
+    hidden = _pick_hidden(p, sources, hidden_cap)
+    for h in hidden:
+        a, b = h["source"], h["target"]
+        edges[(a, b)] = {"source": a, "target": b, "strength": h["strength"], "bridge": True,
+                         "kind": "hidden", "reasons": h["reasons"]}
     for e in edges.values():
         e.setdefault("kind", "similar")
         if "reasons" not in e:
@@ -1056,6 +1201,10 @@ def build_map(df: pd.DataFrame, opts: Optional[MapOptions] = None,
             "sound_tracks": int(np.isfinite(p.sound[:, 0]).sum()) if p.sound is not None else 0,
             # songs with a key, tempo or sound description: what hidden connections can use
             "musical_tracks": int(musical_ok.sum()),
+            # what else hidden links could use, and how many each kind found
+            "played_with_tracks": int(p.df[p.cols["played_with"]].notna().sum()) if p.cols["played_with"] else 0,
+            "playlist_tracks": int(p.df[p.cols["playlists"]].notna().sum()) if p.cols["playlists"] else 0,
+            "hidden_by": {k: sum(h["via"] == k for h in hidden) for k in sources},
             "columns": {k: v for k, v in p.cols.items() if v},
         },
     }

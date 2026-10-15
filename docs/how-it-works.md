@@ -489,7 +489,7 @@ UMAP preserves **local** structure (who's next to whom) much better than **globa
 ### Steps 4 and 5: links, hidden connections and recommendations
 
 - **Links** come from **k-nearest neighbours** in the original feature space (scikit-learn's `NearestNeighbors`), not the 3D layout, so they reflect real similarity rather than projection artefacts.
-- **Hidden connections** use a second "musical only" space (key, folded tempo, mood) and keep pairs that are close there but sit in **different** clusters. That's how a lo-fi track and a jazz track in the same key and half-time tempo get linked.
+- **Hidden connections** are pairs that sit in **different** clusters but belong together anyway: songs you play back to back (from streaming history), songs on the same small playlists, songs close in a second "musical only" space (key, folded tempo, mood), and songs sharing a rare tag. That's how a lo-fi track and a jazz track in the same key and half-time tempo get linked, or two songs you always play one after the other.
 - **Signal** is a ratio: a cluster's share of your listening divided by its share of your library. A cluster that's 14% of your songs but 20% of your plays has a **lift** of 1.43×.
 - **Recommendations** average your most-played tracks into a "taste centre" vector, then rank your least-played tracks by distance to it. That's a tiny **content-based recommender**. Recommending songs *outside* your library needs a catalogue to search, which is on the [roadmap](roadmap.md).
 

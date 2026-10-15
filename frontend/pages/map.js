@@ -39,6 +39,9 @@ const TABS = [
   { id: "people", label: "People" },
 ];
 
+// What each hidden link was found from (meta.hidden_by keys)
+const HIDDEN_VIA = { listening: "played together", playlists: "same playlists", sound: "musical match", tags: "rare tag" };
+
 const EXAMPLE_SEARCHES = ["sad slow piano", "aggressive distorted guitars", "smooth jazz with saxophone", "upbeat dance with heavy bass"];
 
 function Centered({ children }) {
@@ -438,7 +441,7 @@ export default function MapPage() {
                 className="w-24 rounded border border-white/10 bg-black/30 px-2 py-0.5 text-xs text-white"
               />
               <span className="text-gray-400">
-                songs, most-played first. Songs without a lookup have no tempo or key, so they can&apos;t get hidden links.
+                songs, most-played first. Songs without a lookup have no tempo or key, so their hidden links come only from your plays, playlists and tags.
                 New songs take about half a second each; songs looked up before are instant.
               </span>
             </label>
@@ -712,19 +715,20 @@ export default function MapPage() {
             {tab === "hidden" && (
               <>
                 <p className="text-xs leading-5 text-gray-400">
-                  Pairs from different clusters that still match musically: similar sound, same or neighbouring key, same or half/double tempo, similar mood.
-                  Good for transitions and playlist bridges.
+                  Pairs from different clusters that belong together anyway: songs you play back to back, songs you keep
+                  putting on the same playlists, songs that match musically (sound, key, tempo, mood), and songs sharing a
+                  tag almost nothing else in your library has.
                 </p>
                 {data?.hidden_connections.length === 0 && (
                   <p className="text-sm leading-6 text-gray-500">
-                    {(data.meta.musical_tracks ?? 0) === 0
-                      ? "None of these songs has a key or tempo, and hidden links are matches on key, tempo and sound. Import again with “Look up genre, tempo, key and energy online” ticked (and a higher look-up limit for a big library), or use a CSV with key and BPM columns."
-                      : `No strong cross-cluster matches among the ${data.meta.musical_tracks.toLocaleString()} songs that have a key or tempo. Looking up more songs online gives it more to work with.`}
+                    Nothing to go on yet. Add your Spotify streaming history (Streaming_History_Audio files) and playlist
+                    files when you import, or tick “Look up genre, tempo, key and energy online”.
                   </p>
                 )}
-                {data?.hidden_connections.length > 0 && data.meta.musical_tracks != null && data.meta.musical_tracks < data.meta.count * 0.5 && (
+                {data?.hidden_connections.length > 0 && data.meta.hidden_by && (
                   <p className="text-[11px] leading-5 text-gray-500">
-                    Only {data.meta.musical_tracks.toLocaleString()} of {data.meta.count.toLocaleString()} songs have a key or tempo, so links are found among those. Look up more songs online for more.
+                    {Object.entries(data.meta.hidden_by).filter(([, c]) => c).map(([k, c]) => `${c} ${HIDDEN_VIA[k]}`).join(" · ")}
+                    {!data.meta.played_with_tracks && " · add your streaming history to find songs you play back to back"}
                   </p>
                 )}
                 {data?.hidden_connections.map((h, i) => (
@@ -732,7 +736,10 @@ export default function MapPage() {
                     <TrackLine t={byId[h.source]} onClick={() => setSelectedId(h.source)} />
                     <div className="my-1 ml-4 text-fuchsia-300/70">↕</div>
                     <TrackLine t={byId[h.target]} onClick={() => setSelectedId(h.target)} />
-                    <div className="mt-2 text-[11px] leading-5 text-fuchsia-200/80">{h.reasons.join(" · ")}</div>
+                    <div className="mt-2 text-[11px] leading-5 text-fuchsia-200/80">
+                      {h.via && <span className="mr-1.5 rounded border border-fuchsia-300/20 px-1 py-px text-[10px] uppercase tracking-wide text-fuchsia-300/70">{HIDDEN_VIA[h.via]}</span>}
+                      {h.reasons.join(" · ")}
+                    </div>
                   </div>
                 ))}
               </>

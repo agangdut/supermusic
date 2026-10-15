@@ -37,6 +37,7 @@ import time
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import Counter
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
@@ -50,7 +51,9 @@ SKIP_MS = 30_000  # a play shorter than 30 s counts as a skip (Spotify's own rul
 CANONICAL = ["title", "artist", "album", "genre", "key", "mode", "bpm", "energy", "danceability", "valence",
              "acousticness", "instrumentalness", "speechiness", "liveness", "loudness", "brightness", "year",
              "play_count", "skip_count", "minutes_played", "first_played", "last_played", "liked", "rating",
-             "playlists", "added_at", "uri", "source"]
+             "playlists", "added_at", "uri", "played_with", "source"]
+SESSION_GAP_MIN = 20  # plays this close together count as one listening session
+PLAYED_WITH_TOP = 8   # partners kept per song in the played_with column
 
 
 def _norm(col: str) -> str:
@@ -98,10 +101,12 @@ def _aggregate_plays(rows: Iterable[tuple], source: str) -> pd.DataFrame:
     `when` is the play's timestamp as text ("2021-03-04T22:10:05Z" or "2021-03-04 22:10");
     the first ten characters (the date) give first_played / last_played."""
     agg: Dict[str, dict] = {}
+    timeline: List[Tuple[str, str]] = []  # (full timestamp, song key) of every real play
     for title, artist, album, ms, skipped, *extra in rows:
         if not title or not artist:
             continue
-        when = str(extra[0])[:10] if extra and extra[0] else None
+        stamp = str(extra[0]) if extra and extra[0] else None
+        when = stamp[:10] if stamp else None
         uri = extra[1] if len(extra) > 1 else None
         k = song_key(artist, title)
         a = agg.get(k)
@@ -114,6 +119,8 @@ def _aggregate_plays(rows: Iterable[tuple], source: str) -> pd.DataFrame:
             a["skip_count"] += 1
         else:
             a["play_count"] += 1
+            if stamp:
+                timeline.append((stamp, k))
         a["minutes_played"] += ms / 60000
         if when:
             if not a["first_played"] or when < a["first_played"]:
@@ -122,11 +129,61 @@ def _aggregate_plays(rows: Iterable[tuple], source: str) -> pd.DataFrame:
                 a["last_played"] = when
         if uri and not a["uri"]:
             a["uri"] = uri
+    partners = _played_together(timeline)
+    for k, a in agg.items():
+        a["played_with"] = _format_partners(partners.get(k))
     df = pd.DataFrame(agg.values())
     if len(df):
         df["minutes_played"] = df["minutes_played"].round(1)
         df["source"] = source
     return df
+
+
+def _played_together(timeline: List[Tuple[str, str]]) -> Dict[str, Counter]:
+    """How often each pair of songs was played back to back, within one listening session.
+
+    Two songs you keep playing one after the other are linked in your head even when they
+    sound nothing alike: that is the signal the map's hidden links use when there is no key
+    or tempo. Skips are left out (a skip is not a pairing), and a gap of more than
+    SESSION_GAP_MIN minutes starts a new session."""
+    out: Dict[str, Counter] = {}
+    if len(timeline) < 2:
+        return out
+    t = pd.to_datetime(pd.Series([s for s, _ in timeline]), errors="coerce", utc=True, format="mixed")
+    mins = ((t - pd.Timestamp("2000-01-01", tz="UTC")).dt.total_seconds() / 60).to_numpy(dtype=float)
+    ok = np.isfinite(mins)
+    order = np.argsort(np.where(ok, mins, np.inf), kind="stable")
+    prev = None
+    for i in order:
+        if not ok[i]:
+            continue
+        k = timeline[i][1]
+        if prev is not None and k != timeline[prev][1] and mins[i] - mins[prev] <= SESSION_GAP_MIN:
+            a, b = timeline[prev][1], k
+            out.setdefault(a, Counter())[b] += 1
+            out.setdefault(b, Counter())[a] += 1
+        prev = i
+    return out
+
+
+def _format_partners(c: Optional[Counter]) -> Optional[str]:
+    """'song key xN; ...' for partners played next to this song at least twice."""
+    if not c:
+        return None
+    top = [(k, n) for k, n in c.most_common(PLAYED_WITH_TOP) if n >= 2]
+    return "; ".join(f"{k} x{n}" for k, n in top) or None
+
+
+def parse_partners(v) -> Counter:
+    """Inverse of _format_partners."""
+    out: Counter = Counter()
+    if v is None or (isinstance(v, float) and np.isnan(v)):
+        return out
+    for part in str(v).split(";"):
+        key, _, n = part.strip().rpartition(" x")
+        if key and n.isdigit():
+            out[key] += int(n)
+    return out
 
 
 def parse_file(name: str, data: bytes) -> Tuple[pd.DataFrame, str]:
@@ -202,13 +259,23 @@ def parse_file(name: str, data: bytes) -> Tuple[pd.DataFrame, str]:
 
     # ---- Exportify (Spotify playlists) -------------------------------------------
     if "track_name" in cols and _first(df, "artist_names", "artist_name"):
-        return _canonical_from_columns(df, "spotify_playlist"), "Spotify playlist (Exportify)"
+        return _with_playlist(_canonical_from_columns(df, "spotify_playlist"), name), "Spotify playlist (Exportify)"
 
     # ---- Music app playlist export (.txt) ------------------------------------------
     if {"name", "artist"} <= cols and ("plays" in cols or "time" in cols):
-        return _canonical_from_columns(df, "apple_playlist"), "Apple Music playlist export"
+        return _with_playlist(_canonical_from_columns(df, "apple_playlist"), name), "Apple Music playlist export"
 
     return _canonical_from_columns(df, "csv"), "track list (CSV)"
+
+
+def _with_playlist(df: pd.DataFrame, file_name: str) -> pd.DataFrame:
+    """A playlist export is one file per playlist: its file name is the playlist's name."""
+    if len(df) and ("playlists" not in df or df["playlists"].isna().all()):
+        name = Path(file_name).stem.replace("_", " ").strip()
+        df["playlists"] = name or None
+        if name.lower() in {"liked songs", "liked", "your library"} and "liked" not in df:
+            df["liked"] = True
+    return df
 
 
 def _spotify_playlists(playlists: List[dict]) -> pd.DataFrame:
@@ -295,16 +362,28 @@ def merge(frames: List[pd.DataFrame]) -> pd.DataFrame:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     for c in ["first_played", "last_played", "added_at"]:  # ISO dates: text order is time order
         df[c] = df[c].map(lambda v: None if v is None or (isinstance(v, float) and np.isnan(v)) or v == "" else str(v)[:10])
-    agg = {c: "first" for c in CANONICAL if c not in sums and c != "source"}
+    # Fast built-in aggregations first ("first" takes each song's first non-empty value) ...
+    special = {
+        "first_played": min, "last_played": max, "added_at": min,
+        "source": lambda vs: "+".join(sorted(set(map(str, vs)))),
+        "playlists": lambda vs: "; ".join(dict.fromkeys(p.strip() for v in vs for p in str(v).split(";")
+                                                         if p.strip())) or None,
+        "liked": lambda vs: True if any(map(_truthy, vs)) else vs[0],
+        "played_with": lambda vs: _format_partners(sum((parse_partners(v) for v in vs), Counter())),
+    }
+    agg = {c: "first" for c in CANONICAL if c not in sums and c not in special}
     agg.update({c: "sum" for c in sums})
-    # Not "min"/"max": pandas 2 can't compare None with text in those
-    earliest = lambda s: min(s.dropna(), default=None)  # noqa: E731
-    agg.update(first_played=earliest, last_played=lambda s: max(s.dropna(), default=None), added_at=earliest)
-    agg["source"] = lambda s: "+".join(sorted(set(map(str, s.dropna()))))
-    agg["playlists"] = lambda s: "; ".join(dict.fromkeys(p.strip() for v in s.dropna() for p in str(v).split(";")
-                                                         if p.strip())) or None
-    agg["liked"] = lambda s: True if s.map(_truthy).any() else (s.dropna().iloc[0] if s.notna().any() else None)
-    merged = df.groupby("_k", sort=False).agg(agg).reset_index(drop=True)
+    merged = df.groupby("_k", sort=False).agg(agg)
+    # ... then a plain loop over just the non-empty values for the rest (a per-song pandas
+    # lambda took ~20 s on a 23,000-song account export)
+    for c, combine in special.items():
+        found: Dict[str, list] = {}
+        for k, v in zip(df["_k"], df[c]):
+            if v is None or v == "" or (isinstance(v, float) and np.isnan(v)):
+                continue
+            found.setdefault(k, []).append(v)
+        merged[c] = pd.Series({k: combine(vs) for k, vs in found.items()}, dtype=object).reindex(merged.index)
+    merged = merged.reset_index(drop=True)
     for c in sums:
         if df[c].notna().sum() == 0:
             merged[c] = np.nan  # nobody had listening data; don't fake zeros
