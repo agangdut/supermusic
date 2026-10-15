@@ -55,9 +55,45 @@ data/*
 !data/README.md
 backend/data/
 /static/
+# Accounts, votes and song facts live in one SQLite file (data/supermusic.db).
+# Its journal files hold the same user data, so they're ignored too.
 *.db
+*.db-wal
+*.db-shm
+*.db-journal
 *.sqlite
 *.sqlite3
+*.sql
+*.dump
+
+# --- User data ---------------------------------------------------------------
+# Anything people upload or that identifies them stays out of git, wherever it
+# lands. The code for accounts is fine to publish; their data is not.
+uploads/
+tmp_uploads/
+shared_maps/
+artifacts/
+logs/
+backups/
+caddy_data/
+caddy_config/
+*.zip
+# Spotify / Apple Music / YouTube exports (made-up copies for tests are allowed)
+my_spotify_data/
+Spotify Account Data/
+Spotify Extended Streaming History/
+StreamingHistory*.json
+Streaming_History*.json
+YourLibrary.json
+Playlist*.json
+Userdata.json
+Identifiers.json
+Payments.json
+Inferences.json
+Apple Music - *.csv
+watch-history.json
+search-history.json
+!backend/tests/fixtures/**
 
 # Audio, MIDI and model files never belong in git
 *.mp3
