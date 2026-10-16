@@ -9,6 +9,7 @@ import { setBackgroundWork } from "@/lib/backgroundWork";
 import { blendMaps, buildMap, getImport, getMapEstimate, getSharedMap, importLibrary, likeSongs, myMap, radioPlayed, rememberMyMap, searchSound, skipListening } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { handCsvToStudio, missingDetails } from "@/lib/handoff";
+import { LastfmButton } from "@/components/upload/LastfmImport";
 import ComparePanel, { CompareGate } from "@/components/map/ComparePanel";
 import { clusterGenre, clusterName, colorFor, galaxyTitle } from "@/components/map/colors";
 import ImportProgress, { BuildProgress } from "@/components/map/ImportProgress";
@@ -519,6 +520,7 @@ export default function MapExplorer() {
             )}
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {importButton}
+              {!shared && !blend && <LastfmButton className={ghost} />}
               {data && !blend && !shared && <button onClick={() => setSharing(true)} className={ghost}>Share</button>}
               {shared && (shared.owner && shared.owner === user?.username
                 ? <button onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/s/${shared.id}`); setLinkCopied(true); }} className={ghost}>{linkCopied ? "Link copied" : "Copy link"}</button>
@@ -585,11 +587,12 @@ export default function MapExplorer() {
               <button onClick={hideWelcome} className="text-gray-500 hover:text-white" aria-label="Close">✕</button>
             </div>
             <p className="mt-1 text-xs leading-5 text-gray-400">
-              You&apos;re looking at a sample library. Import your Spotify or Apple Music history to see your own galaxies,
+              You&apos;re looking at a sample library. Import your Spotify or Apple Music history, or your Last.fm username, to see your own galaxies,
               then share the picture or compare your taste with a friend.
             </p>
             <div className="mt-3 flex gap-2">
               {importButton}
+              <LastfmButton className={ghost} up />
               <Link href="/maps" className={ghost}>Explore other maps</Link>
             </div>
           </div>

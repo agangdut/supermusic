@@ -70,6 +70,16 @@ export async function enrichFiles(files, { lookup = true, limit, output = "combi
   return apiFetch("/csv/enrich-files", { method: "POST", body: form });
 }
 
+/** POST /csv/import-lastfm: read a Last.fm library by username, then enrich it in the background. */
+export async function importLastfm({ username, lookup = true, limit, max_tracks }) {
+  return postJSON("/csv/import-lastfm", { username, lookup, limit: limit || undefined, max_tracks: max_tracks || undefined });
+}
+
+/** GET /csv/lastfm/status: { enabled } (false when the server has no LASTFM_API_KEY). */
+export async function lastfmStatus() {
+  return apiFetch("/csv/lastfm/status");
+}
+
 /** POST /csv/enrich */
 export async function csvEnrich({ csv_path, strategy = "youtube+acousticbrainz", options = {} }) {
   const job = await postJSON("/csv/enrich", { csv_path, strategy, options });
