@@ -153,7 +153,7 @@ Copy `.env.example` to `.env` and change what you need. The ones that matter mos
 | `JWT_SECRET_KEY` | `change-me-in-production` | Signs login tokens. **Change it before you deploy.** |
 | `CORS_ORIGINS` | `http://localhost:3000,…` | Which websites may call the API |
 | `HF_TOKEN` | _(none)_ | Hugging Face token for MuScriptor's weights (needed for Full band) |
-| `LASTFM_API_KEY` | _(none)_ | Optional. More accurate Music Map genres |
+| `LASTFM_API_KEY` | _(none)_ | Optional. Import from Last.fm by username, and more accurate Music Map genres |
 | `YOUTUBE_API_KEY` | _(none)_ | Optional. Adds YouTube details during CSV enrichment |
 | `NEXT_PUBLIC_API_BASE` | `http://localhost:8000` | Where the UI finds the API (fixed when the UI is built) |
 

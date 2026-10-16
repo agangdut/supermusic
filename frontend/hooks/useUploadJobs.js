@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, API_BASE } from "@/utils/fetcher";
 import { setBackgroundWork } from "@/lib/backgroundWork";
-import { midiConvert, stemsSeparate, csvEnrich, enrichFiles, getJob, areaForJobType, normalizeJobArtifacts, toArtifactUrl } from "@/lib/api";
+import { midiConvert, stemsSeparate, csvEnrich, enrichFiles, importLastfm, getJob, areaForJobType, normalizeJobArtifacts, toArtifactUrl } from "@/lib/api";
 
 // Map backend status to frontend status
 const mapStatus = (status) => {
@@ -24,7 +24,7 @@ export const jobLabel = (j) => {
   const t = j.job_type || j.type;
   if (t === "midi_conversion") return `MIDI (${MODE_LABELS[j.payload?.model] || "General"})`;
   if (t === "stem_separation") return "Stem separation";
-  if (t === "csv_enrichment") return "CSV enrichment";
+  if (t === "csv_enrichment") return j.payload?.source === "lastfm" ? `Last.fm import (${j.payload.username})` : "CSV enrichment";
   if (t === "track_download") return "Download";
   return "Job";
 };
@@ -218,24 +218,16 @@ export default function useUploadJobs() {
           status: mapStatus(job.status),
         };
 
-        // Update job with backend job data
-        updateJob(jobId, {
-          id: job.id,
-          job_type: job.job_type || job.type,
-          status: mappedJob.status,
-          message: job.message,
-          progress: job.progress,
-          result: job.result,
-          error_detail: job.error_detail,
-        });
-
-        // Replace the local job with the backend job
-        setJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, ...mappedJob, id: job.id } : j)));
+        // Replace the local placeholder with the backend job (payload, error_hint and all,
+        // so a job that already finished or failed on the server shows its real label and reason)
+        updateJob(jobId, { ...mappedJob, id: job.id, job_type: job.job_type || job.type });
 
         // If job is already done, handle success
         if ((job.status === "done" || mappedJob.status === "success") && job.result) {
           if (onSuccessData) onSuccessData(job.result);
           notify(successMsg, "ok");
+        } else if (mappedJob.status === "failed") {
+          notify(`${failMsg}: ${job.error_hint || job.error_detail || "unknown error"}`, "err");
         } else {
           notify(`Job started: ${job.message || successMsg}`, "info");
         }
@@ -267,7 +259,7 @@ export default function useUploadJobs() {
         midi_conversion: () => midiConvert(p),
         stem_separation: () => stemsSeparate(p),
         // Batch jobs were sent as files, which the browser no longer has
-        csv_enrichment: p.csv_path ? () => csvEnrich(p) : null,
+        csv_enrichment: p.source === "lastfm" ? () => importLastfm(p) : p.csv_path ? () => csvEnrich(p) : null,
       }[type];
       if (!run) return notify("This job can't be retried. Start it again from the form.", "warn");
       setJobs((prev) => prev.filter((x) => x.id !== j.id));
@@ -383,6 +375,24 @@ export default function useUploadJobs() {
     );
   }, [csvFiles, createJob, notify]);
 
+  // Read a library from Last.fm by username; the server enriches it in the background
+  const importFromLastfm = useCallback(async (username, { lookup = true, limit } = {}) => {
+    const name = String(username || "").trim();
+    if (!name) {
+      notify("Type your Last.fm username first.", "warn");
+      return;
+    }
+    await createJob(
+      "csv_enrichment",
+      () => importLastfm({ username: name, lookup, limit }),
+      "Last.fm import complete ✅",
+      "Last.fm import failed ❌",
+      (result) => {
+        if (result?.artifacts?.csv) setLatestCsv(csvResult(result));
+      }
+    );
+  }, [createJob, notify]);
+
   const clearJobs = useCallback(() => {
     setJobs([]);
   }, []);
@@ -410,6 +420,7 @@ export default function useUploadJobs() {
     transcribeSeparatedStems,
     separateStems,
     enrichCsv,
+    importFromLastfm,
     clearJobs,
   };
 }

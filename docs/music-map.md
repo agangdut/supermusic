@@ -144,6 +144,18 @@ When you import with **Look up … online** ticked and the `clap` service is run
 - CLAP runs on the CPU in about a second per song; `docker-compose.gpu.yml` puts it on the GPU. The model (a few hundred MB) downloads into `data/models/hf` the first time.
 - Without the service, or without online lookups, the map works exactly as before.
 
+## Import from Last.fm (no files)
+
+If you scrobble to Last.fm, click **From Last.fm** on the map (or use the **Import from Last.fm** card in the Studio) and type your username. No password and no export are needed, because Last.fm makes listening data public. You are taken to the Studio, which shows what is happening while it runs: first your library is read from Last.fm, then each song is enriched (genre, year, tempo, key and energy, exactly as in the next section). It keeps running while you look around the rest of the site, and when it is done the Studio offers **Open it in the Music Map**.
+
+What is read ([`core/lastfm_import.py`](../backend/app/core/lastfm_import.py)):
+
+- **Top tracks** (all time, up to 2,000 by default): every song you've scrobbled and its play count.
+- **Loved tracks**: become "liked".
+- **Your latest 5,000 scrobbles**: last-played dates, albums, and which songs you play back to back (the "played together" hidden links). First-played dates are only kept when those pages cover your whole history.
+
+The server needs a free `LASTFM_API_KEY` in `.env` ([get one here](https://www.last.fm/api/account/create)); without it the card says so. Requests share the Last.fm rate limit with the genre lookup. A profile with "Hide recent listening" turned on can't be read, and the error says how to change that. API: `POST /csv/import-lastfm` with `{"username": "...", "lookup": true, "limit": 2000}` returns a job you poll at `GET /csv/jobs/{id}`; `GET /csv/lastfm/status` says whether the key is set.
+
 ## Import from Spotify or Apple Music
 
 Click **Import Spotify / Apple Music** and pick one or more files. SuperMusic works out what each file is from its columns:
