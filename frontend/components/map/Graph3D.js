@@ -224,9 +224,13 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
       const s = l.source, t = l.target;
       if (selectedId != null) { if (s !== selectedId && t !== selectedId) return; }
       else if (mode === "hidden") { if (l.kind !== "hidden") return; }
-      else if (focus) { if (!focus.has(s) || !focus.has(t)) return; }
-      // Overview: keep each cluster's own web plus the hidden threads. Links between
-      // neighbouring clusters are left out, or a real library turns into one big mesh.
+      // Lit-up songs ("My map" on the atlas) are spread all over a big map: glow, no web
+      else if (focus) { if ((large && focus === glowSet) || !focus.has(s) || !focus.has(t)) return; }
+      // Overview of a big map: just the stars. Thousands of links over each other read as
+      // a tangle, so a star's links only appear once you click it (or a cluster).
+      else if (large) return;
+      // Overview of a small map: keep each cluster's own web plus the hidden threads. Links
+      // between neighbouring clusters are left out, or a real library turns into one big mesh.
       else if (l.kind !== "hidden" && l.bridge) return;
       const a = data.tracks[s], b = data.tracks[t];
       if (!a || !b) return;
@@ -238,7 +242,7 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
       keep.add(i);
     });
     return keep;
-  }, [data, selectedId, mode, focus]);
+  }, [data, large, selectedId, mode, focus, glowSet]);
 
   const linkVisible = (l) => !large && drawn.has(l.edge);
 
