@@ -204,6 +204,11 @@ export async function voteSharedMap(id, up = true) {
   return postJSON(`/map/shared/${encodeURIComponent(id)}/vote`, { up });
 }
 
+/** Just a map's upvotes and whether this listener upvoted it: { votes, voted }. */
+export async function getSharedMapVotes(id) {
+  return apiFetch(`/map/shared/${encodeURIComponent(id)}/votes`);
+}
+
 /** The picture saved when a map was shared. */
 export const sharedMapPicture = (id) => `${API_BASE}/map/shared/${encodeURIComponent(id)}/picture.png`;
 

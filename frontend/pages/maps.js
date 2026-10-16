@@ -7,6 +7,7 @@ import { Featured, MapCard } from "@/components/map/MapCards";
 import { myShares, stopSharing } from "@/components/map/ShareDialog";
 import Avatar from "@/components/ui/Avatar";
 import { getLeaderboards, listSharedMaps, searchPeople } from "@/lib/api";
+import { onMapVote } from "@/lib/mapVotes";
 
 const SORTS = [
   { id: "top", label: "Most upvoted" },
@@ -32,7 +33,14 @@ function Rank({ i }) {
 function Charts() {
   const [b, setB] = useState(null);
   const [error, setError] = useState(null);
-  useEffect(() => { getLeaderboards().then(setB).catch((e) => setError(e.message || String(e))); }, []);
+  useEffect(() => {
+    const load = () => getLeaderboards().then(setB).catch((e) => setError(e.message || String(e)));
+    load();
+    // An upvote anywhere changes "Maps of the week"; fetch it again (once, if several land together)
+    let t;
+    const off = onMapVote(() => { clearTimeout(t); t = setTimeout(load, 600); });
+    return () => { off(); clearTimeout(t); };
+  }, []);
   if (error) return <p className="text-sm text-rose-300">{error}</p>;
   if (!b) return <p className="text-sm text-gray-500">Loading…</p>;
   return (
