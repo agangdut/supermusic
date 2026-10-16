@@ -91,7 +91,7 @@ The map is the home page (`/`; old `/map` links still work). Around it:
 - **Community atlas** (`/atlas`): every publicly listed map merged into one universe; brighter stars are in more libraries. Light up your own songs and pin short notes to any song.
 - **Artists** (`/artists`): upload a track to see which galaxy it lands in, its neighbours and the listeners whose maps are full of music like it. The audio is analysed and then deleted.
 - **Reputation**: points for song fixes others agree with (10), being first to suggest a fix (5) and upvotes on your maps (2). Levels go Listener, Tuner, Curator, Cartographer, Astronomer.
-- **Games and charts** (`/play`, Explore → Charts): a ten-question galaxy quiz scored on the server, top maps of the week, top contributors and the most started radio stations.
+- **Games and charts** (`/play`, Explore → Charts): a ten-question music quiz (release years, who recorded a song, which album, which came first), scored on the server, top maps of the week, top contributors and the most started radio stations.
 
 ## Map Radio
 

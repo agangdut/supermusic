@@ -8,6 +8,7 @@ import PageShell from "@/components/layout/PageShell";
 import { setBackgroundWork } from "@/lib/backgroundWork";
 import { blendMaps, buildMap, getImport, getMapEstimate, getSharedMap, importLibrary, likeSongs, myMap, radioPlayed, rememberMyMap, searchSound, skipListening } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { handCsvToStudio, missingDetails } from "@/lib/handoff";
 import ComparePanel, { CompareGate } from "@/components/map/ComparePanel";
 import { clusterGenre, clusterName, colorFor, galaxyTitle } from "@/components/map/colors";
 import ImportProgress, { BuildProgress } from "@/components/map/ImportProgress";
@@ -108,6 +109,8 @@ function ListenLinks({ t }) {
   );
 }
 
+const joinWords = (w) => (w.length > 1 ? `${w.slice(0, -1).join(", ")} and ${w[w.length - 1]}` : w[0]);
+
 export default function MapExplorer() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -185,6 +188,15 @@ export default function MapExplorer() {
 
   // Compare: /?compare=<share id> draws your map and theirs as one (a blend)
   const { user } = useAuth();
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [atTop, setAtTop] = useState(true); // hide the "facts below" cue once they scroll
+  useEffect(() => {
+    const onScroll = () => setAtTop(window.scrollY < 80);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  const [pendingMissing, setPendingMissing] = useState([]); // details the picked CSV lacks (genre, tempo...)
+  useEffect(() => setLinkCopied(false), [shared?.id]);
   const [gate, setGate] = useState(null); // { id } while we wait for your library
   const compareRef = useRef(null); // a compare to run as soon as an import finishes
   const runCompare = useCallback(async (theirsId, mine) => {
@@ -269,7 +281,9 @@ export default function MapExplorer() {
     e.target.value = "";
     if (files.length) {
       setPending(files);
+      setPendingMissing([]);
       setError(null);
+      missingDetails(files).then(setPendingMissing).catch(() => {});
     }
   };
 
@@ -505,7 +519,10 @@ export default function MapExplorer() {
             )}
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {importButton}
-              {data && !blend && <button onClick={() => setSharing(true)} className={ghost}>Share</button>}
+              {data && !blend && !shared && <button onClick={() => setSharing(true)} className={ghost}>Share</button>}
+              {shared && (shared.owner && shared.owner === user?.username
+                ? <button onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/s/${shared.id}`); setLinkCopied(true); }} className={ghost}>{linkCopied ? "Link copied" : "Copy link"}</button>
+                : <button disabled title="Only the person who made this map can share it" className={`${ghost} cursor-not-allowed opacity-40 hover:bg-black/20`}>Share</button>)}
               {shared && <Link href={`/?compare=${encodeURIComponent(shared.id)}`} className={ghost}>Compare with mine</Link>}
               {shared && <UpvoteButton id={shared.id} votes={shared.votes ?? 0} voted={!!shared.voted} />}
               {(shared || blend || !isSample) && (
@@ -596,6 +613,21 @@ export default function MapExplorer() {
                 <ul className="mt-1 text-xs text-gray-400">
                   {pending.map((f) => <li key={f.name}>• {f.name}</li>)}
                 </ul>
+                {pendingMissing.length >= 2 && (
+                  <div className="mt-3 rounded-xl border border-amber-300/30 bg-amber-300/[0.08] p-3">
+                    <div className="text-xs font-semibold text-amber-100">This CSV is missing {joinWords(pendingMissing)}</div>
+                    <p className="mt-1 text-[11px] leading-5 text-amber-100/70">
+                      Without them the map can only group songs by artist, so galaxies and hidden links come out thin.
+                      Do you want to enrich it in the Studio first? It fills in the gaps and keeps a clean copy you can download,
+                      then you can open it straight on the map.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button onClick={() => { handCsvToStudio(pending); setPending(null); router.push("/upload?enrich=1"); }}
+                        className="rounded-lg bg-amber-300 px-3 py-1.5 text-xs font-semibold text-[#0b1121] hover:brightness-110">Enrich it in the Studio</button>
+                      <span className="self-center text-[11px] text-amber-100/60">or build it here with the online lookup below</span>
+                    </div>
+                  </div>
+                )}
                 <p className="mt-2 text-[11px] leading-5 text-gray-500">
                   Works with Exportify playlist CSVs, Spotify&apos;s account data export (StreamingHistory / Streaming_History_Audio JSON),
                   Apple Music&apos;s privacy export (Play Activity, Track Play History, Library Tracks), the Music app&apos;s
@@ -991,10 +1023,21 @@ export default function MapExplorer() {
             </div>
           </div>
         </aside>
+
+        {/* There's more below the map: say so until they scroll */}
+        {data && atTop && !selected && !(isSample && !welcomeHidden) && !pending && !importJob && !gate && (
+          <button
+            onClick={() => document.getElementById("map-facts")?.scrollIntoView({ behavior: "smooth" })}
+            className="absolute bottom-[84px] left-3 z-20 flex items-center md:-translate-x-1/2 gap-2 rounded-full border border-white/15 bg-[#0b1121]/80 px-4 py-2 text-xs font-medium text-gray-100 shadow-lg shadow-black/40 backdrop-blur transition hover:border-fuchsia-400/50 hover:text-white md:bottom-5 md:left-[calc((100%-400px)/2)]"
+          >
+            Facts about this map
+            <svg viewBox="0 0 24 24" className="h-4 w-4 animate-bounce text-fuchsia-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+          </button>
+        )}
       </section>
 
       {/* Below the map: what the map is made of */}
-      <div className="mx-auto w-full max-w-[1400px] px-4 pb-16 pt-8 lg:px-8">
+      <div id="map-facts" className="mx-auto w-full max-w-[1400px] scroll-mt-16 px-4 pb-16 pt-8 lg:px-8">
       {/* Insights strip */}
       {data?.insights?.length > 0 && (
         <div className="mb-4 flex gap-3 overflow-x-auto pb-1">
