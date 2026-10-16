@@ -36,15 +36,22 @@ class MineRequest(BaseModel):
     csv_path: Optional[str] = None
     sample: bool = False
     share_id: Optional[str] = None
+    account: bool = Field(False, description="the library saved on your account")
 
 
 @router.post("/atlas/mine")
-async def atlas_mine(req: MineRequest) -> dict:
+async def atlas_mine(req: MineRequest, me: Optional[str] = Depends(current_username)) -> dict:
     """Which atlas stars are songs from this library."""
     from app.routes.map import _library
 
-    df = pd.read_csv(_library(req))
-    return {"ids": await run_in_threadpool(atlas.mine, df)}
+    if req.account:
+        p = (social.user_row(me) or {}).get("library_csv") if me else None
+        if not p or not Path(p).is_file():
+            raise HTTPException(status_code=404, detail="Import your library on the map first.")
+        df = pd.read_csv(p)
+    else:
+        df = pd.read_csv(_library(req))
+    return {"ids": await run_in_threadpool(atlas.mine, df), "songs": len(df)}
 
 
 @router.get("/atlas/song")

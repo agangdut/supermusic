@@ -1,6 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/router";
+
 import PageShell from "@/components/layout/PageShell";
+import { takeCsvForStudio } from "@/lib/handoff";
 import useUploadJobs from "@/hooks/useUploadJobs";
 
 import ToastBanner from "@/components/upload/ToastBanner";
@@ -31,6 +35,19 @@ export default function UploadPage() {
     retryJob,
   } = useUploadJobs();
 
+  // Sent here from the map with a CSV that needs enriching: put it in the CSV card
+  const router = useRouter();
+  useEffect(() => {
+    if (router.query.enrich == null) return;
+    const files = takeCsvForStudio();
+    if (files?.length) {
+      setCsvFiles(files);
+      setTimeout(() => document.getElementById("csv-card")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+    }
+    router.replace("/upload", undefined, { shallow: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.query.enrich]);
+
   return (
     <PageShell>
       <ToastBanner toast={toast} />
@@ -55,12 +72,14 @@ export default function UploadPage() {
             busy={busy}
           />
 
+          <div id="csv-card" className="scroll-mt-24">
           <CsvCard
             csvFiles={csvFiles}
             setCsvFiles={setCsvFiles}
             enrichCsv={enrichCsv}
             busy={busy}
           />
+          </div>
 
           <StatusCard runningCount={runningCount} />
         </div>

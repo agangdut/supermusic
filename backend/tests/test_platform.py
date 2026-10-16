@@ -142,7 +142,9 @@ def test_quiz_scores_are_counted_on_the_server():
     right = 0
     for _ in range(10):
         q = client.get("/games/quiz", headers=h).json()
-        assert q["kind"] in ("galaxy", "link") and len(q["options"]) == 4 and "answer" not in q
+        assert q["kind"] in ("year", "artist", "album", "genre", "first") and len(q["options"]) == 4 and "answer" not in q
+        if q["kind"] == "year":
+            assert "year" not in (q.get("song") or {})  # the card mustn't give the answer away
         res = client.post("/games/quiz/answer", json={"id": q["id"], "choice": q["options"][0]["id"]}, headers=h).json()
         right += res["correct"]
         # An answered question can't be answered again

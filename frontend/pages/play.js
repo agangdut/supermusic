@@ -7,15 +7,17 @@ import { getLeaderboards, quizAnswer, quizFinish, quizQuestion } from "@/lib/api
 import { useAuth } from "@/lib/auth";
 
 function Song({ s }) {
+  const facts = [s.album && `Album: ${s.album}`, s.genre, s.year].filter(Boolean);
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-      <div className="text-lg font-semibold text-white">{s.title}</div>
-      <div className="text-sm text-gray-400">{s.artist}</div>
-      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-gray-400">
-        {[s.genre, s.bpm && `${Math.round(s.bpm)} BPM`, s.key, s.year].filter(Boolean).map((x) => (
-          <span key={x} className="rounded-md border border-white/10 px-1.5 py-0.5">{x}</span>
-        ))}
-      </div>
+      {s.title && <div className="text-lg font-semibold text-white">{s.title}</div>}
+      {s.artist && <div className={s.title ? "text-sm text-gray-400" : "text-lg font-semibold text-white"}>{s.artist}</div>}
+      {s.songs?.length > 0 && <div className="mt-1 text-xs text-gray-500">Songs include {s.songs.join(", ")}</div>}
+      {facts.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-gray-400">
+          {facts.map((x) => <span key={x} className="rounded-md border border-white/10 px-1.5 py-0.5">{x}</span>)}
+        </div>
+      )}
     </div>
   );
 }
@@ -65,12 +67,12 @@ export default function Play() {
 
   return (
     <PageShell>
-      <Head><title>Galaxy quiz · SuperMusic</title></Head>
+      <Head><title>Music quiz · SuperMusic</title></Head>
       <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[1fr_300px]">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-fuchsia-300">Play</div>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">Galaxy quiz</h1>
-          <p className="mt-1 text-sm text-gray-400">Ten questions from the maps people shared. Guess which galaxy a song lives in, or why two songs from different worlds are linked.</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">Music quiz</h1>
+          <p className="mt-1 text-sm text-gray-400">Ten questions about the music on the community atlas: when songs and albums came out, who recorded them, and what came first.</p>
 
           {!started && (
             <button onClick={restart} className="mt-6 rounded-xl bg-gradient-to-r from-fuchsia-600 to-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-fuchsia-600/20 hover:brightness-110">
@@ -88,16 +90,9 @@ export default function Play() {
               <div className="mt-1 h-1 rounded-full bg-white/5">
                 <div className="h-1 rounded-full bg-gradient-to-r from-fuchsia-500 to-indigo-500" style={{ width: `${(q.round / q.rounds) * 100}%` }} />
               </div>
-              <p className="mt-4 text-sm text-gray-300">{q.prompt}</p>
+              <p className="mt-4 text-lg font-semibold text-white">{q.prompt}</p>
               <div className="mt-3">
-                {q.kind === "galaxy" && <Song s={q.song} />}
-                {q.kind === "link" && (
-                  <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-                    <Song s={q.pair[0]} />
-                    <span className="text-center text-fuchsia-300">✦</span>
-                    <Song s={q.pair[1]} />
-                  </div>
-                )}
+                {q.song && <Song s={q.song} />}
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 {q.options.map((o) => {
@@ -131,7 +126,7 @@ export default function Play() {
           {finished && (
             <div className="mt-6 rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(ellipse_at_top,_#2a1660_0%,_#0b1121_65%)] p-6 text-center">
               <div className="text-5xl font-bold text-white">{finished.score}/{finished.rounds}</div>
-              <p className="mt-1 text-sm text-gray-400">{finished.score >= 8 ? "Astronomer level." : finished.score >= 5 ? "You know your way around the galaxies." : "The universe is big. Try again?"}</p>
+              <p className="mt-1 text-sm text-gray-400">{finished.score >= 8 ? "You really know your music." : finished.score >= 5 ? "Solid. You know your stuff." : "Plenty more to discover. Try again?"}</p>
               {finished.pending ? (
                 <div className="mx-auto mt-4 flex max-w-xs flex-col gap-2">
                   {!user && <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="Your name for the leaderboard"

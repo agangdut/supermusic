@@ -87,7 +87,10 @@ export default function Atlas() {
   const [tab, setTab] = useState("galaxies");
   const [selectedId, setSelectedId] = useState(null);
   const [clusterFocus, setClusterFocus] = useState(null);
-  const [mine, setMine] = useState(null); // Set of atlas ids in your library
+  const [mine, setMine] = useState(null); // { which: "mine" | "sample", ids: Set of atlas ids, songs, title }
+  const { user } = useAuth();
+  const [myMapKnown, setMyMapKnown] = useState(null);
+  useEffect(() => { setMyMapKnown(myMap()); }, []);
   const [pins, setPins] = useState(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -112,20 +115,32 @@ export default function Atlas() {
       return s;
     }
     if (clusterFocus != null) return new Set(data.tracks.filter((t) => t.cluster === clusterFocus).map((t) => t.id));
-    if (mine) return mine;
+    if (mine?.ids.size) return mine.ids;
     return null;
   }, [data, selectedId, clusterFocus, mine]);
 
-  const lightMine = async () => {
-    if (mine) { setMine(null); return; }
+  // Light up a library's songs: the sample, or the one you imported on the map
+  const lightUp = async (which) => {
+    if (mine?.which === which) { setMine(null); return; }
     const m = myMap();
+    const src = which === "sample" ? { sample: true } : m?.csv_path ? { csv_path: m.csv_path } : { account: true };
     try {
-      const r = await atlasMine(m?.csv_path ? { csv_path: m.csv_path } : { sample: true });
-      setMine(new Set(r.ids));
+      const r = await atlasMine(src);
+      setMine({ which, ids: new Set(r.ids), songs: r.songs, title: which === "sample" ? "the sample library" : m?.title || user?.library_title || "your map" });
+      setSelectedId(null);
+      setClusterFocus(null);
     } catch (e) {
       setError(e.message || String(e));
     }
   };
+  const hasMine = !!(myMapKnown?.csv_path || user?.has_library);
+  const mineGalaxies = useMemo(() => {
+    if (!mine || !data) return [];
+    const counts = new Map();
+    data.tracks.forEach((t) => { if (mine.ids.has(t.id)) counts.set(t.cluster, (counts.get(t.cluster) || 0) + 1); });
+    return [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([cid, n]) => ({ n, name: clusterName(data.clusters.find((c) => c.id === cid) || {}) || "a galaxy" }));
+  }, [mine, data]);
 
   const empty = data && !data.tracks?.length;
   return (
@@ -133,7 +148,7 @@ export default function Atlas() {
       <Head><title>Community atlas · SuperMusic</title></Head>
       <section className="relative h-[calc(100svh-7rem)] min-h-[460px] overflow-hidden bg-[radial-gradient(ellipse_at_center,_#1a1440_0%,_#0b1121_55%,_#05070f_100%)] md:h-[calc(100vh-3.5rem)]">
         {data && !empty && (
-          <Graph3D data={data} selectedId={selectedId} focusIds={focusIds} focusCluster={clusterFocus} picks={[]} mode="clusters"
+          <Graph3D data={data} selectedId={selectedId} focusIds={focusIds} highlightIds={mine?.ids} focusCluster={clusterFocus} picks={[]} mode="clusters"
             onSelect={(id) => { setSelectedId(id); if (id != null) { setClusterFocus(null); setSheetOpen(false); } }} />
         )}
         {!data && !error && <div className="absolute inset-0 grid place-items-center text-sm text-gray-400">Drawing everyone&apos;s music…</div>}
@@ -159,11 +174,29 @@ export default function Atlas() {
             )}
             {data && !empty && (
               <div className="mt-3 flex flex-wrap gap-1.5">
-                <button onClick={lightMine}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${mine ? "bg-amber-300/20 text-amber-100" : "bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white"}`}>
-                  {mine ? `Your songs lit up (${mine.size})` : myMap() ? "Light up my songs" : "Light up the sample's songs"}
-                </button>
+                <span className="self-center pr-1 text-[11px] text-gray-400">Light up</span>
+                {[["mine", "My map"], ["sample", "The sample"]].map(([which, label]) => (
+                  <button key={which} onClick={() => lightUp(which)} disabled={which === "mine" && !hasMine}
+                    title={which === "mine" && !hasMine ? "Import your library on the Map first" : undefined}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                      mine?.which === which ? "bg-yellow-300 text-[#0b1121] shadow-[0_0_18px_rgba(253,224,71,0.55)]"
+                        : which === "mine" && !hasMine ? "cursor-not-allowed border border-white/10 text-gray-500"
+                          : "border border-yellow-300/40 text-yellow-100 hover:bg-yellow-300/10"}`}>
+                    {mine?.which === which ? `✓ ${label}` : label}
+                  </button>
+                ))}
                 <Link href="/artists" className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-gray-200 hover:bg-white/10">Add your track</Link>
+              </div>
+            )}
+            {mine && (
+              <div className="mt-2 flex items-start gap-2 rounded-xl border border-yellow-300/30 bg-yellow-300/[0.07] px-3 py-2 text-xs text-yellow-50">
+                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-yellow-300 shadow-[0_0_10px_#fde047]" />
+                <span className="min-w-0 flex-1">
+                  {mine.ids.size
+                    ? <><b>{mine.ids.size}</b> songs from {mine.title} are on the atlas, glowing gold{mineGalaxies.length ? <>, mostly in {mineGalaxies.map((g) => g.name).join(", ")}</> : null}.</>
+                    : <>None of the songs from {mine.title} are on the atlas yet. Share your map with &ldquo;List it&rdquo; ticked to add them.</>}
+                </span>
+                <button onClick={() => setMine(null)} className="shrink-0 text-yellow-200/70 hover:text-white">Clear</button>
               </div>
             )}
           </div>
