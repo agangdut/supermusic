@@ -4,11 +4,13 @@ import asyncio
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from ..models.job import Job, JobStatus, JobType
 from ..utils.storage import job_store, output_name, save_artifact
+from ..utils.safe_paths import AUDIO, MIDI, user_file
+from app.core import jobs
 from app.core.humanize import render_audio
 from app.core.melody_match import melody_match
 from app.core.note_cleanup import merge_hat_echoes, separate_repeats
@@ -93,7 +95,7 @@ def _separated_stems(job_id: str) -> tuple[Path, Dict[str, str]]:
 
 
 @router.post("/convert", response_model=Job)
-async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
+async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks, owner: str = Depends(jobs.job_owner)) -> Job:
     separated = _separated_stems(req.stem_job_id) if req.stem_job_id else None
     if separated:
         if not req.source_path:
@@ -102,9 +104,11 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
             missing = [s for s in req.stems if s not in separated[1]]
             if missing:
                 raise HTTPException(status_code=400, detail=f"That separation has no {', '.join(missing)} stem")
+    if not separated:
+        req.source_path = str(user_file(req.source_path, AUDIO, "song"))
     job = Job(job_type=JobType.MIDI_CONVERSION, payload=req.dict())
     job_store[str(job.id)] = job
-    job.mark_running("Transcribing audio to MIDI…")
+    job.message = "Transcribing audio to MIDI…"
 
     async def _worker(j: Job) -> None:
         try:
@@ -227,8 +231,7 @@ async def convert_to_midi(req: MIDIConvertRequest, bg: BackgroundTasks) -> Job:
         with reporting(j):
             await _worker(j)
 
-    bg.add_task(_run, job)
-    return job
+    return jobs.submit(bg, job, _run, owner)
 
 
 class MelodyMatchRequest(BaseModel):
@@ -240,15 +243,14 @@ class MelodyMatchRequest(BaseModel):
 @router.post("/melody-match")
 async def score_melody(req: MelodyMatchRequest) -> Dict[str, Any]:
     """How closely the MIDI's melody follows the singer (melody_match = % of sung time on the right note)."""
-    midi = Path(req.midi_path)
-    if not midi.exists():
-        raise HTTPException(status_code=404, detail=f"MIDI file not found: {midi}")
-    vocals = Path(req.vocals_path) if req.vocals_path else None
+    midi = user_file(req.midi_path, MIDI, "MIDI file")
+    vocals = user_file(req.vocals_path, AUDIO, "vocal stem") if req.vocals_path else None
     loop = asyncio.get_event_loop()
     if vocals is None:
-        if not req.audio_path or not Path(req.audio_path).exists():
+        if not req.audio_path:
             raise HTTPException(status_code=400, detail="Give vocals_path or an existing audio_path")
-        vocals = (await loop.run_in_executor(None, split_vocals, req.audio_path))[0]
+        audio = user_file(req.audio_path, AUDIO, "song")
+        vocals = (await loop.run_in_executor(None, split_vocals, str(audio)))[0]
     if not vocals.exists():
         raise HTTPException(status_code=404, detail=f"Vocal stem not found: {vocals}")
     try:
@@ -265,9 +267,7 @@ class PlayabilityRequest(BaseModel):
 @router.post("/playability")
 async def score_playability(req: PlayabilityRequest) -> Dict[str, Any]:
     """How much of a MIDI file two hands can play (100 = every moment)."""
-    path = Path(req.midi_path)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail=f"MIDI file not found: {path}")
+    path = user_file(req.midi_path, MIDI, "MIDI file")
     return playability_report(path, req.hand_span)
 
 

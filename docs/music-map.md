@@ -1,10 +1,10 @@
-# 🌌 Music Map
+# Music Map
 
 The Music Map turns a spreadsheet of songs into a 3D constellation of your taste. It's built to show you patterns you wouldn't spot in a playlist: which sounds you actually gravitate to, which songs from different genres secretly belong together, and what in your library you've been overlooking.
 
 ![Music Map](img/music-map.png)
 
-Open it at **http://localhost:3000/map**. It loads a 156-track sample library (all made-up names) so you can explore right away.
+It is the home page: open **http://localhost:3000**. It loads a 156-track sample library (all made-up names) so you can explore right away.
 
 ## Reading the map
 
@@ -51,7 +51,7 @@ The **insight cards** across the top show the strongest skews in your listening,
 
 ## Share your map
 
-Press **Share** above the map to get a short link like `/map?share=ASRLnVJ2`. Anyone who opens it sees the map as you saw it, can click around, **Remap** it with different sliders, see songs they may like and start a radio station. They can't change your copy.
+Press **Share** above the map to get a short link like `/?share=ASRLnVJ2`. Anyone who opens it sees the map as you saw it, can click around, **Remap** it with different sliders, see songs they may like and start a radio station. They can't change your copy.
 
 - **Listed or link-only.** Tick *List it on Shared maps* to show it on the **Shared maps** page (`/maps`); unticked, only people with the link can find it.
 - **People see it as you do.** A share includes everything the map was built from: play counts, likes, the *For you* picks, insight cards, *Your library in numbers*, sound search and your slider settings. To keep your listening private, untick *Include my listening data*; the share then drops play counts, likes, skips, play dates, the *For you* picks, the insight cards and *Your library in numbers*, and the song list copied into the share has those columns removed too. People see the songs, clusters and links.
@@ -158,7 +158,7 @@ The server needs a free `LASTFM_API_KEY` in `.env` ([get one here](https://www.l
 
 ## Import from Spotify or Apple Music
 
-Click **Import Spotify / Apple Music** and pick one or more files. SuperMusic works out what each file is from its columns:
+Click **Import your library** and pick one or more files. SuperMusic works out what each file is from its columns:
 
 | Service | File | Where to get it |
 |---|---|---|
@@ -175,7 +175,7 @@ Listening histories don't include genre, tempo or key. With **Look up genre, tem
 
 The merged library is saved to `data/processed/library/`, and the sliders and **Remap** work on it like any other map.
 
-The **CSV / library files** card on the Workspace page does the same merge without drawing a map: drop in any number of files, get one deduplicated, enriched CSV back with a summary of what each file was, how many duplicates were merged and how many songs now have each detail, plus an **Open it in the Music Map** link. With several files you can also pick **One file per input**: each file comes back as its own enriched CSV (its own songs and play counts, with details looked up once and shared across files), plus a .zip of them all.
+The **CSV / library files** card on the Studio page does the same merge without drawing a map: drop in any number of files, get one deduplicated, enriched CSV back with a summary of what each file was, how many duplicates were merged and how many songs now have each detail, plus an **Open it in the Music Map** link. With several files you can also pick **One file per input**: each file comes back as its own enriched CSV (its own songs and play counts, with details looked up once and shared across files), plus a .zip of them all.
 
 **Big libraries.** Maps up to 50,000 songs are allowed. On a 4-core CPU a 23,000-song library draws in about 25 seconds (plus about 20 seconds once per server start, while UMAP compiles its fast neighbour search; the server does that in the background at start-up). Above 2,500 songs the 3D view draws all stars as one point cloud and all links as one set of lines, so it stays smooth; the overview names the 12 biggest clusters, and big libraries get up to 24 clusters instead of 10.
 

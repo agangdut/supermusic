@@ -238,10 +238,13 @@ export default function useUploadJobs() {
           message: failMsg,
           error_detail: detail,
           error_hint: /failed to fetch|networkerror|load failed/i.test(detail)
-            ? "Couldn't reach the SuperMusic server. Is Docker running? Try: docker compose up -d"
-            : undefined,
+            ? "Couldn't reach the SuperMusic server. Check your connection and try again (running it yourself? docker compose up -d)."
+            : /sign in/i.test(detail)
+              ? "Sign in (top right) to run this. It's free."
+              : undefined,
         });
-        notify(failMsg, "err");
+        // Say why when it's something they can act on (sign in, a limit, a file that's gone)
+        notify(/sign in|jobs|too many|minutes long|over \d+ MB|upload it again/i.test(detail) ? detail : failMsg, "err");
       } finally {
         runningRef.current = false;
         setBusy(false);

@@ -73,6 +73,12 @@ export default function Login() {
               className="w-full rounded-xl bg-gradient-to-r from-fuchsia-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-fuchsia-600/20 transition hover:brightness-110 disabled:opacity-50">
               {busy ? "One moment…" : signup ? "Create account" : "Sign in"}
             </button>
+            {signup && (
+              <p className="text-center text-[11px] text-gray-500">
+                By creating an account you agree to the <Link href="/terms" className="underline hover:text-gray-300">terms</Link> and
+                {" "}<Link href="/privacy" className="underline hover:text-gray-300">privacy policy</Link>.
+              </p>
+            )}
           </form>
 
           <p className="mt-4 text-center text-xs text-gray-400">

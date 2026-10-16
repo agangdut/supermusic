@@ -20,7 +20,6 @@ transformers
 # Web
 fastapi
 uvicorn
-jinja2
 python-multipart
 pydantic
 python-dotenv
@@ -38,10 +37,8 @@ click
 pytest
 
 # Database
-sqlalchemy
 
 # Rate Limiting
-slowapi
 
 # Authentication
 python-jose[cryptography]
@@ -51,4 +48,3 @@ bcrypt
 websockets
 
 # Additional utilities
-aiofiles

@@ -29,10 +29,11 @@ export async function getServerSideProps({ params, req }) {
     meta = null;
   }
   const proto = req.headers["x-forwarded-proto"] || "http";
-  return { props: { id, meta, url: `${proto}://${req.headers.host}/s/${encodeURIComponent(id)}` } };
+  const origin = `${proto}://${req.headers.host}`;
+  return { props: { id, meta, origin, url: `${origin}/s/${encodeURIComponent(id)}` } };
 }
 
-export default function ShareLanding({ id, meta, url }) {
+export default function ShareLanding({ id, meta, url, origin }) {
   if (!meta) {
     return (
       <PageShell>
@@ -46,7 +47,8 @@ export default function ShareLanding({ id, meta, url }) {
     );
   }
   const s = meta.showcase || {};
-  const card = sharedMapCard(id);
+  // Link previews need a full address; on the public site the API is a path on the same domain
+  const card = /^https?:/.test(sharedMapCard(id)) ? sharedMapCard(id) : `${origin}${sharedMapCard(id)}`;
   const desc = `${num(s.songs ?? meta.songs)} songs in ${num(s.clusters)} galaxies${meta.by ? ` by ${meta.by}` : ""}. Explore it, or compare it with your own music.`;
   return (
     <PageShell>

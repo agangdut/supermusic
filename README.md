@@ -1,72 +1,39 @@
 <div align="center">
 
-# 🎧 SuperMusic
+# SuperMusic
 
-**Turn any song into MIDI, stems, a playable piano part and a map of your taste, all from one web app.**
+**Turn any song into MIDI, stems and a playable piano part, and see your whole music library as a map of your taste.**
 
 [![CI](https://github.com/agangdut/supermusic/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/agangdut/supermusic/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.10-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white)
-![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=nextdotjs&logoColor=white)
-![Docker](https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-a855f7)
 
-[Where things stand](#-where-things-stand) · [Quickstart](#-quickstart) · [Features](#-features) · [How it works](docs/how-it-works.md) · [All docs](docs/index.md) · [Roadmap](docs/roadmap.md)
+[What it does](#what-it-does) · [Run it yourself](#run-it-yourself) · [Host it](docs/deploy.md) · [How it works](docs/how-it-works.md) · [All docs](docs/index.md)
 
-<img src="docs/img/home.png" alt="SuperMusic home page" width="88%" />
+<img src="docs/img/home.png" alt="The SuperMusic Music Map" width="88%" />
 
 </div>
 
----
+## What it does
 
-## 📍 Where things stand
+**Music Map.** Import your Spotify or Apple Music history, your Last.fm scrobbles (just type your username), or any CSV of songs, and see your library as a 3D galaxy. Songs that sound alike cluster together, the parts you play most glow brightest, and threads connect songs from different scenes that belong together. Share your map by link, compare it with a friend's, start a radio station from any corner of it, and send that playlist to Spotify or YouTube. ([guide](docs/music-map.md))
 
-_October 2026._ New here? Read this, then **[How it works](docs/how-it-works.md)**, the one guide that explains the whole project (written for a CS student new to ML).
+**Community.** Sign in to get a profile with your maps, follow people and see what they share, explore the community atlas (every public map in one universe), fix a song's tempo or key for everyone, and play the weekly music quiz.
 
-- **Audio → MIDI works.** **MuScriptor** is the default full-band engine: on real pop songs it scores 0.47 overall F1, against 0.35 for YourMT3+ and 0.14 for Basic Pitch. Solo piano is near perfect (0.97) with the Piano model. ([benchmarks](docs/transcription-accuracy.md))
-- **Voices** get their own clean "Lead vocal" track, transcribed by **GAME**, a singing-only model. It gets about 70% more sung notes right than MuScriptor's own voice track (vocal F1 0.25 vs 0.15), though singing is still the hardest part.
-- **Playable piano** works: "Playable by two hands", Piano cover (Pop2Piano), and a piano MP3 preview of every result.
-- **Music Map** works from a CSV or Spotify / Apple Music exports. Genres roll Spotify's detailed tags into ~20 broad ones, with an online lookup for songs that have none. Maps can be **shared by link** with everything it was built from, so others see it as you do, and **Map Radio** plays a station that walks through the map, which you can send to Spotify, YouTube or a CSV. Listeners can **fix a song's stats** (tempo, key, genre, energy) and tag its vibe; once two agree, the fix reaches everyone's map. The **People** tab finds shared maps closest to yours.
-- **Platform:** the Music Map is now the home page. You can **sign in** and get a **profile** with your maps, followers and reputation, **follow** people and read a **feed** with a **weekly digest**, share a map as a **picture card** for socials, **compare** your map with anyone's, explore the **community atlas** (every public map in one universe, with notes pinned to songs), see **where your own track lands** as an artist, and play the **music quiz** with weekly **charts**. Works on phones too. ([guide](docs/music-map.md#the-platform))
-- **Research:** learned music models group songs by genre far better than the map's own features: CLAP 39%, MERT 29%, the map 16% same-genre neighbours. Adding a CLAP vector per song to the map is the likely next step. We also checked our MuScriptor service against the authors' official server: same accuracy.
-- **Not done yet:** jobs are lost on restart, no job queue, no YouTube screen, the digest is not emailed yet, no deploy setup. See the [roadmap](docs/roadmap.md).
+**Audio to MIDI.** Upload a song and get a `.mid` file with a track per instrument. Auto picks the right model for the song; Full band handles pop and rock mixes; Piano is near perfect on solo piano; the singer comes out as a clean lead vocal line. ([how accurate is it?](docs/transcription-accuracy.md))
 
----
+**Playable piano.** Tick *Playable by two hands* to get a left and right hand part a real pianist can play, or pick *Piano cover* to have the song arranged for piano. Every result comes with a piano preview you can listen to. ([details](docs/playable-piano.md))
 
-## ✨ Features
+**Stems.** Split a song into vocals, drums, bass and the rest, and turn just the parts you want into MIDI.
 
-| | What it does | Powered by |
-|---|---|---|
-| 🎹 **Audio → MIDI** | Transcribes a song into a `.mid` file. **Auto** detects the instruments; **Full band** transcribes every instrument in a mix (MuScriptor, the most accurate on pop); **Piano** is tuned for solo piano; the singer becomes a clean **Lead vocal** track. Tick **Playable by two hands** for a left/right hand part a pianist can play ([how](docs/playable-piano.md)), or pick **Piano cover** to have the song arranged for piano. Every result comes with a piano MP3 preview ([accuracy](docs/transcription-accuracy.md)) | [MuScriptor](https://github.com/muscriptor/muscriptor), [YourMT3+](https://github.com/mimbres/YourMT3), [Basic Pitch](https://github.com/spotify/basic-pitch), [ByteDance piano model](https://github.com/bytedance/piano_transcription), [Pop2Piano](https://github.com/sweetcocoa/pop2piano), [GAME](https://github.com/openvpi/GAME) |
-| 🥁 **Stem separation** | Splits a mix into vocals, drums, bass and other | [Demucs](https://github.com/facebookresearch/demucs) |
-| 🧾 **CSV enrichment** | Combines any number of CSVs and Spotify / Apple Music exports (JSON included) into one deduplicated track list, and looks up missing genre, year, tempo, key and energy | librosa |
-| ⬇️ **Track download** | Grabs the audio from a YouTube (or similar) link (API only for now) | [yt-dlp](https://github.com/yt-dlp/yt-dlp) |
-| 🌌 **Music Map** | Turns your library (a CSV, or Spotify / Apple Music exports) into a 3D constellation: taste clusters, hidden connections between genres, picks you've been missing, and search by how songs sound. Share it by link, or start a radio station from any part of it and send it to Spotify or YouTube ([guide](docs/music-map.md#map-radio)) | UMAP, scikit-learn, three.js, CLAP |
-| 📦 **Batch and export** | Runs many files at once and zips up the results | FastAPI |
-
-Every task runs as a **job**. You start it, the page shows its progress and time left, and the finished files appear as downloads.
-
-### 🌌 Music Map
-
-Drop in a CSV of your library, or your Spotify / Apple Music export, and see it as a galaxy. Tracks that sound alike cluster together, the clusters you play most glow brightest, and pink threads link songs from different scenes that would mix well (same key, half-time tempo, similar mood). Add a `play_count`, `rating` or `liked` column and it learns your taste and suggests tracks you've been overlooking.
+**Library clean-up.** Combine any number of CSVs and streaming exports into one deduplicated list, and fill in missing genre, year, tempo, key and energy.
 
 <div align="center">
-<img src="docs/img/music-map.png" alt="Music Map showing taste clusters and recommendations" width="88%" />
+<img src="docs/img/music-map.png" alt="A Music Map with taste clusters and recommendations" width="88%" />
 </div>
 
-More in the [Music Map guide](docs/music-map.md).
+## Run it yourself
 
-### 🎛️ Workspace
-
-<div align="center">
-<img src="docs/img/upload.png" alt="Upload and process page" width="88%" />
-</div>
-
----
-
-## 🚀 Quickstart
-
-All you need is [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+You need [Docker](https://www.docker.com/products/docker-desktop/).
 
 ```bash
 git clone https://github.com/agangdut/supermusic.git
@@ -74,30 +41,24 @@ cd supermusic
 docker compose up --build
 ```
 
-Have an NVIDIA GPU? Run `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build` instead, so the model servers (MuScriptor, YourMT3+ and GAME) run on it.
+Then open http://localhost:3000. The first build takes several minutes because it installs the machine-learning libraries.
 
-**For Full band (MuScriptor)**, copy `.env.example` to `.env`, accept the licence on [MuScriptor/muscriptor-medium](https://huggingface.co/MuScriptor/muscriptor-medium), and put a free Hugging Face read token in `HF_TOKEN`. Without it, Auto falls back to YourMT3+.
+- **NVIDIA GPU?** Use `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build` so transcription runs on it, which is many times faster.
+- **Full band transcription** uses MuScriptor, whose weights need a free Hugging Face account: copy `.env.example` to `.env`, accept the licence on [MuScriptor/muscriptor-medium](https://huggingface.co/MuScriptor/muscriptor-medium), and put a read token in `HF_TOKEN`. Without it, SuperMusic uses YourMT3+ instead.
 
-| Open | To |
-|---|---|
-| http://localhost:3000 | see the app |
-| http://localhost:3000/upload | upload a song or CSV and run a job |
-| http://localhost:3000/map | explore the Music Map (opens with a sample library) |
-| http://localhost:8000/docs | try the API in your browser |
+Your uploads and results are saved in `./data`. The [usage guide](docs/usage.md) covers every screen and the API, and [configuration](docs/configuration.md) lists every setting.
 
-> ⏱️ The first build takes several minutes because it installs the machine-learning libraries (the backend image is about 3.4 GB). Later builds are much faster.
-
-Your uploads and results are saved in `./data`, so they survive a restart.
+To put SuperMusic on the internet with your own domain and HTTPS, follow [Running SuperMusic as a public website](docs/deploy.md).
 
 <details>
-<summary><b>Run it without Docker</b></summary>
+<summary>Run it without Docker</summary>
 
-You'll also need **ffmpeg** on your PATH and **Node 18+**.
+You also need ffmpeg on your PATH, Python 3.10 and Node 20.
 
 ```bash
 # Backend, from the repo root
 python -m venv .venv
-.venv\Scripts\activate          # macOS/Linux: source .venv/bin/activate
+source .venv/bin/activate            # Windows: .venv\Scripts\activate
 pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
 pip install -r requirements.txt
 uvicorn app.main:app --app-dir backend --reload
@@ -112,92 +73,53 @@ npm run dev
 
 </details>
 
----
-
-## 🧭 How it fits together
+## How it fits together
 
 ```mermaid
 flowchart LR
-    U([You]) --> FE[Next.js UI<br/>port 3000]
-    FE -- "upload, start job, poll" --> API[FastAPI backend<br/>port 8000]
-    API --> CPU["In the backend (CPU)<br/>Basic Pitch · Piano model · Pop2Piano<br/>Demucs · librosa · yt-dlp · Music Map"]
-    API --> GPU["Model servers (GPU)<br/>MuScriptor :8200 · YourMT3+ :8100<br/>GAME :8300 · CLAP :8300"]
-    CPU & GPU --> ART[(./data<br/>uploads · results · models)]
-    ART -- "download links" --> FE
+    U([Browser]) --> FE[Website<br/>Next.js]
+    FE -- "upload, start a job, check on it" --> API[API<br/>FastAPI]
+    API --> CPU["In the API<br/>Demucs · Basic Pitch · Piano model<br/>Pop2Piano · librosa · Music Map"]
+    API --> GPU["Model servers<br/>MuScriptor · YourMT3+ · GAME · CLAP"]
+    CPU & GPU --> DATA[(data/<br/>accounts · uploads · results)]
 ```
 
-The full picture, including why each big model has its own container and how a job flows, is in [How it works](docs/how-it-works.md#2-the-system-one-backend-three-model-servers-and-a-job-pattern).
-
----
-
-## 🗂️ Project layout
+Heavy jobs (stems, transcription) wait in line and run one at a time, so the site stays responsive however many people press the button. Accounts, shared maps and finished jobs are kept in one SQLite file. [How it works](docs/how-it-works.md) explains every part and every model, for readers who can program but are new to machine learning.
 
 ```
-backend/      FastAPI app: routes, job pipelines, auth, tests
-frontend/     Next.js UI (pages router + Tailwind)
-services/     Model servers, one container each: MuScriptor, YourMT3+, GAME, CLAP
-scripts/      Benchmarks (eval_*), comparisons (compare_*), dataset builders
-docs/         Guides, benchmarks, API reference, roadmap, research notes, screenshots
-data/         Uploads, results and model weights at runtime (git-ignored; see data/README.md)
-legacy/       Older prototype code, not used by the app (see legacy/README.md)
+backend/    API: routes, job pipelines, accounts, tests
+frontend/   Website (Next.js and Tailwind)
+services/   Model servers, one container each
+scripts/    Benchmarks and dataset tools
+deploy/     Production setup: Caddy, settings template, backups
+docs/       Guides, benchmarks, API reference
 ```
 
----
+## Contributing
 
-## ⚙️ Configuration
-
-Copy `.env.example` to `.env` and change what you need. The ones that matter most:
-
-| Variable | Default | What it's for |
-|---|---|---|
-| `JWT_SECRET_KEY` | `change-me-in-production` | Signs login tokens. **Change it before you deploy.** |
-| `CORS_ORIGINS` | `http://localhost:3000,…` | Which websites may call the API |
-| `HF_TOKEN` | _(none)_ | Hugging Face token for MuScriptor's weights (needed for Full band) |
-| `LASTFM_API_KEY` | _(none)_ | Optional. Import from Last.fm by username, and more accurate Music Map genres |
-| `YOUTUBE_API_KEY` | _(none)_ | Optional. Adds YouTube details during CSV enrichment |
-| `NEXT_PUBLIC_API_BASE` | `http://localhost:8000` | Where the UI finds the API (fixed when the UI is built) |
-
-Every setting is listed in [docs/configuration.md](docs/configuration.md).
-
----
-
-## 🧪 Tests
+Issues and pull requests are welcome. Before opening a pull request, run the backend tests and build the website:
 
 ```bash
 docker compose exec backend python -m pytest -q backend/tests
+cd frontend && npm run build
 ```
 
-On every push to `master`, CI runs the backend tests and builds the frontend.
+CI runs both on every pull request. Ideas for what to work on are in the [roadmap](docs/roadmap.md).
 
----
+## License
 
-## 📚 Docs
+SuperMusic's code is [MIT](LICENSE) © 2025 Agang Dut.
 
-| Start here | Then, when you need it |
-|---|---|
-| 🎓 [How it works](docs/how-it-works.md): the whole project explained | [Usage](docs/usage.md) · [Transcription accuracy](docs/transcription-accuracy.md) · [Playable piano](docs/playable-piano.md) · [Music Map](docs/music-map.md) · [Training data](docs/training-data.md) · [API](docs/api.md) · [Configuration](docs/configuration.md) · [Roadmap](docs/roadmap.md) |
+The models it downloads have their own licences, and two are for **non-commercial use only**:
 
----
+| Model | Used for | Licence |
+|---|---|---|
+| [MuScriptor](https://huggingface.co/MuScriptor/muscriptor-medium) | Full band transcription | CC BY-NC 4.0, non-commercial |
+| [GAME](https://github.com/openvpi/GAME) | Lead vocal | CC BY-NC-SA 4.0, non-commercial |
+| [YourMT3+](https://huggingface.co/spaces/mimbres/YourMT3) | Full band transcription | Apache 2.0 (code in `services/yourmt3`, see its [NOTICE](services/yourmt3/NOTICE.md)) |
+| [Demucs](https://github.com/facebookresearch/demucs), [Basic Pitch](https://github.com/spotify/basic-pitch), [CLAP](https://huggingface.co/laion/clap-htsat-unfused) | Stems, General mode, sound search | MIT / Apache 2.0 |
+| [Pop2Piano](https://github.com/sweetcocoa/pop2piano) | Piano covers | See its repository |
 
-## 🤝 Contributing
+No model weights, audio or datasets are stored in this repository; they download on first use.
 
-Issues and pull requests are welcome. Before opening a PR, run the backend tests (above) and `npm run build` in `frontend/`. CI runs both on every pull request.
-
----
-
-## 📜 License
-
-SuperMusic's own code is [MIT](LICENSE) © 2025 Agang Dut.
-
-The models it downloads have their own licences, and some are **non-commercial only**:
-
-| Model | Weights licence |
-|---|---|
-| [MuScriptor](https://huggingface.co/MuScriptor/muscriptor-medium) (Full band) | CC BY-NC 4.0, non-commercial |
-| [GAME](https://github.com/openvpi/GAME) (Lead vocal) | CC BY-NC-SA 4.0, non-commercial |
-| [YourMT3+](https://huggingface.co/spaces/mimbres/YourMT3) | Apache 2.0 (its code is included in `services/yourmt3`, see its [NOTICE](services/yourmt3/NOTICE.md)) |
-| [CLAP](https://huggingface.co/laion/clap-htsat-unfused), [Basic Pitch](https://github.com/spotify/basic-pitch), [Demucs](https://github.com/facebookresearch/demucs) | Apache 2.0 / MIT |
-
-Each `services/*/NOTICE.md` has the details. No model weights, audio or datasets are stored in this repository; they download on first use.
-
-Only process music you have the right to use. Transcribing or separating a song for personal study is one thing; sharing the stems or MIDI of someone else's song may need the rights holder's permission.
+Only process music you have the right to use. Transcribing or separating a song for your own study is one thing; sharing the stems or MIDI of someone else's song may need the rights holder's permission.

@@ -37,20 +37,10 @@ async def websocket_jobs(websocket: WebSocket):
     active_connections.add(websocket)
     
     try:
-        # Send initial job list
-        jobs = {str(job_id): {
-            "id": str(job_id),
-            "job_type": job.job_type.value if hasattr(job, "job_type") else None,
-            "status": job.status.value if hasattr(job, "status") else None,
-            "progress": getattr(job, "progress", None),
-            "message": getattr(job, "message", None),
-        } for job_id, job in job_store.items()}
-        
-        await websocket.send_json({
-            "type": "initial_jobs",
-            "jobs": jobs
-        })
-        
+        # Nothing is sent until the page names a job it started: job ids work like
+        # passwords to their results, so they're never listed for strangers
+        await websocket.send_json({"type": "initial_jobs", "jobs": {}})
+
         # Keep connection alive and handle messages
         while True:
             data = await websocket.receive_text()
@@ -58,8 +48,8 @@ async def websocket_jobs(websocket: WebSocket):
                 message = json.loads(data)
                 if message.get("type") == "subscribe":
                     job_id = message.get("job_id")
-                    if job_id and job_id in job_store:
-                        job = job_store[job_id]
+                    job = job_store.get(job_id) if job_id else None
+                    if job is not None:
                         await websocket.send_json({
                             "type": "job_update",
                             "job_id": job_id,

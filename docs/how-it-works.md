@@ -1,12 +1,12 @@
-# 🎓 How SuperMusic works: a guide for CS students
+# How SuperMusic works
 
-This guide walks through the whole project on a technical level, written for someone who knows how to program but is new to machine learning. It explains what each part does, which ML model sits behind it, how we measured whether it works, and what you can learn from it.
+This guide walks through the whole project on a technical level, for anyone who knows how to program but is new to machine learning. It explains what each part does, which ML model sits behind it, how we measured whether it works, and what you can learn from it.
 
-You don't need to read it in order. Part 0 says where the project stands today; Part 1 is a short ML primer for audio; Part 2 is the system architecture; Parts 3 to 5 cover each feature; Part 6 is how we measure them; Part 7 is a study plan.
+You don't need to read it in order. Part 0 sums up what works today; Part 1 is a short ML primer for audio; Part 2 is the system architecture; Parts 3 to 5 cover each feature; Part 6 is how we measure them; Part 7 is a study plan.
 
 **Contents**
 
-0. [Where things stand (October 2026)](#0-where-things-stand-october-2026)
+0. [What works today](#0-what-works-today)
 1. [Machine learning for audio, in ten minutes](#1-machine-learning-for-audio-in-ten-minutes)
 2. [The system: one backend, three model servers, and a job pattern](#2-the-system-one-backend-three-model-servers-and-a-job-pattern)
 3. [Audio to MIDI: seven modes and a voice model](#3-audio-to-midi-seven-modes-and-a-voice-model)
@@ -55,18 +55,18 @@ Almost all the "intelligence" comes from **pretrained models** written by resear
 
 ---
 
-## 0. Where things stand (October 2026)
+## 0. What works today
 
 | Area | State |
 |---|---|
 | Running it | `docker compose up --build` starts everything. Add `docker-compose.gpu.yml` on an NVIDIA GPU. MuScriptor needs a free Hugging Face token (`HF_TOKEN` in `.env`) |
 | Audio → MIDI | Works. **MuScriptor** is the default full-band engine: on real pop songs it scores 0.47 overall F1, against 0.35 for YourMT3+ and 0.14 for Basic Pitch. **Piano** mode is near perfect on solo piano (0.97) |
-| Voices | The singer becomes a clean "Lead vocal" track. **GAME**, a singing-only model, is wired in for Full band and Auto, and is being benchmarked against MuScriptor's own voice track |
+| Voices | The singer becomes a clean "Lead vocal" track, transcribed by **GAME**, a singing-only model, in Full band and Auto. It gets about 70% more sung notes right than MuScriptor's own voice track |
 | Playable piano | "Playable by two hands" and "Piano cover" (Pop2Piano) work; every MIDI job also returns a piano MP3 preview |
-| Stems, CSV, YouTube download | Work end to end. YouTube download has no screen in the UI yet (API only) |
+| Stems, CSV, link download | Work end to end. Downloading from a link has no screen yet (API only), and is off on public servers |
 | Music Map | Works from a CSV or Spotify / Apple Music exports. Genres now roll Spotify's detailed tags (e.g. "pop rap") into ~20 broad genres, with an online lookup (Last.fm, MusicBrainz) for songs that have none |
 | Research | Learned music models group songs by genre far better than the map's own features: **CLAP** 39% and **MERT** 29% same-genre neighbours, against 16% for the map. Adding a CLAP vector per song to the map is the likely next step |
-| Not done | Jobs and accounts live in memory (lost on restart), no job queue, no login screen, no deploy setup. Full list in the [roadmap](roadmap.md) |
+| Running it publicly | Accounts, shared maps and finished jobs are saved in SQLite; heavy jobs wait in line; a production setup with HTTPS is in [deploy](deploy.md). What's next is in the [roadmap](roadmap.md) |
 
 Audio and MIDI files (`*.mp3`, `*.mid`, `*.midi`) are git-ignored, so test songs and results never get committed.
 
@@ -141,7 +141,6 @@ flowchart TB
         GM["game :8300<br/>GAME (singing)"]
     end
 
-    R[(redis :6379<br/>reserved for a job queue)]
     DATA[("./data volume<br/>uploads · artifacts · model weights · caches")]
 
     UI -->|HTML/JS| NEXT
@@ -159,7 +158,6 @@ flowchart TB
 - **frontend**: a Next.js app. It is mostly client-side React and calls the backend directly with `fetch` ([`frontend/lib/api.js`](../frontend/lib/api.js)). The Music Map's 3D view uses `react-force-graph-3d`, which renders with three.js (WebGL).
 - **backend**: a FastAPI app ([`backend/app/main.py`](../backend/app/main.py)). Each area (`midi`, `stems`, `csv`, `map`, `upload`, …) is a router in `backend/app/routes/`, and the real work lives in `backend/app/core/`. Basic Pitch, the Piano model, Demucs and Pop2Piano run here, on CPU.
 - **muscriptor**, **yourmt3**, **game**: one small Python server per heavy model ([`services/`](../services)). Each loads its model once and answers HTTP requests. The backend checks whether each is reachable and falls back to the next best option if not.
-- **redis**: running, but not used yet. It is reserved for a proper job queue (see the [roadmap](roadmap.md)).
 
 **Why does each big model get its own container?** Three reasons, all common in real ML systems:
 
@@ -200,9 +198,10 @@ sequenceDiagram
     API->>FS: save raw/uploads/audio/song.mp3
     API-->>UI: { path }
     UI->>API: POST /midi/convert { source_path, model: "auto" }
-    API->>API: create Job(status=running, eta_s), put in job_store
+    API->>API: create Job(status=queued), save it, join the line
     API->>BG: bg.add_task(_worker, job)
-    API-->>UI: { id, status: "running" }  (returns at once)
+    API-->>UI: { id, status: "queued" }  (returns at once)
+    Note over BG: waits for a free worker slot<br/>(SM_HEAVY_WORKERS, 1 by default)
     BG->>EX: run_in_executor(transcribe_auto)
     Note over EX: CPU/GPU-heavy model runs here,<br/>so the event loop stays free.<br/>It calls report("Separating the voice…")
     EX->>FS: write the .mid and preview .mp3
@@ -211,7 +210,7 @@ sequenceDiagram
         UI->>API: GET /midi/jobs/{id}
         API-->>UI: { status, progress, stage, eta_s }
     end
-    UI->>API: GET /artifacts/{id}_song.mid
+    UI->>API: GET /artifacts/{random folder}/song (Auto).mid
 ```
 
 Things to notice in [`routes/midi.py`](../backend/app/routes/midi.py):
@@ -220,7 +219,8 @@ Things to notice in [`routes/midi.py`](../backend/app/routes/midi.py):
 - **Live progress without plumbing.** Pipeline code deep inside `core/` calls `report("Transcribing the singing with GAME…")` without knowing about jobs. [`core/progress.py`](../backend/app/core/progress.py) uses a Python `contextvars` variable to know which job is current, and copies that context into the worker thread. The job also gets an `eta_s` estimate from the song's length and the mode's measured speed, so the UI can draw a progress bar. MuScriptor reports "section X of Y" from its own server, which the backend polls the same way the UI polls the backend.
 - **Models are loaded once and cached** in a module-level variable (for example `_model` in `piano_transcription.py`), guarded by a `threading.Lock`. Loading weights takes seconds and hundreds of MB of RAM; doing it per request would be slow and could run out of memory. The lock also serialises inference, because these models aren't thread-safe.
 - **Weights download lazily** on first use into `data/models/`, which is a mounted volume, so they survive container rebuilds.
-- The job store is a Python `dict` ([`utils/storage.py`](../backend/app/utils/storage.py)). That's simple, but restarting the backend forgets every job, and it can't scale to several backend processes. The UI notices when a job it was polling disappears and marks it **Lost** with a **Try again** button. Moving jobs to Redis or a database is the top item on the [roadmap](roadmap.md).
+- **Heavy jobs wait in line.** [`core/jobs.py`](../backend/app/core/jobs.py) lets only `SM_HEAVY_WORKERS` jobs (1 by default) run at once, behind an `asyncio.Semaphore`; the others show "Waiting in line: 2 jobs ahead of yours". Ten people starting a job together would otherwise each get a tenth of the CPU and could run the server out of memory. The same module limits how many jobs one person can have going and start per hour.
+- **Jobs survive a restart.** The job store ([`utils/storage.py`](../backend/app/utils/storage.py)) keeps jobs in memory while they run and writes them to the SQLite file whenever one starts or ends. After a restart, finished jobs are read back from the database, and a job that was cut off comes back as failed with a note to start it again. Because the line and running jobs live in one process's memory, the backend runs as a single process; moving the heavy work to separate worker processes is on the [roadmap](roadmap.md).
 - The frontend's polling lives in [`hooks/useUploadJobs.js`](../frontend/hooks/useUploadJobs.js) (`setInterval(..., 2000)`). A WebSocket route exists (`routes/websocket.py`) as the push-based alternative but isn't used by the UI.
 
 ### Where the code lives
@@ -231,7 +231,7 @@ Things to notice in [`routes/midi.py`](../backend/app/routes/midi.py):
 | `backend/app/core/` | The actual audio/ML code. Each file is usable on its own, without FastAPI |
 | `backend/app/models/job.py` | The `Job` Pydantic model every long task returns |
 | `services/muscriptor/`, `services/yourmt3/`, `services/game/`, `services/clap/` | The model servers (YourMT3+ also carries the authors' model code under `amt/`) |
-| `frontend/pages/` | `index.js` (home), `upload.js` (the Workspace), `map.js` (Music Map) |
+| `frontend/pages/` | `index.js` (the Music Map, which is the home page), `upload.js` (the Studio), `atlas.js`, `play.js`, `u/` (profiles), `account.js`, `privacy.js`, `terms.js` |
 | `frontend/components/map/Graph3D.js` | The 3D map renderer |
 | `scripts/` | Benchmarks (`eval_*.py`), comparisons (`compare_*.py`), dataset builders (`build_*.py`), and `make_guide_figures.py` for this guide's charts |
 | `legacy/` | Older prototype code, kept for reference and not used by the app |
@@ -242,7 +242,7 @@ Things to notice in [`routes/midi.py`](../backend/app/routes/midi.py):
 
 ## 3. Audio to MIDI: seven modes and a voice model
 
-Turning recorded audio into notes is called **automatic music transcription (AMT)**. It's an open research problem, and no single model is best at everything. So the Workspace offers several modes, plus **Auto**, which picks one. Each mode is a function in `backend/app/core/` that takes an audio path and returns a MIDI path.
+Turning recorded audio into notes is called **automatic music transcription (AMT)**. It's an open research problem, and no single model is best at everything. So the Studio offers several modes, plus **Auto**, which picks one. Each mode is a function in `backend/app/core/` that takes an audio path and returns a MIDI path.
 
 | Mode in the UI | API `model` | Engine | Best for |
 |---|---|---|---|
@@ -555,7 +555,7 @@ Each benchmark answers a different question, from easiest to closest to real use
 
 ![Solo piano benchmark](img/benchmark-solo-piano.png)
 
-Notice the trade-off between accuracy and speed: the piano specialist is the most accurate but about 10× slower than Basic Pitch on the same hardware. Which one is "best" depends on whether the user is waiting for it.
+Notice the trade-off between accuracy and speed: the piano specialist is the most accurate but about 10× slower than Basic Pitch on the same hardware. Which one is "best" depends on whether someone is waiting for it.
 
 **Piano inside a band** builds its own test set: it mixes a drums + bass + guitar backing under MAESTRO clips at equal loudness, so we know the exact piano notes even though the audio now sounds like a band. This trick of creating labelled data by mixing known sources is called **data synthesis** or **augmentation**.
 
@@ -600,7 +600,7 @@ Most songs you'd feed in have no reference MIDI. But the singer *is* an answer k
 | UMAP, PCA, k-means, silhouette | `_embed_3d`, `_cluster` in `core/music_map.py` | Swap k-means for DBSCAN or HDBSCAN and compare cluster quality |
 | Embeddings (self-supervised, contrastive) | `scripts/compare_embeddings.py` | Feed CLAP or MERT layer-7 vectors into `build_map` as an extra feature block and look at the clusters |
 | Recommenders | `_recommend` in `core/music_map.py` | Replace the "taste centre" average with several centres (one per favourite cluster) |
-| Async web APIs with slow work | `routes/midi.py`, `core/progress.py`, `utils/storage.py` | Move the job store into Redis so jobs survive a restart |
+| Async web APIs with slow work | `routes/midi.py`, `core/progress.py`, `utils/storage.py` | Move heavy jobs into a separate worker process that reads the line from the database |
 | Containers, GPUs, dependency isolation | `Dockerfile`, `services/*/Dockerfile`, `docker-compose.gpu.yml` | Run YourMT3+ on CPU and on GPU and compare the time per clip |
 
 A good order to read the code in:

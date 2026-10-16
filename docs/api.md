@@ -1,6 +1,6 @@
-# 🔌 API reference
+# API reference
 
-Base URL: `http://localhost:8000` · Live, clickable docs: **[/docs](http://localhost:8000/docs)**
+Base URL: `http://localhost:8000` when you run it yourself, or `https://<your domain>/api` on a public site. Running locally, the interactive docs at [/docs](http://localhost:8000/docs) let you try every endpoint (they're turned off on a public site).
 
 ## How jobs work
 
@@ -14,24 +14,26 @@ Long tasks don't block the request. You **start** a job and get back a job objec
   "message": "MIDI conversion complete",
   "progress": 80,
   "result": {
-    "artifacts": { "midi": "/app/data/artifacts/sample (General).mid" },
+    "artifacts": { "midi": "/app/data/artifacts/Xk3v9QmP2aL7wR4t/sample (General).mid" },
     "metrics": { "duration_s": 70.8, "model": "basic" }
   },
   "error_detail": null
 }
 ```
 
-`status` is one of `queued`, `running`, `done` or `error`. Each artifact path ends in a file name you can download from `/artifacts/{file name}` (URL-encode the spaces). Files are named after the song and what they are, e.g. `Artist - Song (Full band).mid`, `Artist - Song (Full band, two hands).mid`, `Artist - Song (vocals).wav`. Words like "(Official Music Video)" are dropped from the upload's name, and a second run of the same song gets `(2)` on the end.
+`status` is `queued` while the job waits in line (its `message` says how many jobs are ahead), then `running`, then `done` or `error`. Each result sits in a folder with a random name, so download it from `/artifacts/{folder}/{file name}` (URL-encode the spaces). Files are named after the song and what they are, e.g. `Artist - Song (Full band).mid`, `Artist - Song (Full band, two hands).mid`, `Artist - Song (vocals).wav`. Words like "(Official Music Video)" are dropped from the upload's name.
 
-> ⚠️ Jobs are kept in memory, so restarting the backend forgets them. The files stay in `data/artifacts`.
+Jobs are saved, so a finished job can still be fetched after the server restarts. Uploads and results are deleted after `SM_KEEP_DAYS` days (7 by default).
+
+**Limits.** Each person can have 3 heavy jobs (stems, MIDI, batch, downloads) waiting or running and start 20 per hour; past that the API answers `429`. A public site can also require sign-in for heavy jobs (`401`). Job endpoints only accept paths returned by `/upload/*` or by an earlier job, and answer `404` for anything else. See [configuration](configuration.md#limits-for-a-public-site).
 
 ## Files
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| `POST` | `/upload/audio` | form field `file` (mp3, wav, flac, m4a, ogg, opus) | `{ success, path, filename, size }` |
+| `POST` | `/upload/audio` | form field `file` (mp3, wav, flac, m4a, ogg, opus; up to 100 MB and 15 minutes) | `{ success, path, filename, size }` |
 | `POST` | `/upload/csv` | form field `file` (csv) | same as above |
-| `GET` | `/artifacts/{name}` | | the file |
+| `GET` | `/artifacts/{folder}/{name}` | | the file |
 
 ## Jobs
 
@@ -45,6 +47,9 @@ Long tasks don't block the request. You **start** a job and get back a job objec
 | `GET` | `/stems/jobs/{id}` | |
 | `POST` | `/csv/enrich` | `csv_path`*, `strategy` ("youtube+acousticbrainz"), `options` |
 | `GET` | `/csv/jobs/{id}` | |
+| `POST` | `/csv/enrich-files` | multipart: `files`* (CSVs, Spotify or Apple Music exports), `lookup` (true), `limit` (2000), `output` ("combined" or "separate") |
+| `POST` | `/csv/import-lastfm` | `username`*, `lookup` (true), `limit` (2000). Needs `LASTFM_API_KEY` |
+| `GET` | `/csv/lastfm/status` | whether the Last.fm key is set |
 | `POST` | `/tracks/download` | `url`*, `format` ("bestaudio"), `title_hint` |
 | `GET` | `/tracks/jobs/{id}` | |
 | `POST` | `/visualization/umap` | `audio_paths`*, `n_components` (3), `n_neighbors` (15), `min_dist` (0.1), `metadata` |
@@ -93,11 +98,11 @@ Paths like `source_path` are **server** paths, the ones `/upload/*` returns.
 | `POST` | `/auth/login` | `username`*, `password`* | `{ access_token, token_type }` |
 | `GET` | `/auth/me` | header `Authorization: Bearer <token>` | your profile |
 
-> Accounts work, but no other endpoint requires sign-in yet, and accounts are lost on restart. See the [roadmap](roadmap.md).
+Send the token as `Authorization: Bearer <token>` to act as your account (profiles, follows, shared maps, and heavy jobs when the site requires sign-in).
 
 ## Live updates
 
-`ws://localhost:8000/ws/jobs` is a WebSocket that pushes job updates as they happen. The UI currently polls instead.
+`ws://localhost:8000/ws/jobs` is a WebSocket. Send `{"type": "subscribe", "job_id": "..."}` for a job you started and it answers with that job's state. The website polls instead.
 
 ## Health
 
@@ -106,4 +111,3 @@ Paths like `source_path` are **server** paths, the ones `/upload/*` returns.
 | `GET` | `/healthz` | `{ "ok": true, "status": "healthy" }` |
 | `GET` | `/` | welcome message with links |
 
-**Tested end to end:** upload, MIDI, stems, CSV, download, accounts, Music Map. **Not yet tested end to end:** UMAP, batch, export, WebSocket.

@@ -7,10 +7,10 @@ legacy
 *.log
 .env*
 !.env.example
-# Runtime data is mounted as a volume, never baked into the image
-data/raw
-data/interim
-data/processed
-data/artifacts
-data/models
-data/samples
+# Runtime data (accounts, uploads, results, models) is mounted as a volume,
+# never baked into the image
+data
+backups
+docs
+services
+deploy

@@ -6,6 +6,7 @@ from typing import Optional
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from app.core import jobs
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
@@ -71,7 +72,7 @@ class PinRequest(BaseModel):
     title: Optional[str] = None
 
 
-@router.post("/atlas/pins")
+@router.post("/atlas/pins", dependencies=[Depends(jobs.rate_limit("pins", 60))])
 async def add_pin(req: PinRequest, voter: Optional[str] = Depends(listener),
                   me: Optional[str] = Depends(current_username)) -> dict:
     """Pin a note to a song on the atlas."""
@@ -95,7 +96,7 @@ async def delete_pin(pin_id: int, voter: Optional[str] = Depends(listener)) -> d
 
 # ---- artists -------------------------------------------------------------------------------
 
-@router.post("/artist/land")
+@router.post("/artist/land", dependencies=[Depends(jobs.rate_limit("artist", 10))])
 async def land_track(file: UploadFile = File(...), title: str = Form(..., min_length=1, max_length=120),
                      artist_name: Optional[str] = Form(None, max_length=120),
                      genre: Optional[str] = Form(None, max_length=200), public: bool = Form(False),

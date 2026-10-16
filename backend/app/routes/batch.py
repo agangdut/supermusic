@@ -4,11 +4,13 @@ import asyncio
 from pathlib import Path
 from typing import List, Dict, Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..models.job import Job, JobType
 from ..utils.storage import job_store, output_name, save_artifact
+from ..utils.safe_paths import AUDIO, user_file
+from app.core import jobs
 from app.core.csv_enrichment import enrich_csv_file
 from app.core.transcription import transcribe_to_midi
 from app.core.separator import separate_stems
@@ -27,11 +29,14 @@ class BatchProcessRequest(BaseModel):
 
 
 @router.post("/process", response_model=Job)
-async def batch_process(req: BatchProcessRequest, bg: BackgroundTasks) -> Job:
+async def batch_process(req: BatchProcessRequest, bg: BackgroundTasks, owner: str = Depends(jobs.job_owner)) -> Job:
+    if len(req.audio_files) > 20:
+        raise HTTPException(status_code=400, detail="A batch can have up to 20 songs.")
+    req.audio_files = [str(user_file(p, AUDIO, "song")) for p in req.audio_files]
     """Process multiple audio files in batch."""
     job = Job(job_type=JobType.MIDI_CONVERSION, payload=req.dict())
     job_store[str(job.id)] = job
-    job.mark_running(f"Processing {len(req.audio_files)} files…")
+    job.message = f"Processing {len(req.audio_files)} files…"
 
     async def _worker(j: Job) -> None:
         try:
@@ -102,8 +107,7 @@ async def batch_process(req: BatchProcessRequest, bg: BackgroundTasks) -> Job:
         except Exception as e:
             j.mark_failed(str(e), "Batch processing failed")
 
-    bg.add_task(_worker, job)
-    return job
+    return jobs.submit(bg, job, _worker, owner)
 
 
 @router.get("/jobs/{job_id}", response_model=Job)

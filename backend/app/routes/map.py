@@ -5,6 +5,7 @@ from typing import Dict, Optional
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Request
+from app.core import jobs
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
@@ -12,6 +13,7 @@ from app.core import community, map_share, social
 from app.middleware.auth import current_username
 from app.routes.community import client_ip, listener
 from app.core.music_map import MapOptions, build_map, similar_tracks, estimate_build_seconds
+from app.utils.safe_paths import CSV, is_user_file, user_file
 
 router = APIRouter(prefix="/map", tags=["map"])
 
@@ -31,7 +33,7 @@ class MapRequest(BaseModel):
     )
 
 
-@router.post("/build")
+@router.post("/build", dependencies=[Depends(jobs.rate_limit("map", 120))])
 async def build(req: MapRequest, voter: Optional[str] = Depends(listener)) -> dict:
     """Build a 3D taste map from a CSV of tracks. Fast enough to run inline.
 
@@ -70,10 +72,7 @@ def _library(req) -> Path:
         return path
     if not req.csv_path:
         raise HTTPException(status_code=400, detail="Send csv_path, share_id, or sample=true.")
-    path = Path(req.csv_path)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail=f"CSV file not found: {path}")
-    return path
+    return user_file(req.csv_path, CSV, "CSV")
 
 
 def warm_up() -> None:
@@ -275,7 +274,7 @@ class ImportJob:
         }
 
 
-@router.post("/import")
+@router.post("/import", dependencies=[Depends(jobs.rate_limit("import", 20))])
 async def import_library(
     files: List[UploadFile] = File(..., description="Spotify / Apple Music exports or CSVs; several at once is fine."),
     enrich: bool = Form(True, description="Look songs up online (genre from Last.fm/MusicBrainz tags, year from Deezer) and analyse 30 s previews for tempo/key/energy."),
@@ -319,7 +318,7 @@ async def import_library(
                     job.warning = f"Songs weren't given a sound description: {e}"
             out = settings.PROCESSED_DIR / "library"
             out.mkdir(parents=True, exist_ok=True)
-            csv_path = out / f"library_{job.id[:8]}.csv"
+            csv_path = out / f"library_{job.id}.csv"  # the full random id, so nobody can guess it
             df.to_csv(csv_path, index=False)
             # Listeners' corrections go on the drawing, not into the saved file, so taking
             # one back (or new agreement) shows up on the next Remap
@@ -390,7 +389,7 @@ class SearchRequest(BaseModel):
     limit: int = Field(20, ge=1, le=100)
 
 
-@router.post("/search")
+@router.post("/search", dependencies=[Depends(jobs.rate_limit("search", 120))])
 async def search_sound(req: SearchRequest) -> dict:
     """Songs whose sound best matches a description. Needs a library imported with the CLAP service running."""
     path = _library(req)
@@ -452,22 +451,12 @@ def _shareable_library(req: ShareRequest) -> Optional[Path]:
         return SAMPLE_CSV
     if req.share_id:
         return map_share.library_path(req.share_id)
-    if req.csv_path:
-        path = Path(req.csv_path).resolve()
-        if path.suffix.lower() == ".csv" and path.is_file() and any(path.is_relative_to(r) for r in _library_roots()):
-            return path
+    if req.csv_path and is_user_file(req.csv_path, CSV):
+        return Path(req.csv_path).resolve()
     return None
 
 
-def _library_roots() -> List[Path]:
-    """Where SuperMusic writes CSVs: imports, uploads and CSV enrichment results."""
-    from app.routes.upload import UPLOAD_DIR
-    from app.utils.storage import _ARTIFACT_DIR
-
-    return [p.resolve() for p in (settings.DATA_DIR, settings.PROCESSED_DIR, UPLOAD_DIR, _ARTIFACT_DIR)]
-
-
-@router.post("/share")
+@router.post("/share", dependencies=[Depends(jobs.rate_limit("share", 30))])
 async def share_map(req: ShareRequest, me: Optional[str] = Depends(current_username)) -> dict:
     """Save a snapshot of a map under a short link. Returns the id and a secret delete token.
     Signed in, the map also goes on your profile (and your followers' feeds when listed)."""
@@ -596,7 +585,7 @@ class BlendRequest(BaseModel):
     weights: Dict[str, float] = Field(default_factory=dict)
 
 
-@router.post("/blend")
+@router.post("/blend", dependencies=[Depends(jobs.rate_limit("map", 120))])
 async def blend_maps(req: BlendRequest, me: Optional[str] = Depends(current_username)) -> dict:
     """Both libraries drawn as one map. Each song says whose it is: "you", "them" or "both"."""
     from app.core import blend
@@ -667,7 +656,7 @@ class YoutubeRequest(BaseModel):
     songs: List[YoutubeSong] = Field(..., min_length=1, max_length=50)
 
 
-@router.post("/youtube-ids")
+@router.post("/youtube-ids", dependencies=[Depends(jobs.rate_limit("lookup", 60))])
 async def youtube_ids(req: YoutubeRequest) -> dict:
     """A YouTube video id for each song (None when nothing was found), in the same order.
     Open them as a playlist with https://www.youtube.com/watch_videos?video_ids=a,b,c."""
@@ -689,7 +678,7 @@ class TasteMatchRequest(BaseModel):
     limit: int = Field(10, ge=1, le=50)
 
 
-@router.post("/taste-match")
+@router.post("/taste-match", dependencies=[Depends(jobs.rate_limit("map", 120))])
 async def taste_match(req: TasteMatchRequest) -> dict:
     """Public shared maps closest to this library (by the artists both play), with songs to try from each."""
     from app.core import taste_match as tm

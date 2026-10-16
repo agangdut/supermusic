@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 from pathlib import Path
 from typing import Dict, Iterable, Optional, TYPE_CHECKING
 
@@ -14,9 +15,66 @@ else:
     JobType = object  # type: ignore
 
 # ------------------------------------------------------------------------------
-# Simple in-memory job store
+# Job store: kept in memory while the server runs, and saved to the SQLite file
+# (data/supermusic.db) whenever a job starts or ends, so a restart doesn't lose
+# finished results. A job that was still running when the server stopped comes
+# back as failed, with a note to start it again.
 # ------------------------------------------------------------------------------
-job_store: Dict[str, Job] = {}  # defined at import time
+_RESTARTED = "The server restarted while this was running. Start it again."
+
+
+class JobStore(dict):
+    def get(self, job_id, default=None):  # type: ignore[override]
+        job = super().get(job_id)
+        if job is None:
+            job = _load_job(str(job_id))
+            if job is not None:
+                super().__setitem__(str(job_id), job)
+        return job if job is not None else default
+
+    def __contains__(self, job_id) -> bool:  # type: ignore[override]
+        return self.get(job_id) is not None
+
+    def __getitem__(self, job_id):
+        job = self.get(job_id)
+        if job is None:
+            raise KeyError(job_id)
+        return job
+
+
+job_store: Dict[str, Job] = JobStore()  # defined at import time
+
+
+def save_job(job: Job) -> None:
+    """Write a job's current state to the database. Never lets a database problem break the job."""
+    try:
+        from app.core import store
+
+        store.connect().execute(
+            "INSERT INTO jobs (id, job_type, status, data, updated_at) VALUES (?, ?, ?, ?, strftime('%s','now')) "
+            "ON CONFLICT(id) DO UPDATE SET status=excluded.status, data=excluded.data, updated_at=excluded.updated_at",
+            (str(job.id), str(getattr(job.job_type, "value", job.job_type)), str(getattr(job.status, "value", job.status)),
+             job.model_dump_json()),
+        )
+    except Exception:
+        pass
+
+
+def _load_job(job_id: str) -> Optional[Job]:
+    try:
+        from app.core import store
+        from app.models.job import Job as JobModel, JobStatus
+
+        row = store.connect().execute("SELECT data FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            return None
+        job = JobModel.model_validate_json(row["data"])
+    except Exception:
+        return None
+    if job.status in (JobStatus.queued, JobStatus.running):
+        job.mark_failed(_RESTARTED, "Stopped by a server restart")
+    return job
+
 
 def get_job(job_id: str) -> Optional[Job]:
     return job_store.get(job_id)
@@ -73,14 +131,12 @@ def _safe_filename(text: str) -> str:
 
 
 def save_bytes(filename: str, content: bytes) -> str:
-    """Save into the artifact folder under a readable name. If that name is taken
-    (the same song run twice), the new file becomes "Name (2).ext", "Name (3).ext", ..."""
+    """Save into the artifact folder under a readable name, in a folder of its own."""
     safe = Path(_safe_filename(filename))
-    out_path = _ARTIFACT_DIR / safe.name
-    n = 2
-    while out_path.exists():
-        out_path = _ARTIFACT_DIR / f"{safe.stem} ({n}){safe.suffix}"
-        n += 1
+    # Each result gets its own folder with a random name, so the download link
+    # can't be guessed from the song's name by someone else.
+    folder = _ARTIFACT_DIR / secrets.token_urlsafe(12)
+    out_path = folder / safe.name
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(content)
     return str(out_path)

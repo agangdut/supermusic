@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Depends
+from app.core import jobs
 from pydantic import BaseModel, Field
 import bcrypt
 
@@ -45,7 +46,7 @@ def _session(username: str) -> dict:
             "user": social.public_user(social.user_row(username))}
 
 
-@router.post("/register")
+@router.post("/register", dependencies=[Depends(jobs.rate_limit("register", 10))])
 async def register(user: UserRegister):
     """Register a new user. Usernames become profile links (/u/<name>): letters, numbers, . _ - only."""
     if not social.USERNAME_RE.match(user.username):
@@ -61,7 +62,7 @@ async def register(user: UserRegister):
     return _session(user.username)
 
 
-@router.post("/login")
+@router.post("/login", dependencies=[Depends(jobs.rate_limit("login", 30))])
 async def login(user: UserLogin):
     """Login and get access token."""
     stored_user = _get_user(user.username.strip())
@@ -89,6 +90,19 @@ class ProfileUpdate(BaseModel):
 async def update_me(req: ProfileUpdate, username: str = Depends(require_username)):
     """Change your display name, bio, or whether you're an artist."""
     return social.update_profile(username, req.display_name, req.bio, req.is_artist)
+
+
+class DeleteRequest(BaseModel):
+    password: str = Field(..., max_length=72, description="Your password, to confirm")
+
+
+@router.post("/me/delete", dependencies=[Depends(jobs.rate_limit("login", 30))])
+async def delete_me(req: DeleteRequest, username: str = Depends(require_username)):
+    """Delete your account and everything it made (shared maps, votes, follows, pins, tracks)."""
+    stored = _get_user(username)
+    if not stored or not verify_password(req.password, stored["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Wrong password.")
+    return social.delete_account(stored["username"])
 
 
 class ClaimRequest(BaseModel):

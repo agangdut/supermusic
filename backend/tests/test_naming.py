@@ -21,6 +21,8 @@ def test_output_name_adds_what_the_file_is():
 def test_save_bytes_keeps_both_files_when_a_name_repeats():
     first = save_bytes("Same Song (Piano).mid", b"1")
     second = save_bytes("Same Song (Piano).mid", b"2")
-    assert first.endswith("Same Song (Piano).mid")
-    assert second.endswith("Same Song (Piano) (2).mid")
+    # Same readable name, each in its own random folder (so links can't be guessed)
+    assert first.endswith("Same Song (Piano).mid") and second.endswith("Same Song (Piano).mid")
+    assert first != second
+    assert open(first, "rb").read() == b"1" and open(second, "rb").read() == b"2"
     assert save_bytes('Bad: name?.mid', b"x").endswith("Bad name.mid")

@@ -1,4 +1,4 @@
-# 🎹 Transcription accuracy
+# Transcription accuracy
 
 **Summary:** for solo piano use **Piano** (0.97 note F1). For anything with a band, **Full band** (MuScriptor) is the most accurate on real pop (0.47 overall F1, against 0.35 for YourMT3+ and 0.14 for General). Auto picks between them for you. The sections below go from easiest test to hardest: solo piano, piano in a band, classical ensembles, real pop, then voices and melody.
 
@@ -76,7 +76,7 @@ The tests above are piano and classical music. [MulTTiPop](https://huggingface.c
 
 ### Our MuScriptor vs the official one
 
-Our `muscriptor` service wraps the PyPI package, not the authors' own server. To check that the wrapper wasn't costing accuracy, we ran the official server from [github.com/muscriptor/muscriptor](https://github.com/muscriptor/muscriptor) (commit `7f213af`, September 2026) in its own container and scored both on the same clips. Once the answer was in, that extra container was removed, since the app only needs our own `muscriptor` service. It is in the git history (commit `07a34b9`) if you ever want to re-run the test.
+Our `muscriptor` service wraps the PyPI package, not the authors' own server. To check that the wrapper wasn't costing accuracy, we ran the official server from [github.com/muscriptor/muscriptor](https://github.com/muscriptor/muscriptor) (as of September 2026) in its own container and scored both on the same clips. That comparison container isn't part of the app; only the `muscriptor` service is.
 
 What is the same: the model code and weights. The repo's model and decoding code is identical to PyPI `muscriptor==0.3.0`, which our service installs, and both download the same `muscriptor-medium` weights (shared through `data/models/hf`). Both read the audio as 16 kHz mono and cut it into 5-second sections.
 

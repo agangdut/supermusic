@@ -1,6 +1,6 @@
-# 📄 Research papers
+# Research papers
 
-Papers that shaped SuperMusic, with what each one means for this project. The PDFs aren't kept in the repo (we don't have the right to redistribute them); follow the links to read them. Each paper also has a study guide written for a college student new to the field.
+Papers that shaped SuperMusic, with what each one means for this project. The PDFs aren't kept in the repo (we don't have the right to redistribute them); follow the links to read them. The MuScriptor paper also has a plain-language study guide.
 
 | Paper | Area |
 |---|---|
@@ -11,7 +11,7 @@ Papers that shaped SuperMusic, with what each one means for this project. The PD
 
 **MuScriptor: An Open Model for Multi-Instrument Music Transcription** (ISMIR 2026)
 Simon Rouard, Michael Krause, Axel Roebel, Carl-Johann Simon-Gabriel, Alexandre Défossez (Kyutai, Mirelo AI, IRCAM)
-[arXiv:2607.08168](https://arxiv.org/abs/2607.08168) · [code](https://github.com/muscriptor/muscriptor) · [weights](https://huggingface.co/MuScriptor/muscriptor-medium) · **[explained (study guide)](muscriptor.md)** ([web version](https://claude.ai/artifact/HnjW95Bn9hS5RWe7Pnojh5), private claude.ai page)
+[arXiv:2607.08168](https://arxiv.org/abs/2607.08168) · [code](https://github.com/muscriptor/muscriptor) · [weights](https://huggingface.co/MuScriptor/muscriptor-medium) · **[explained (study guide)](muscriptor.md)**
 
 **Summary.** A plain decoder-only transformer that turns a full mix into multi-instrument MIDI. It is pre-trained on 1.45M synthetic MIDI renders, then fine-tuned on 170k real recordings (about 11,000 hours) with aligned notes, then polished with reinforcement learning on 300 high-quality transcriptions. Synthetic data alone isn't enough for real songs; adding real recordings is what makes it work. You can also tell it which instruments are present.
 
@@ -21,7 +21,7 @@ Simon Rouard, Michael Krause, Axel Roebel, Carl-Johann Simon-Gabriel, Alexandre 
 
 **Diffusable Latents from Structure-Agnostic Distillation** (2026)
 Adrien Ramanana Rahary, Nicolas Dufour, Patrick Pérez, David Picard (ENPC, Kyutai)
-[arXiv:2609.39657](https://arxiv.org/abs/2609.39657) · [code](https://github.com/AdrienRR/structure-agnostic-distillation) · [blog post](https://kyutai.org/blog/2026-09-28-structure-agnostic-distillation) · [study guide](https://claude.ai/artifact/Gq7MtdmNULnwmTh6mmekyH) (private claude.ai page)
+[arXiv:2609.39657](https://arxiv.org/abs/2609.39657) · [code](https://github.com/AdrienRR/structure-agnostic-distillation) · [blog post](https://kyutai.org/blog/2026-09-28-structure-agnostic-distillation)
 
 **Summary.** Image generators learn faster when their compressed "latent" space is taught to resemble a big pretrained model's features. The paper shows you don't need to match those features position by position: matching one pooled (averaged) vector per image works as well or slightly better, even across modalities, and so does matching only each image's nearest neighbours.
 
