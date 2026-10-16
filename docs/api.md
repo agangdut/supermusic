@@ -47,6 +47,7 @@ Jobs are saved, so a finished job can still be fetched after the server restarts
 | `GET` | `/stems/jobs/{id}` | |
 | `POST` | `/csv/enrich` | `csv_path`*, `strategy` ("youtube+acousticbrainz"), `options` |
 | `GET` | `/csv/jobs/{id}` | |
+| `POST` | `/csv/enrich-files` | multipart: `files`* (CSVs, Spotify or Apple Music exports), `lookup` (true), `limit` (2000), `output` ("combined" or "separate") |
 | `POST` | `/csv/import-lastfm` | `username`*, `lookup` (true), `limit` (2000). Needs `LASTFM_API_KEY` |
 | `GET` | `/csv/lastfm/status` | whether the Last.fm key is set |
 | `POST` | `/tracks/download` | `url`*, `format` ("bestaudio"), `title_hint` |

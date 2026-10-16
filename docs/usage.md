@@ -4,7 +4,7 @@ On a public SuperMusic site, open it in your browser and sign in (top right) to 
 
 ## In the browser
 
-![Upload page](img/upload.png)
+![The Studio](img/upload.png)
 
 ### Turn a song into MIDI
 
@@ -32,22 +32,20 @@ On a public SuperMusic site, open it in your browser and sign in (top right) to 
 
 Demucs is heavy, so this can take a few minutes on a CPU.
 
-### Enrich a CSV of tracks
+### Import from Last.fm
 
-1. Under **CSV**, choose a `.csv` file.
-2. Click **Enrich CSV** and download the enriched copy when it's done.
+At the top of the Studio, type your Last.fm username and click **Import & enrich**. No password is needed, because Last.fm listening data is public. SuperMusic reads your top tracks, loved tracks and recent scrobbles, fills in genre, year, tempo, key and energy, and offers **Open it in the Music Map** when it's done. The server needs a free `LASTFM_API_KEY` ([configuration](configuration.md)). More detail is in the [Music Map guide](music-map.md#import-from-lastfm-no-files).
 
-Each row needs either a `youtube_url` or a `local_path` that points to an audio file **the server can see** (for Docker, a path inside `./data`, written as `/app/data/...`). Rows without reachable audio are kept but not enriched. Columns like `title` and `artist` are used for MusicBrainz lookups.
+### Clean up and enrich your library files
 
-```csv
-title,artist,youtube_url,local_path
-Me at the zoo,jawed,https://www.youtube.com/watch?v=jNQXAC9IVRw,
-My demo,Me,,/app/data/raw/uploads/audio/demo.mp3
-```
+1. Under **CSV / library files**, drop in one or more files: any CSV with `title` and `artist` columns, Exportify CSVs, or Spotify and Apple Music data exports.
+2. Leave **Look up missing genre, year, tempo, key and energy online** ticked to fill in what's missing (songs looked up before are remembered).
+3. With several files, choose **One combined file** (duplicates merged, play counts added up) or **One file per input**.
+4. Click **Enrich** and download the CSV when it's done, or open it straight in the Music Map.
 
 ### Explore the Music Map
 
-The Music Map is the home page. It starts with a sample library; click **Import Spotify / Apple Music** to use your own CSV or listening history, or **From Last.fm** to import your scrobbles by username (the server needs a `LASTFM_API_KEY`). The [Music Map guide](music-map.md) explains what you're looking at.
+The Music Map is the home page. It starts with a sample library; click **Import your library** to use your own CSV or listening history, or **From Last.fm** to import your scrobbles by username (the server needs a `LASTFM_API_KEY`). The [Music Map guide](music-map.md) explains what you're looking at.
 
 ## From the command line
 

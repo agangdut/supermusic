@@ -231,7 +231,7 @@ Things to notice in [`routes/midi.py`](../backend/app/routes/midi.py):
 | `backend/app/core/` | The actual audio/ML code. Each file is usable on its own, without FastAPI |
 | `backend/app/models/job.py` | The `Job` Pydantic model every long task returns |
 | `services/muscriptor/`, `services/yourmt3/`, `services/game/`, `services/clap/` | The model servers (YourMT3+ also carries the authors' model code under `amt/`) |
-| `frontend/pages/` | `index.js` (home), `upload.js` (the Workspace), `map.js` (Music Map) |
+| `frontend/pages/` | `index.js` (the Music Map, which is the home page), `upload.js` (the Studio), `atlas.js`, `play.js`, `u/` (profiles), `account.js`, `privacy.js`, `terms.js` |
 | `frontend/components/map/Graph3D.js` | The 3D map renderer |
 | `scripts/` | Benchmarks (`eval_*.py`), comparisons (`compare_*.py`), dataset builders (`build_*.py`), and `make_guide_figures.py` for this guide's charts |
 | `legacy/` | Older prototype code, kept for reference and not used by the app |
@@ -242,7 +242,7 @@ Things to notice in [`routes/midi.py`](../backend/app/routes/midi.py):
 
 ## 3. Audio to MIDI: seven modes and a voice model
 
-Turning recorded audio into notes is called **automatic music transcription (AMT)**. It's an open research problem, and no single model is best at everything. So the Workspace offers several modes, plus **Auto**, which picks one. Each mode is a function in `backend/app/core/` that takes an audio path and returns a MIDI path.
+Turning recorded audio into notes is called **automatic music transcription (AMT)**. It's an open research problem, and no single model is best at everything. So the Studio offers several modes, plus **Auto**, which picks one. Each mode is a function in `backend/app/core/` that takes an audio path and returns a MIDI path.
 
 | Mode in the UI | API `model` | Engine | Best for |
 |---|---|---|---|

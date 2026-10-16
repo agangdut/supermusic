@@ -1,6 +1,6 @@
 # Playable by two hands
 
-Tick **Playable by two hands** under the MIDI model in the Workspace, and the transcription is rewritten so a real pianist can play it with ten fingers. The download becomes a two-track file, **Right hand** and **Left hand**, and the untouched transcription is kept alongside it as `midi_original`.
+Tick **Playable by two hands** under the MIDI model in the Studio, and the transcription is rewritten so a real pianist can play it with ten fingers. The download becomes a two-track file, **Right hand** and **Left hand**, and the untouched transcription is kept alongside it as `midi_original`.
 
 ## What it does
 
