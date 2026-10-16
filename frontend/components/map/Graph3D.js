@@ -157,7 +157,7 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
         fx: t.x, fy: t.y, fz: t.z,
         size: sizes[i],
       })),
-      links: data.edges.map((e) => ({ ...e })),
+      links: data.edges.map((e, i) => ({ ...e, edge: i })),
     };
   }, [data, large, sizes]);
 
@@ -210,17 +210,37 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus, data, glowSet]);
 
-  const linkVisible = (l) => {
-    if (large) return false; // drawn by the point-cloud view below
-    const s = typeof l.source === "object" ? l.source.id : l.source;
-    const t = typeof l.target === "object" ? l.target.id : l.target;
-    if (selectedId != null) return s === selectedId || t === selectedId;
-    if (mode === "hidden") return l.kind === "hidden";
-    if (focus) return focus.has(s) && focus.has(t);
-    // Overview: keep each cluster's own web plus the hidden threads. Links between
-    // neighbouring clusters are left out, or a real library turns into one big mesh.
-    return l.kind === "hidden" || !l.bridge;
-  };
+  // Which links to draw right now, by index into data.edges. Many songs can sit on the
+  // exact same spot (imports with only a title, artist and genre all land together), and
+  // their links then lie on top of each other. With additive glow, 40 faint lines on one
+  // spot add up to one bright white line, so the map looks like a bunched-up web. Each
+  // segment is drawn once, and links between songs on the same spot (zero length) not at all.
+  const drawn = useMemo(() => {
+    const keep = new Set();
+    if (!data) return keep;
+    const seen = new Set();
+    const at = (t) => `${Math.round(t.x * 2)},${Math.round(t.y * 2)},${Math.round(t.z * 2)}`;
+    data.edges.forEach((l, i) => {
+      const s = l.source, t = l.target;
+      if (selectedId != null) { if (s !== selectedId && t !== selectedId) return; }
+      else if (mode === "hidden") { if (l.kind !== "hidden") return; }
+      else if (focus) { if (!focus.has(s) || !focus.has(t)) return; }
+      // Overview: keep each cluster's own web plus the hidden threads. Links between
+      // neighbouring clusters are left out, or a real library turns into one big mesh.
+      else if (l.kind !== "hidden" && l.bridge) return;
+      const a = data.tracks[s], b = data.tracks[t];
+      if (!a || !b) return;
+      const ka = at(a), kb = at(b);
+      if (ka === kb) return;
+      const key = `${l.kind === "hidden" ? "h" : "s"}|${ka < kb ? ka + "|" + kb : kb + "|" + ka}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      keep.add(i);
+    });
+    return keep;
+  }, [data, selectedId, mode, focus]);
+
+  const linkVisible = (l) => !large && drawn.has(l.edge);
 
   // Cluster names floating above each group
   useEffect(() => {
@@ -397,12 +417,7 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
   useEffect(() => {
     const c = cloud.current;
     if (!large || !c || !data) return;
-    const visible = data.edges.filter((l) => {
-      if (selectedId != null) return l.source === selectedId || l.target === selectedId;
-      if (mode === "hidden") return l.kind === "hidden";
-      if (focus) return focus.has(l.source) && focus.has(l.target);
-      return l.kind === "hidden" || !l.bridge;
-    });
+    const visible = data.edges.filter((l, i) => drawn.has(i));
     const pos = new Float32Array(visible.length * 6);
     const col = new Float32Array(visible.length * 6);
     const tmp = new THREE.Color();
@@ -420,7 +435,7 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
     // A focused cluster of a thousand songs is a hairball at full strength; fade by link count
     c.lines.material.opacity = selectedId != null ? 0.5 : focus ? Math.min(0.4, Math.max(0.06, 60 / Math.sqrt(visible.length + 1) / 10)) : 0.06;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [large, data, selectedId, mode, focus, colorOf]);
+  }, [large, data, drawn, selectedId, focus, colorOf]);
 
   // Hit-testing for the point cloud: the nearest star on screen within a few pixels
   const [hover, setHover] = useState(null); // { t, x, y }
