@@ -105,7 +105,10 @@ function textSprite(text, color) {
   return sprite;
 }
 
-export default function Graph3D({ data, selectedId, focusIds, focusCluster, picks, mode, onSelect, colorOf }) {
+// "Light up my songs": these stars turn bright gold, grow, and get a ring
+export const HIGHLIGHT_COLOR = "#fde047";
+
+export default function Graph3D({ data, selectedId, focusIds, focusCluster, picks, mode, onSelect, colorOf, highlightIds }) {
   const fgRef = useRef();
   const wrapRef = useRef();
   const [size, setSize] = useState({ width: 800, height: 600 });
@@ -160,8 +163,9 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
 
   const pickSet = useMemo(() => new Set(picks || []), [picks]);
   const focus = focusIds && focusIds.size ? focusIds : null;
+  const glowSet = highlightIds && highlightIds.size ? highlightIds : null;
 
-  const DIM = 0.22;
+  const DIM = glowSet ? 0.07 : 0.22;
   const focusRef = useRef(focus);
   focusRef.current = focus;
 
@@ -173,7 +177,8 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
     const f = focusRef.current;
     const lit = !f || f.has(node.id);
     const isPick = mode === "picks" && pickSet.has(node.id);
-    const color = isPick ? PICK_COLOR : colorOfTrack(node);
+    const hl = glowSet?.has(node.id);
+    const color = hl ? HIGHLIGHT_COLOR : isPick ? PICK_COLOR : colorOfTrack(node);
     const mat = new THREE.SpriteMaterial({
       map: getGlowTexture(),
       color,
@@ -184,7 +189,7 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
     });
     glowMats.current.set(node.id, mat);
     const glow = new THREE.Sprite(mat);
-    const s = node.id === selectedId ? node.size * 2.6 : isPick ? Math.max(node.size, 5) * 2 : node.size * 1.6;
+    const s = node.id === selectedId ? node.size * 2.6 : hl ? Math.max(node.size, 4) * 2 : isPick ? Math.max(node.size, 5) * 2 : node.size * 1.6;
     glow.scale.set(s, s, 1);
     group.add(glow);
     if (node.id === selectedId) {
@@ -195,14 +200,15 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
     }
     return group;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, mode, pickSet, data, colorOf]);
+  }, [selectedId, mode, pickSet, data, colorOf, glowSet]);
 
   // Fade tracks and cluster names in and out of focus
   useEffect(() => {
-    for (const [id, mat] of glowMats.current) mat.opacity = !focus || focus.has(id) ? 0.9 : DIM;
+    for (const [id, mat] of glowMats.current) mat.opacity = !focus || focus.has(id) ? (glowSet?.has(id) ? 1 : 0.9) : DIM;
     const litClusters = focus ? new Set((data?.tracks || []).filter((t) => focus.has(t.id)).map((t) => t.cluster)) : null;
     for (const [cid, sprite] of labelSprites.current) sprite.material.opacity = !litClusters || litClusters.has(cid) ? 0.9 : 0.25;
-  }, [focus, data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, data, glowSet]);
 
   const linkVisible = (l) => {
     if (large) return false; // drawn by the point-cloud view below
@@ -365,11 +371,12 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
     const tmp = new THREE.Color();
     data.tracks.forEach((t, i) => {
       const isPick = mode === "picks" && pickSet.has(t.id);
-      tmp.set(isPick ? PICK_COLOR : colorOfTrack(t));
+      const hl = glowSet?.has(t.id);
+      tmp.set(hl ? HIGHLIGHT_COLOR : isPick ? PICK_COLOR : colorOfTrack(t));
       col.setXYZ(i, tmp.r, tmp.g, tmp.b);
-      alpha.setX(i, !focus || focus.has(t.id) ? 0.9 : DIM * 0.6);
+      alpha.setX(i, !focus || focus.has(t.id) ? (hl ? 1 : 0.9) : DIM * 0.6);
       const s = sizes[i];
-      sz.setX(i, t.id === selectedId ? s * 2.6 : isPick ? Math.max(s, 5) * 2 : s * 1.6);
+      sz.setX(i, t.id === selectedId ? s * 2.6 : hl ? Math.max(s, 4) * 2 : isPick ? Math.max(s, 5) * 2 : s * 1.6);
     });
     col.needsUpdate = alpha.needsUpdate = sz.needsUpdate = true;
     const litClusters = focus ? new Set(data.tracks.filter((t) => focus.has(t.id)).map((t) => t.cluster)) : null;
@@ -384,7 +391,7 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
       c.ring.scale.set(s, s, 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [large, data, colorOf, focus, selectedId, mode, pickSet, sizes]);
+  }, [large, data, colorOf, focus, selectedId, mode, pickSet, sizes, glowSet]);
 
   // Links: the same rules as the small map, minus the animated particles
   useEffect(() => {

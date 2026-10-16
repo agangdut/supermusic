@@ -73,7 +73,7 @@ function Charts() {
           </li>
         ))}
       </Board>
-      <Board title="Galaxy quiz" hint="Best runs this week, out of 10."
+      <Board title="Music quiz" hint="Best runs this week, out of 10."
         empty={!b.quiz.length && "Nobody has played this week."}>
         {b.quiz.map((q, i) => (
           <li key={`${q.name}${i}`} className="flex items-center gap-3">

@@ -93,7 +93,9 @@ function CsvSummary({ csv }) {
           <div className="grid grid-cols-3 gap-2">
             <Stat value={m.songs?.toLocaleString()} label={m.outputs ? "different songs" : "songs"} />
             <Stat value={m.files?.length} label={m.files?.length === 1 ? "file" : "files"} />
-            {m.outputs
+            {m.lastfm
+              ? <Stat value={m.lastfm.scrobbles_total?.toLocaleString()} label="scrobbles on Last.fm" />
+              : m.outputs
               ? <Stat value={m.outputs.filter((o) => o.csv).length} label="enriched files" />
               : <Stat value={m.duplicates_merged?.toLocaleString()} label="duplicates merged" />}
           </div>

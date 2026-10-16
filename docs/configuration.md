@@ -10,7 +10,7 @@ With Docker, put settings in a `.env` file next to `docker-compose.yml` (start f
 | `SM_ENV` | _(empty)_ | `production` turns off the interactive API docs and refuses unsafe settings (default secret, `CORS_ORIGINS=*`). Set by `docker-compose.prod.yml` |
 | `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000` | Comma-separated sites allowed to call the API |
 | `YOUTUBE_API_KEY` | _(empty)_ | Optional. Adds YouTube details during CSV enrichment |
-| `LASTFM_API_KEY` | _(empty)_ | Optional, free from [last.fm/api](https://www.last.fm/api/account/create). Makes Music Map genres more accurate; without it MusicBrainz is used |
+| `LASTFM_API_KEY` | _(empty)_ | Optional, free from [last.fm/api](https://www.last.fm/api/account/create). Turns on **Import from Last.fm** (by username) and makes Music Map genres more accurate; without it MusicBrainz is used |
 | `SUPERMUSIC_ARTIFACT_DIR` | `/app/data/artifacts` in Docker | Where finished files are written and served from |
 | `SUPERMUSIC_UPLOAD_DIR` | `<raw dir>/uploads` | Where uploads are saved |
 | `SM_DATA_DIR` | `data/` | Root data folder |

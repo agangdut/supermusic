@@ -15,7 +15,7 @@
 
 ## What it does
 
-**Music Map.** Import your Spotify or Apple Music history, or any CSV of songs, and see your library as a 3D galaxy. Songs that sound alike cluster together, the parts you play most glow brightest, and threads connect songs from different scenes that belong together. Share your map by link, compare it with a friend's, start a radio station from any corner of it, and send that playlist to Spotify or YouTube. ([guide](docs/music-map.md))
+**Music Map.** Import your Spotify or Apple Music history, your Last.fm scrobbles (just type your username), or any CSV of songs, and see your library as a 3D galaxy. Songs that sound alike cluster together, the parts you play most glow brightest, and threads connect songs from different scenes that belong together. Share your map by link, compare it with a friend's, start a radio station from any corner of it, and send that playlist to Spotify or YouTube. ([guide](docs/music-map.md))
 
 **Community.** Sign in to get a profile with your maps, follow people and see what they share, explore the community atlas (every public map in one universe), fix a song's tempo or key for everyone, and play the weekly music quiz.
 

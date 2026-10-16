@@ -169,6 +169,84 @@ async def enrich_files(
     return job
 
 
+class LastfmImportRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64, description="Last.fm username.")
+    max_tracks: int = Field(2000, ge=1, le=20_000, description="Read at most this many top tracks (most-played first).")
+    recent_pages: int = Field(25, ge=0, le=100, description="Pages of 200 recent scrobbles to read for play dates.")
+    lookup: bool = Field(True, description="Look songs up online for genre, year, tempo, key and energy.")
+    limit: int = Field(2000, ge=0, le=50_000, description="Look up at most this many songs (most-played first).")
+
+
+@router.get("/lastfm/status")
+def lastfm_status() -> dict:
+    """Whether the server has a LASTFM_API_KEY, so the UI can say what's missing before anyone tries."""
+    from app.core import lastfm_import
+    return {"enabled": lastfm_import.enabled()}
+
+
+@router.post("/import-lastfm", response_model=Job)
+async def import_lastfm(req: LastfmImportRequest) -> Job:
+    """Read a listener's library from Last.fm by username, then enrich it like any other import.
+
+    Runs in the background: the job reports progress while it reads Last.fm and while it
+    looks songs up, and finishes with one enriched CSV the Music Map can open."""
+    from app.core import lastfm_import, library_import
+
+    if not lastfm_import.enabled():
+        raise HTTPException(status_code=503, detail="Last.fm import isn't set up on this server: add a free "
+                            "LASTFM_API_KEY to .env (https://www.last.fm/api/account/create) and restart.")
+    username = req.username.strip()
+    job = Job(job_type=JobType.CSV_ENRICHMENT, payload={"source": "lastfm", **req.dict(), "username": username})
+    job_store[str(job.id)] = job
+    job.mark_running(f"Connecting to Last.fm for {username}…")
+    job.progress = 2
+
+    def work() -> None:
+        try:
+            def reading(msg: str, frac: float) -> None:
+                job.message = msg
+                job.progress = int(2 + 13 * frac)
+                job.updated_at = datetime.utcnow()
+
+            df, summary = lastfm_import.fetch(username, max_tracks=req.max_tracks,
+                                              recent_pages=req.recent_pages, progress=reading)
+            before = _coverage(df)
+            found = None
+            if req.lookup and req.limit > 0:
+                job.message = f"Got {len(df):,} songs from Last.fm. Checking which need looking up…"
+
+                def progress(done: int, total: int) -> None:
+                    job.progress = int(15 + 80 * done / max(total, 1))
+                    job.message = f"Looking songs up online… {done:,} of {total:,}"
+                    job.updated_at = datetime.utcnow()
+
+                df, found = library_import.enrich(df, limit=req.limit, progress=progress)
+            job.message = "Saving…"
+            df = df.dropna(axis=1, how="all")
+            path = save_artifact(job, f"{summary['user']} - Last.fm (enriched).csv", df.to_csv(index=False).encode("utf-8"))
+            metrics = {
+                "files": [{"file": f"Last.fm: {summary['user']}", "type": "Last.fm library", "songs": int(len(df))}],
+                "rows_in": int(len(df)),
+                "songs": int(len(df)),
+                "duplicates_merged": 0,
+                "coverage_before": before,
+                "coverage_after": _coverage(df),
+                "lastfm": summary,
+            }
+            if found is not None:
+                metrics["matched_online"] = int(found)
+            job.mark_success({"artifacts": {"csv": path}, "library_csv": path, "metrics": metrics},
+                             message=f"{len(df):,} songs from Last.fm ready")
+        except lastfm_import.LastfmError as e:
+            job.mark_failed(str(e), "Last.fm import failed")
+            job.error_hint = str(e)  # already written for the listener
+        except Exception as e:  # pragma: no cover
+            job.mark_failed(str(e), "Last.fm import failed")
+
+    threading.Thread(target=work, daemon=True).start()
+    return job
+
+
 LOOKED_UP = ["genre", "genre_source", "year", "bpm", "key", "energy", "brightness"]
 
 

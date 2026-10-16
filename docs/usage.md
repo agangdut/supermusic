@@ -47,7 +47,7 @@ My demo,Me,,/app/data/raw/uploads/audio/demo.mp3
 
 ### Explore the Music Map
 
-The Music Map is the home page. It starts with a sample library; click **Import Spotify / Apple Music** to use your own CSV or listening history. The [Music Map guide](music-map.md) explains what you're looking at.
+The Music Map is the home page. It starts with a sample library; click **Import Spotify / Apple Music** to use your own CSV or listening history, or **From Last.fm** to import your scrobbles by username (the server needs a `LASTFM_API_KEY`). The [Music Map guide](music-map.md) explains what you're looking at.
 
 ## From the command line
 
