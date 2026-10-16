@@ -94,6 +94,7 @@ function UserMenu() {
           <Link href={`/u/${user.username}`} className={item} onClick={() => setOpen(false)}>Your profile</Link>
           <Link href="/feed" className={item} onClick={() => setOpen(false)}>Feed &amp; weekly digest</Link>
           <Link href="/artists" className={item} onClick={() => setOpen(false)}>Your tracks</Link>
+          <Link href="/account" className={item} onClick={() => setOpen(false)}>Account</Link>
           <div className="my-1 h-px bg-white/10" />
           <button className={item} onClick={() => { signOut(); setOpen(false); }}>Sign out</button>
         </div>
@@ -146,9 +147,17 @@ export default function PageShell({ children, bleed = false }) {
         )}
       </header>
 
-      <main className={bleed ? "flex-1 pb-16 md:pb-0" : "flex flex-1 justify-center px-4 pb-24 md:pb-16 lg:px-8"}>
+      <main className={bleed ? "flex-1" : "flex flex-1 justify-center px-4 pb-8 md:pb-16 lg:px-8"}>
         {bleed ? children : <div className="w-full max-w-[1400px] pt-6 lg:pt-10">{children}</div>}
       </main>
+
+      <footer className="border-t border-white/5 px-4 pb-20 pt-4 text-center text-[11px] text-gray-500 md:pb-4">
+        <Link href="/privacy" className="hover:text-gray-300">Privacy</Link>
+        <span className="mx-2">·</span>
+        <Link href="/terms" className="hover:text-gray-300">Terms</Link>
+        <span className="mx-2">·</span>
+        <a href="https://github.com/agangdut/supermusic" className="hover:text-gray-300">Source code</a>
+      </footer>
 
       {/* Phone tab bar */}
       <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-white/10 bg-[#0b1121]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">

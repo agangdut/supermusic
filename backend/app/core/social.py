@@ -18,6 +18,7 @@ import json
 import re
 import time
 from collections import defaultdict
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from app.core import community, store
@@ -299,3 +300,35 @@ def feed_of(username: str, limit: int = 20) -> List[Dict[str, Any]]:
         e["actor_name"] = names.get(username, username)
         e["target_name"] = names.get(e["target"], e["target"]) if e["target"] else None
     return out
+
+
+def delete_account(username: str) -> Dict[str, Any]:
+    """Remove an account and what it made: shared maps, votes, follows, feed events, pins,
+    uploaded artist tracks, quiz and radio history, and the library behind its own map."""
+    from app.core import map_share
+    from app.core.config import settings
+
+    maps = [m["id"] for m in map_share.by_owner(username, include_unlisted=True)]
+    for share_id in maps:
+        map_share.delete(share_id, "", owner=username)
+    u = user_row(username) or {}
+    lib = u.get("library_csv")
+    if lib:
+        p = Path(lib).resolve()
+        if p.is_file() and p.is_relative_to(settings.PROCESSED_DIR.resolve()):
+            p.unlink(missing_ok=True)
+    voter = f"user:{username}"
+    with store.tx() as c:
+        for sql, args in [
+            ("DELETE FROM song_votes WHERE voter = ?", (voter,)),
+            ("DELETE FROM map_votes WHERE voter = ?", (voter,)),
+            ("DELETE FROM follows WHERE follower = ? OR followee = ?", (username, username)),
+            ("DELETE FROM events WHERE actor = ? OR target = ?", (username, username)),
+            ("DELETE FROM atlas_pins WHERE author = ?", (voter,)),
+            ("DELETE FROM artist_tracks WHERE owner = ?", (username,)),
+            ("DELETE FROM radio_plays WHERE listener IN (?, ?)", (voter, username)),
+            ("DELETE FROM quiz_scores WHERE listener IN (?, ?)", (voter, username)),
+            ("DELETE FROM users WHERE username = ?", (username,)),
+        ]:
+            c.execute(sql, args)
+    return {"deleted": True, "maps": len(maps)}

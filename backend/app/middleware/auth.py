@@ -8,7 +8,11 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 
 # JWT configuration
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+_PLACEHOLDERS = {"", "your-secret-key-change-in-production", "change-me-in-production", "change-me"}
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "") or "your-secret-key-change-in-production"
+if os.getenv("SM_ENV") == "production" and (SECRET_KEY in _PLACEHOLDERS or len(SECRET_KEY) < 32):
+    # Anyone who knows the key can sign in as anyone, and the default one is public
+    raise RuntimeError("Set JWT_SECRET_KEY in .env to a long random value (openssl rand -hex 32) before going live.")
 ALGORITHM = "HS256"
 
 security = HTTPBearer(auto_error=False)

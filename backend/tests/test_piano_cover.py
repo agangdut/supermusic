@@ -10,7 +10,7 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_cover_mode_runs_pop2piano_and_can_be_made_playable(tmp_path, monkeypatch):
+def test_cover_mode_runs_pop2piano_and_can_be_made_playable(tmp_path, user_dir, monkeypatch):
     calls = {}
 
     def fake_cover(audio_path, composer="composer1"):
@@ -24,7 +24,7 @@ def test_cover_mode_runs_pop2piano_and_can_be_made_playable(tmp_path, monkeypatc
         return out
 
     monkeypatch.setattr(midi_routes, "piano_cover", fake_cover)
-    audio = tmp_path / "song.wav"
+    audio = user_dir / "song.wav"
     audio.write_bytes(b"not really audio")
 
     job = client.post("/midi/convert", json={

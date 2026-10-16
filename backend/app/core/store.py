@@ -16,7 +16,8 @@ Tables:
   atlas_pins  notes people pinned on songs in the community atlas
   artist_tracks  songs artists uploaded to see where they land on the atlas
   radio_plays stations people started, for the radio charts
-  quiz_scores rounds of the galaxy quiz, for its leaderboard
+  quiz_scores rounds of the music quiz, for its leaderboard
+  jobs        stem, MIDI and CSV jobs and their results, so a restart keeps them
 """
 from __future__ import annotations
 
@@ -117,6 +118,14 @@ CREATE TABLE IF NOT EXISTS quiz_scores (
     created_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS quiz_scores_time ON quiz_scores (created_at);
+CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    job_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    data TEXT NOT NULL,           -- JSON: the whole job, as the API returns it
+    updated_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS jobs_time ON jobs (updated_at);
 """
 
 # Columns added after a table first shipped: (table, column, definition)

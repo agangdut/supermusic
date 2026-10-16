@@ -23,9 +23,7 @@ from app.routes import community as community_routes
 from app.routes import people as people_routes
 from app.routes import community_atlas as atlas_routes
 from app.core.piano_transcription import warm_up as piano_warm_up
-from app.middleware.rate_limit import limiter, RATE_LIMITS
-from slowapi.errors import RateLimitExceeded
-from slowapi import _rate_limit_exceeded_handler
+from app.core import cleanup
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.middleware.error_handler import (
@@ -41,12 +39,13 @@ from app.middleware.error_handler import (
 app = FastAPI(
     title="SuperMusic API",
     version="0.1.0",
-    description="Backend API for SuperMusic – audio download, metadata enrichment, stem separation, transcription, visualization."
+    description="Backend API for SuperMusic: stem separation, audio to MIDI, library enrichment and the Music Map.",
+    # The interactive API pages are for local development, not the public site
+    docs_url=None if os.getenv("SM_ENV") == "production" else "/docs",
+    redoc_url=None if os.getenv("SM_ENV") == "production" else "/redoc",
+    openapi_url=None if os.getenv("SM_ENV") == "production" else "/openapi.json",
 )
 
-# Add rate limiter
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Add error handlers
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
@@ -60,7 +59,9 @@ app.add_exception_handler(Exception, general_exception_handler)
 # A Music Map of 20,000 songs is ~15 MB of JSON; compressed it is a few MB
 app.add_middleware(GZipMiddleware, minimum_size=50_000)
 
-origins = os.getenv("CORS_ORIGINS", "*").split(",")
+origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+if os.getenv("SM_ENV") == "production" and "*" in origins:
+    raise RuntimeError("Set CORS_ORIGINS to your site's address (e.g. https://supermusic.example) in production.")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -133,6 +134,7 @@ def _warm_map() -> None:
 
     threading.Thread(target=map_routes.warm_up, daemon=True).start()
     threading.Thread(target=piano_warm_up, daemon=True).start()
+    cleanup.start()
 
 # ------------------------------------------------------------------------------
 # Static file serving for artifacts

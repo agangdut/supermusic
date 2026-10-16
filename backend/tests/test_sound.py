@@ -72,7 +72,7 @@ def test_map_without_sound_column_is_unchanged():
     assert r["meta"]["sound_tracks"] == 0
 
 
-def test_search_ranks_by_text_vector(monkeypatch, tmp_path):
+def test_search_ranks_by_text_vector(monkeypatch, user_dir):
     df, base = _library()
     monkeypatch.setattr(sound, "embed_text", lambda texts: np.stack([base[1]]))
     out = sound.search(df, "anything", limit=5)
@@ -80,16 +80,16 @@ def test_search_ranks_by_text_vector(monkeypatch, tmp_path):
     assert all(df.loc[r["id"], "title"].startswith("Song 1") for r in out)
     assert out[0]["score"] >= out[-1]["score"]
 
-    path = tmp_path / "lib.csv"
+    path = user_dir / "lib.csv"
     df.to_csv(path, index=False)
     r = client.post("/map/search", json={"csv_path": str(path), "query": "dark synths", "limit": 3})
     assert r.status_code == 200, r.text
     assert [x["id"] for x in r.json()["results"]] == [x["id"] for x in out[:3]]
 
 
-def test_search_needs_sound_data(tmp_path):
+def test_search_needs_sound_data(user_dir):
     df, _ = _library()
-    path = tmp_path / "lib.csv"
+    path = user_dir / "lib.csv"
     df.drop(columns=["sound"]).to_csv(path, index=False)
     r = client.post("/map/search", json={"csv_path": str(path), "query": "piano"})
     assert r.status_code == 400

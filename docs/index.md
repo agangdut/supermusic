@@ -1,16 +1,27 @@
-# 📚 SuperMusic docs
+# SuperMusic docs
 
-Start with the [README](../README.md) for what SuperMusic does, where it stands, and the quickstart. Then:
+## Using SuperMusic
 
-| Page | Read it when you want to… |
+| Page | Read it to |
 |---|---|
-| 🎓 [How it works](how-it-works.md) | **understand the whole project**: the system, every ML model, how we measure them, and where things stand. Written for a CS student new to machine learning |
-| 🛠️ [Usage guide](usage.md) | use the app, or drive it from the command line |
-| 🎹 [Transcription accuracy](transcription-accuracy.md) | see every MIDI benchmark (piano, band, classical, pop, voices) and the melody match score |
-| 🖐️ [Playable piano](playable-piano.md) | turn a song into a left/right hand part a pianist can play, with Piano cover mode and its results |
-| 🌌 [Music Map](music-map.md) | explore your library in 3D, import Spotify / Apple Music, and see the CLAP and MERT embedding experiment |
-| 📦 [Training data](training-data.md) | see which datasets and newer models could make MIDI more accurate, and what's been tried |
-| 🔌 [API reference](api.md) | call the backend yourself |
-| ⚙️ [Configuration](configuration.md) | change ports, folders, keys (`HF_TOKEN`, `LASTFM_API_KEY`) or models |
-| 📄 [Research papers](research/README.md) | read the papers behind MuScriptor (with a [MuScriptor study guide](research/muscriptor.md)) and the Music Map embedding work, and how each relates to SuperMusic |
-| 🛣️ [Roadmap](roadmap.md) | see what's done and what's next |
+| [Usage guide](usage.md) | find your way around every screen, or drive SuperMusic from the command line |
+| [Music Map](music-map.md) | import your library, read the map, share it, and use Map Radio, the atlas and the community features |
+| [Playable piano](playable-piano.md) | turn a song into a left and right hand part, or a piano cover |
+| [Transcription accuracy](transcription-accuracy.md) | see how accurate each MIDI mode is, measured on public test sets |
+
+## Running it
+
+| Page | Read it to |
+|---|---|
+| [Running SuperMusic as a public website](deploy.md) | put it on a server with your own domain, HTTPS and backups |
+| [Configuration](configuration.md) | change any setting: keys, limits, folders, models, ports |
+| [API reference](api.md) | call the API yourself |
+
+## Under the hood
+
+| Page | Read it to |
+|---|---|
+| [How it works](how-it-works.md) | understand the whole system and every model in it, written for programmers new to machine learning |
+| [Training data](training-data.md) | see which datasets could make transcription more accurate |
+| [Research papers](research/README.md) | read the papers behind the models, and what each means for SuperMusic |
+| [Roadmap](roadmap.md) | see what's planned |

@@ -4,11 +4,13 @@ import asyncio
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..models.job import Job, JobType
 from ..utils.storage import job_store, save_artifact
+from ..utils.safe_paths import AUDIO, user_file
+from app.core import jobs
 from app.core.visualization import extract_audio_features_batch, create_umap_visualization, plot_umap
 import json
 
@@ -24,11 +26,14 @@ class VisualizationRequest(BaseModel):
 
 
 @router.post("/umap", response_model=Job)
-async def create_umap_vis(req: VisualizationRequest, bg: BackgroundTasks) -> Job:
+async def create_umap_vis(req: VisualizationRequest, bg: BackgroundTasks, owner: str = Depends(jobs.job_owner)) -> Job:
+    if len(req.audio_paths) > 200:
+        raise HTTPException(status_code=400, detail="Up to 200 songs at a time.")
+    req.audio_paths = [str(user_file(p, AUDIO, "song")) for p in req.audio_paths]
     """Create UMAP visualization from audio files."""
     job = Job(job_type=JobType.VISUALIZATION, payload=req.dict())
     job_store[str(job.id)] = job
-    job.mark_running("Extracting audio features…")
+    job.message = "Extracting audio features…"
 
     async def _worker(j: Job) -> None:
         try:
@@ -109,8 +114,7 @@ async def create_umap_vis(req: VisualizationRequest, bg: BackgroundTasks) -> Job
         except Exception as e:
             j.mark_failed(str(e), "Visualization failed")
 
-    bg.add_task(_worker, job)
-    return job
+    return jobs.submit(bg, job, _worker, owner)
 
 
 @router.get("/jobs/{job_id}", response_model=Job)

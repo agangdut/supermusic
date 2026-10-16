@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field, AnyUrl
 
 from ..models.job import Job, JobType
 from ..utils.storage import job_store, output_name, save_artifact
 from app.core.downloader import download_audio
+from app.core import jobs
 
 
 router = APIRouter(prefix="/tracks", tags=["tracks"])
@@ -21,11 +23,25 @@ class TrackDownloadRequest(BaseModel):
     title_hint: Optional[str] = Field(None, description="Optional custom filename stem.")
 
 
+# Only these sites, so the server can't be told to fetch addresses on its own network
+ALLOWED_HOSTS = ("youtube.com", "youtu.be", "soundcloud.com", "bandcamp.com")
+
+
+def downloads_enabled() -> bool:
+    """Off on the public site (SM_ENABLE_DOWNLOADS=0): downloading from YouTube breaks its terms."""
+    return os.getenv("SM_ENABLE_DOWNLOADS", "1") == "1"
+
+
 @router.post("/download", response_model=Job)
-async def download_track(req: TrackDownloadRequest, bg: BackgroundTasks) -> Job:
+async def download_track(req: TrackDownloadRequest, bg: BackgroundTasks, owner: str = Depends(jobs.job_owner)) -> Job:
+    if not downloads_enabled():
+        raise HTTPException(status_code=403, detail="Downloading from links is turned off on this server.")
+    host = (req.url.host or "").lower()
+    if not any(host == h or host.endswith("." + h) for h in ALLOWED_HOSTS):
+        raise HTTPException(status_code=400, detail="Links from YouTube, SoundCloud or Bandcamp only.")
     job = Job(job_type=JobType.TRACK_DOWNLOAD, payload=req.dict())
     job_store[str(job.id)] = job
-    job.mark_running("Fetching media…")
+    job.message = "Fetching media…"
 
     async def _worker(j: Job) -> None:
         try:
@@ -63,8 +79,7 @@ async def download_track(req: TrackDownloadRequest, bg: BackgroundTasks) -> Job:
         except Exception as e:  # pragma: no cover
             j.mark_failed(str(e), "Track download failed")
 
-    bg.add_task(_worker, job)
-    return job
+    return jobs.submit(bg, job, _worker, owner)
 
 
 @router.get("/jobs/{job_id}", response_model=Job)

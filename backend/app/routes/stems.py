@@ -4,11 +4,13 @@ import asyncio
 from pathlib import Path
 from typing import Dict, Any, List
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..models.job import Job, JobType
 from ..utils.storage import job_store, output_name, save_artifact
+from ..utils.safe_paths import AUDIO, user_file
+from app.core import jobs
 from app.core.separator import separate_stems as run_separation
 from app.core.progress import estimate_seconds, report, reporting, run_with_context
 
@@ -23,10 +25,11 @@ class StemSeparationRequest(BaseModel):
 
 
 @router.post("/separate", response_model=Job)
-async def separate_stems(req: StemSeparationRequest, bg: BackgroundTasks) -> Job:
+async def separate_stems(req: StemSeparationRequest, bg: BackgroundTasks, owner: str = Depends(jobs.job_owner)) -> Job:
+    req.audio_path = str(user_file(req.audio_path, AUDIO, "song"))
     job = Job(job_type=JobType.STEM_SEPARATION, payload=req.dict())
     job_store[str(job.id)] = job
-    job.mark_running("Separating stems…")
+    job.message = "Separating stems…"
 
     async def _worker(j: Job) -> None:
         try:
@@ -71,8 +74,7 @@ async def separate_stems(req: StemSeparationRequest, bg: BackgroundTasks) -> Job
         with reporting(j):
             await _worker(j)
 
-    bg.add_task(_run, job)
-    return job
+    return jobs.submit(bg, job, _run, owner)
 
 
 @router.get("/jobs/{job_id}", response_model=Job)

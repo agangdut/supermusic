@@ -1,4 +1,4 @@
-# 🌌 Music Map
+# Music Map
 
 The Music Map turns a spreadsheet of songs into a 3D constellation of your taste. It's built to show you patterns you wouldn't spot in a playlist: which sounds you actually gravitate to, which songs from different genres secretly belong together, and what in your library you've been overlooking.
 

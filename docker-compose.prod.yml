@@ -1,0 +1,128 @@
+# The public website: one server, HTTPS by Caddy, everything else private.
+#
+#   cp deploy/production.env.example .env      # then fill it in
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Only Caddy is reachable from the internet (ports 80 and 443). It gets a free
+# HTTPS certificate for SITE_DOMAIN by itself, sends /api/* to the backend and
+# everything else to the website. See docs/deploy.md.
+#
+# The transcription engines (Full band, MuScriptor, Lead vocal) each need a few GB
+# of memory. They're off unless you add `--profile engines`.
+
+x-restart: &restart
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    <<: *restart
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - SITE_DOMAIN=${SITE_DOMAIN:?Set SITE_DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+  backend:
+    build: .
+    <<: *restart
+    # One process: jobs in progress and the waiting line live in its memory
+    command: ["uvicorn", "app.main:app", "--app-dir", "backend", "--host", "0.0.0.0", "--port", "8000",
+              "--proxy-headers", "--forwarded-allow-ips", "*"]
+    environment:
+      - SM_ENV=production
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env (openssl rand -hex 32)}
+      - CORS_ORIGINS=https://${SITE_DOMAIN}
+      - SM_REQUIRE_LOGIN_FOR_JOBS=${SM_REQUIRE_LOGIN_FOR_JOBS:-1}
+      - SM_ENABLE_DOWNLOADS=${SM_ENABLE_DOWNLOADS:-0}
+      - SM_HEAVY_WORKERS=${SM_HEAVY_WORKERS:-1}
+      - SM_MAX_ACTIVE_JOBS=${SM_MAX_ACTIVE_JOBS:-3}
+      - SM_JOBS_PER_HOUR=${SM_JOBS_PER_HOUR:-20}
+      - SM_MAX_UPLOAD_MB=${SM_MAX_UPLOAD_MB:-100}
+      - SM_MAX_SONG_MINUTES=${SM_MAX_SONG_MINUTES:-15}
+      - SM_KEEP_DAYS=${SM_KEEP_DAYS:-7}
+      - SUPERMUSIC_ARTIFACT_DIR=/app/data/artifacts
+      - TORCH_HOME=/app/data/models/torch
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
+      - LASTFM_API_KEY=${LASTFM_API_KEY:-}
+      - YOURMT3_URL=http://yourmt3:8100
+      - MUSCRIPTOR_URL=http://muscriptor:8200
+      - CLAP_URL=http://clap:8300
+      - GAME_URL=http://game:8300
+    volumes:
+      - ./data:/app/data
+    deploy:
+      resources:
+        limits:
+          memory: ${BACKEND_MEMORY:-8g}
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - NEXT_PUBLIC_API_BASE=/api
+        - NEXT_PUBLIC_SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
+        - NEXT_PUBLIC_CONTACT_EMAIL=${CONTACT_EMAIL:?Set CONTACT_EMAIL in .env (shown on the Privacy and Terms pages)}
+    <<: *restart
+    environment:
+      - API_INTERNAL_BASE=http://backend:8000   # for pages drawn on the server (share links)
+    depends_on:
+      - backend
+
+  # Music Map "sound" search. Small enough for the CPU.
+  clap:
+    build: ./services/clap
+    <<: *restart
+    environment:
+      - HF_HOME=/app/data/models/hf
+      - CLAP_MODEL=${CLAP_MODEL:-laion/clap-htsat-unfused}
+    volumes:
+      - ./data:/app/data
+
+  yourmt3:
+    build: ./services/yourmt3
+    profiles: ["engines"]
+    <<: *restart
+    environment:
+      - WANDB_MODE=disabled
+      - HF_HOME=/app/data/models/hf
+    volumes:
+      - ./data:/app/data
+
+  # Non-commercial licence (CC BY-NC 4.0): only on a free, non-commercial site.
+  muscriptor:
+    build: ./services/muscriptor
+    profiles: ["engines"]
+    <<: *restart
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      - HF_HOME=/app/data/models/hf
+      - MUSCRIPTOR_MODEL=${MUSCRIPTOR_MODEL:-medium}
+    volumes:
+      - ./data:/app/data
+
+  # Non-commercial licence (CC BY-NC-SA 4.0): only on a free, non-commercial site.
+  game:
+    build: ./services/game
+    profiles: ["engines"]
+    <<: *restart
+    environment:
+      - GAME_MODEL=${GAME_MODEL:-medium}
+      - TORCH_HOME=/app/data/models/torch
+    volumes:
+      - ./data:/app/data
+
+volumes:
+  caddy_data:
+  caddy_config:

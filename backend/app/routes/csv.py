@@ -6,11 +6,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, Depends
+from app.core import jobs
 from pydantic import BaseModel, Field
 
 from ..models.job import Job, JobType
 from ..utils.storage import job_store, save_artifact
+from ..utils.safe_paths import CSV, user_file
 from app.core.metadata import enrich_track_record
 
 # Optional shared store (fallback if not present)
@@ -28,8 +30,9 @@ class CSVEnrichmentRequest(BaseModel):
     options: Dict[str, Any] = Field(default_factory=dict)
 
 
-@router.post("/enrich", response_model=Job)
+@router.post("/enrich", response_model=Job, dependencies=[Depends(jobs.rate_limit("enrich", 20))])
 async def enrich_csv(req: CSVEnrichmentRequest, bg: BackgroundTasks) -> Job:
+    req.csv_path = str(user_file(req.csv_path, CSV, "CSV"))
     job = Job(job_type=JobType.CSV_ENRICHMENT, payload=req.dict())
     job_store[str(job.id)] = job
     job.mark_running("Starting CSV enrichment…")
@@ -91,7 +94,7 @@ def _coverage(df) -> Dict[str, float]:
     return {c: round(float(df[c].notna().mean()), 3) for c in COVERAGE if c in df and len(df)}
 
 
-@router.post("/enrich-files", response_model=Job)
+@router.post("/enrich-files", response_model=Job, dependencies=[Depends(jobs.rate_limit("enrich", 20))])
 async def enrich_files(
     files: List[UploadFile] = File(..., description="CSVs and Spotify / Apple Music exports (JSON or text); several at once is fine."),
     lookup: bool = Form(True, description="Look songs up online for genre, year, tempo, key and energy."),

@@ -4,7 +4,6 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=sqlite:///./data/supermusic.db
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-production}
       - SUPERMUSIC_ARTIFACT_DIR=/app/data/artifacts
@@ -85,15 +84,3 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-
-volumes:
-  redis_data:
-

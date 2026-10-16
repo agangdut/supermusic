@@ -106,7 +106,8 @@ class LibraryRequest(BaseModel):
 @router.put("/me/library")
 async def set_my_library(req: LibraryRequest, me: str = Depends(require_username)) -> dict:
     """Remember which library is "my map" (used by Compare, the digest and the atlas)."""
-    from app.routes.map import SAMPLE_CSV, _library_roots
+    from app.routes.map import SAMPLE_CSV
+    from app.utils.safe_paths import CSV, is_user_file
 
     path: Optional[Path] = None
     if req.sample:
@@ -114,9 +115,8 @@ async def set_my_library(req: LibraryRequest, me: str = Depends(require_username
     elif req.share_id:
         path = map_share.library_path(req.share_id)
     elif req.csv_path:
-        p = Path(req.csv_path).resolve()
-        if p.suffix.lower() == ".csv" and p.is_file() and any(p.is_relative_to(r) for r in _library_roots()):
-            path = p
+        if is_user_file(req.csv_path, CSV):
+            path = Path(req.csv_path).resolve()
     if not path:
         raise HTTPException(status_code=400, detail="That library can't be used.")
     social.set_library(me, str(path), req.title)

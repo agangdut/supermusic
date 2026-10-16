@@ -1,0 +1,39 @@
+# HTTPS for the public site. Caddy fetches and renews the certificate itself;
+# SITE_DOMAIN must already point at this server (an A record) when it starts.
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	# Library exports can be large; single songs are capped lower by the backend
+	request_body {
+		max_size 300MB
+	}
+
+	# The API, on the same address as the site: /api/map/build -> backend /map/build
+	handle_path /api/* {
+		reverse_proxy backend:8000 {
+			# Music Map builds of big libraries can take a minute or two
+			transport http {
+				read_timeout 5m
+				write_timeout 5m
+			}
+		}
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+}
+
+# www.<domain> sends visitors to the main address
+www.{$SITE_DOMAIN} {
+	redir https://{$SITE_DOMAIN}{uri} permanent
+}

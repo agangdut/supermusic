@@ -143,6 +143,7 @@ class Job(ORMModel):
         if message:
             self.message = message
         self.updated_at = datetime.utcnow()
+        self._save()
 
     def mark_success(self, result: Dict[str, Any], message: Optional[str] = None) -> None:
         """Mark job as successfully completed."""
@@ -156,6 +157,7 @@ class Job(ORMModel):
             self.stages[-1]["ended_at"] = datetime.utcnow().isoformat()
         self.stage = None
         self.updated_at = datetime.utcnow()
+        self._save()
 
     def mark_failed(self, error_detail: str, message: Optional[str] = None) -> None:
         """Mark job as failed."""
@@ -168,6 +170,19 @@ class Job(ORMModel):
         if message:
             self.message = message
         self.updated_at = datetime.utcnow()
+        self._save()
+
+    def mark_queued(self, message: Optional[str] = None) -> None:
+        """Waiting for a free worker."""
+        self.status = JobStatus.queued
+        if message:
+            self.message = message
+        self.updated_at = datetime.utcnow()
+
+    def _save(self) -> None:
+        from app.utils.storage import save_job
+
+        save_job(self)
 
 
 class JobInDB(Job):

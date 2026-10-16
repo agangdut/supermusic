@@ -1,4 +1,4 @@
-# 🎼 MuScriptor, explained
+# MuScriptor, explained
 
 A study guide to **MuScriptor: An Open Model for Multi-Instrument Music Transcription** by Simon Rouard, Michael Krause, Axel Roebel, Carl-Johann Simon-Gabriel and Alexandre Défossez (Kyutai, Mirelo AI, IRCAM). ISMIR 2026, [arXiv 2607.08168](https://arxiv.org/abs/2607.08168). Written for a college student new to machine learning, and tied to how SuperMusic uses the model.
 

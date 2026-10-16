@@ -38,10 +38,12 @@ export function normalizeJobArtifacts(job) {
 export function toArtifactUrl(pathOrUrl) {
   if (!pathOrUrl) return pathOrUrl;
   // Already a URL? leave it.
-  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
-  // Strip any local prefix and use the filename.
-  const file = String(pathOrUrl).split(/[\\/]/).pop();
-  return `${ARTIFACT_BASE}/${encodeURIComponent(file)}`;
+  if (/^https?:\/\//i.test(pathOrUrl) || String(pathOrUrl).startsWith(ARTIFACT_BASE)) return pathOrUrl;
+  // Each result sits in its own random folder: keep "<folder>/<file>", drop the server's prefix
+  const parts = String(pathOrUrl).split(/[\\/]/).filter(Boolean);
+  const at = parts.lastIndexOf("artifacts");
+  const rel = at >= 0 && at < parts.length - 1 ? parts.slice(at + 1) : parts.slice(-1);
+  return `${ARTIFACT_BASE}/${rel.map(encodeURIComponent).join("/")}`;
 }
 
 async function postJSON(path, body) {
