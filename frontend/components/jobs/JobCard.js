@@ -1,6 +1,8 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import ArtifactList from "./ArtifactList";
+import { toArtifactUrl } from "@/lib/api";
 import { jobLabel } from "@/hooks/useUploadJobs";
 
 const RUNNING = ["running", "queued"];
@@ -143,6 +145,8 @@ export default function JobCard({ job, onUseArtifact, onRetry, className = "" })
         </div>
       )}
 
+      {!running && !failed && <CsvActions result={result} className="mt-3" />}
+
       {result?.artifacts && <ArtifactList className="mt-3" artifacts={result.artifacts} onUse={onUseArtifact} />}
 
       {result?.metrics && (
@@ -154,5 +158,24 @@ export default function JobCard({ job, onUseArtifact, onRetry, className = "" })
         </details>
       )}
     </article>
+  );
+}
+
+/** A finished library CSV: open it on the map, or save it. */
+export function CsvActions({ result, className = "" }) {
+  const csv = result?.library_csv;
+  if (!csv || result?.metrics?.outputs) return null; // "one file per input" jobs list their own links
+  const download = toArtifactUrl(result?.artifacts?.csv || csv);
+  return (
+    <div className={`flex flex-wrap gap-2 ${className}`}>
+      <Link href={`/?csv=${encodeURIComponent(csv)}`}
+        className="rounded-lg bg-gradient-to-r from-fuchsia-600 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-fuchsia-600/20 hover:brightness-110">
+        Use in map
+      </Link>
+      <a href={download} download
+        className="rounded-lg border border-white/15 bg-black/20 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-white/10">
+        Download CSV
+      </a>
+    </div>
   );
 }

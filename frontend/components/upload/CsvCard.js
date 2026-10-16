@@ -15,7 +15,7 @@ export default function CsvCard({
 }) {
   const inputRef = useRef();
   const [lookup, setLookup] = useState(true);
-  const [limit, setLimit] = useState("");
+  const [limit, setLimit] = useState("500");
   const [dragging, setDragging] = useState(false);
   const [output, setOutput] = useState("combined");
   const files = csvFiles || [];
@@ -124,7 +124,7 @@ export default function CsvCard({
         <label className="ml-5 flex items-center gap-2 text-xs text-gray-400">
           <span>Look up at most</span>
           <input
-            type="number" min="1" max="50000" placeholder="2000" value={limit}
+            type="number" min="1" max="50000" placeholder="500" value={limit}
             onChange={(e) => setLimit(e.target.value)}
             className="w-20 rounded border border-white/10 bg-black/30 px-2 py-0.5 text-xs text-white"
           />

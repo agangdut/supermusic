@@ -7,6 +7,28 @@ from pathlib import Path
 # Simple, dependency-free settings (no pydantic-settings required)
 # Uses env vars if present, otherwise sensible defaults.
 
+
+def _load_dotenv() -> None:
+    """Read keys such as LASTFM_API_KEY from .env when the backend runs outside Docker.
+
+    docker compose passes .env in itself; `uvicorn` started by hand doesn't, which left
+    keys in .env silently unused. Variables already set always win."""
+    try:
+        from dotenv import load_dotenv
+    except ImportError:  # python-dotenv is in requirements.txt, but don't fail without it
+        return
+    here = Path(__file__).resolve()
+    for env in (here.parents[3] / ".env", here.parents[2] / ".env"):  # repo root, then backend/
+        if env.is_file():
+            load_dotenv(env, override=False)
+    # Tolerate the usual .env slips around API keys: quotes or spaces kept as part of the value
+    for name in ("LASTFM_API_KEY", "YOUTUBE_API_KEY"):
+        if name in os.environ:
+            os.environ[name] = os.environ[name].strip().strip("'\"").strip()
+
+
+_load_dotenv()
+
 @dataclass(frozen=True)
 class Settings:
     # Root paths

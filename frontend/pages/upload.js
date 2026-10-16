@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
@@ -13,7 +13,8 @@ import AudioCard from "@/components/upload/AudioCard";
 import CsvCard from "@/components/upload/CsvCard";
 import { LastfmCard } from "@/components/upload/LastfmImport";
 import StatusCard from "@/components/upload/StatusCard";
-import ResultsCard from "@/components/upload/ResultsCard"; // wraps ThemedCard+ResultsConsole
+import ResultsCard from "@/components/upload/ResultsCard";
+import { CsvActions } from "@/components/jobs/JobCard"; // wraps ThemedCard+ResultsConsole
 
 export default function UploadPage() {
   const {
@@ -40,6 +41,11 @@ export default function UploadPage() {
 
   // A running Last.fm import: say what's happening and where to go meanwhile
   const lastfmJob = jobs.find((j) => j.payload?.source === "lastfm" && ["running", "queued"].includes(j.status));
+  // ... and once the newest one is done, put "Use in map" and "Download" right at the top
+  const [dismissed, setDismissed] = useState(null);
+  const newest = jobs[0];
+  const lastfmDone = newest?.payload?.source === "lastfm" && newest.status === "success" && newest.result?.library_csv
+    && dismissed !== newest.id ? newest : null;
 
   // Sent here from the map with a CSV that needs enriching: put it in the CSV card
   const router = useRouter();
@@ -70,6 +76,7 @@ export default function UploadPage() {
       <ToastBanner toast={toast} />
 
       {lastfmJob && <LastfmWaiting job={lastfmJob} />}
+      {!lastfmJob && lastfmDone && <LastfmReady job={lastfmDone} onClose={() => setDismissed(lastfmDone.id)} />}
 
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white tracking-tight">
@@ -156,6 +163,25 @@ function LastfmWaiting({ job }) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Shown when a Last.fm import has finished: the two things people want next
+function LastfmReady({ job, onClose }) {
+  const songs = job.result?.metrics?.songs;
+  return (
+    <div className="mb-6 rounded-2xl border border-emerald-400/30 bg-emerald-400/[0.06] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-white">
+            {job.payload?.username}&apos;s Last.fm library is ready{songs ? `: ${songs.toLocaleString()} songs` : ""}
+          </div>
+          <p className="mt-1 text-xs text-gray-300">Every song now has its genre, tempo, key and energy where they could be found.</p>
+        </div>
+        <button onClick={onClose} className="text-gray-500 hover:text-white" aria-label="Close">✕</button>
+      </div>
+      <CsvActions result={job.result} className="mt-3" />
     </div>
   );
 }

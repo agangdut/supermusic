@@ -267,8 +267,8 @@ export default function MapExplorer() {
   const [pending, setPending] = useState(null); // files picked, waiting for "Build my map"
   const [enrichOnline, setEnrichOnline] = useState(true);
   const [listenPreviews, setListenPreviews] = useState(true);
-  const [listenLimit, setListenLimit] = useState(""); // blank = every song (up to the import limit)
-  const [lookupLimit, setLookupLimit] = useState(""); // blank = the server default (1,500)
+  const [listenLimit, setListenLimit] = useState("50"); // blank = every song (up to the import limit)
+  const [lookupLimit, setLookupLimit] = useState("500"); // blank = the server default (500)
   const [importJob, setImportJob] = useState(null);
   const [uploading, setUploading] = useState(0); // number of files being sent
   const [lastWarning, setLastWarning] = useState(null); // e.g. online lookups were skipped
@@ -476,7 +476,7 @@ export default function MapExplorer() {
       {/* The map fills the screen; everything else floats on it */}
       <section
         ref={mapRef}
-        className="relative h-[calc(100svh-7rem)] min-h-[460px] overflow-hidden md:h-[calc(100vh-3.5rem)]
+        className="relative h-[calc(100svh-9.75rem)] min-h-[460px] overflow-hidden md:h-[calc(100vh-6.25rem)]
                    bg-[radial-gradient(ellipse_at_center,_#1a1440_0%,_#0b1121_55%,_#05070f_100%)]"
       >
         {data && (
@@ -650,7 +650,7 @@ export default function MapExplorer() {
                   <label className="mt-2 ml-5 flex flex-wrap items-center gap-2 text-xs text-gray-300">
                     <span>Look up at most</span>
                     <input
-                      type="number" min="1" max="50000" placeholder="1500" value={lookupLimit}
+                      type="number" min="1" max="50000" placeholder="500" value={lookupLimit}
                       onChange={(e) => setLookupLimit(e.target.value)}
                       className="w-24 rounded border border-white/10 bg-black/30 px-2 py-0.5 text-xs text-white"
                     />
@@ -1028,10 +1028,10 @@ export default function MapExplorer() {
         </aside>
 
         {/* There's more below the map: say so until they scroll */}
-        {data && atTop && !selected && !(isSample && !welcomeHidden) && !pending && !importJob && !gate && (
+        {data && atTop && !pending && !importJob && !gate && (
           <button
             onClick={() => document.getElementById("map-facts")?.scrollIntoView({ behavior: "smooth" })}
-            className="absolute bottom-[84px] left-3 z-20 flex items-center md:-translate-x-1/2 gap-2 rounded-full border border-white/15 bg-[#0b1121]/80 px-4 py-2 text-xs font-medium text-gray-100 shadow-lg shadow-black/40 backdrop-blur transition hover:border-fuchsia-400/50 hover:text-white md:bottom-5 md:left-[calc((100%-400px)/2)]"
+            className={`${(isSample && !welcomeHidden) || selected ? "hidden md:flex" : "flex"} absolute bottom-[84px] left-3 z-20 items-center md:-translate-x-1/2 gap-2 rounded-full border border-white/15 bg-[#0b1121]/80 px-4 py-2 text-xs font-medium text-gray-100 shadow-lg shadow-black/40 backdrop-blur transition hover:border-fuchsia-400/50 hover:text-white md:bottom-5 md:left-[calc((100%-400px)/2)]`}
           >
             Facts about this map
             <svg viewBox="0 0 24 24" className="h-4 w-4 animate-bounce text-fuchsia-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
@@ -1040,7 +1040,18 @@ export default function MapExplorer() {
       </section>
 
       {/* Below the map: what the map is made of */}
-      <div id="map-facts" className="mx-auto w-full max-w-[1400px] scroll-mt-16 px-4 pb-16 pt-8 lg:px-8">
+      {/* The top of this strip always peeks out under the map, so it's clear there's more below */}
+      {data && (
+        <button
+          onClick={() => document.getElementById("map-facts")?.scrollIntoView({ behavior: "smooth" })}
+          className="group flex h-11 w-full items-center justify-center gap-2 border-t border-white/10 bg-gradient-to-b from-fuchsia-500/[0.07] to-transparent text-xs font-medium text-gray-300 transition hover:text-white"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4 animate-bounce text-fuchsia-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+          Scroll down for facts about this map
+          <span className="hidden text-gray-500 sm:inline">· what each galaxy is made of, your library in numbers</span>
+        </button>
+      )}
+      <div id="map-facts" className="mx-auto w-full max-w-[1400px] scroll-mt-16 px-4 pb-16 pt-4 lg:px-8">
       {/* Insights strip */}
       {data?.insights?.length > 0 && (
         <div className="mb-4 flex gap-3 overflow-x-auto pb-1">

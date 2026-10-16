@@ -98,7 +98,7 @@ def _coverage(df) -> Dict[str, float]:
 async def enrich_files(
     files: List[UploadFile] = File(..., description="CSVs and Spotify / Apple Music exports (JSON or text); several at once is fine."),
     lookup: bool = Form(True, description="Look songs up online for genre, year, tempo, key and energy."),
-    limit: int = Form(2000, ge=0, le=50_000, description="Look up at most this many songs (most-played first)."),
+    limit: int = Form(500, ge=0, le=50_000, description="Look up at most this many songs (most-played first)."),
     output: str = Form("combined", pattern="^(combined|separate)$",
                        description="combined: one CSV for all files. separate: one enriched CSV per input file."),
 ) -> Job:
@@ -174,7 +174,7 @@ class LastfmImportRequest(BaseModel):
     max_tracks: int = Field(2000, ge=1, le=20_000, description="Read at most this many top tracks (most-played first).")
     recent_pages: int = Field(25, ge=0, le=100, description="Pages of 200 recent scrobbles to read for play dates.")
     lookup: bool = Field(True, description="Look songs up online for genre, year, tempo, key and energy.")
-    limit: int = Field(2000, ge=0, le=50_000, description="Look up at most this many songs (most-played first).")
+    limit: int = Field(500, ge=0, le=50_000, description="Look up at most this many songs (most-played first).")
 
 
 @router.get("/lastfm/status")
@@ -194,7 +194,8 @@ async def import_lastfm(req: LastfmImportRequest) -> Job:
 
     if not lastfm_import.enabled():
         raise HTTPException(status_code=503, detail="Last.fm import isn't set up on this server: add a free "
-                            "LASTFM_API_KEY to .env (https://www.last.fm/api/account/create) and restart.")
+                            "LASTFM_API_KEY to .env (https://www.last.fm/api/account/create), then restart the backend: "
+                            "docker compose up -d --force-recreate backend")
     username = req.username.strip()
     job = Job(job_type=JobType.CSV_ENRICHMENT, payload={"source": "lastfm", **req.dict(), "username": username})
     job_store[str(job.id)] = job
