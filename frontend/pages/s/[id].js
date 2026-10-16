@@ -90,7 +90,7 @@ export default function ShareLanding({ id, meta, url, origin }) {
               Compare with my music
             </Link>
             <div className="flex items-center justify-center gap-3 pt-1">
-              <UpvoteButton id={id} votes={meta.votes ?? 0} voted={!!meta.voted} />
+              <UpvoteButton id={id} votes={meta.votes ?? 0} voted={!!meta.voted} check />
               <span className="text-xs text-gray-500">Like it? Upvote it.</span>
             </div>
           </div>

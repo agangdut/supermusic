@@ -1,28 +1,31 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { voteSharedMap } from "@/lib/api";
+import { setMapVote, useMapVote } from "@/lib/mapVotes";
 
-/** ▲ count. Click to upvote a shared map, click again to take it back. */
-export default function UpvoteButton({ id, votes = 0, voted = false, size = "md", onChange }) {
-  const [state, setState] = useState({ votes, voted });
+/** ▲ count. Click to upvote a shared map, click again to take it back. Every button for the
+ *  same map, on any page or tab, shows the same count (see lib/mapVotes.js).
+ *  `check`: the page was drawn on the server, so ask who is looking before trusting `voted`. */
+export default function UpvoteButton({ id, votes = 0, voted = false, size = "md", check = false, onChange }) {
+  const state = useMapVote(id, votes, voted, { check });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  useEffect(() => setState({ votes, voted }), [votes, voted]);
 
   const click = async (e) => {
     e.preventDefault();
     e.stopPropagation();
     if (busy) return;
+    const before = state;
     const up = !state.voted;
     setBusy(true);
     setError(null);
-    setState((s) => ({ votes: s.votes + (up ? 1 : -1), voted: up })); // show it straight away
+    setMapVote(id, Math.max(0, before.votes + (up ? 1 : -1)), up); // show it straight away, everywhere
     try {
       const r = await voteSharedMap(id, up);
-      setState(r);
+      setMapVote(id, r.votes, r.voted);
       onChange?.(r);
     } catch (err) {
-      setState({ votes, voted }); // put it back
+      setMapVote(id, before.votes, before.voted); // put it back
       setError(err.message || String(err));
     } finally {
       setBusy(false);

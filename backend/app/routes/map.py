@@ -523,6 +523,15 @@ class MapVoteRequest(BaseModel):
     up: bool = Field(True, description="true to upvote, false to take the upvote back")
 
 
+@router.get("/shared/{share_id}/votes")
+def shared_map_votes(share_id: str, voter: Optional[str] = Depends(listener)) -> dict:
+    """Just the upvote count and whether you upvoted: for pages drawn on the server, which
+    can't know who is looking."""
+    if not map_share.read_meta(share_id):
+        raise HTTPException(status_code=404, detail="This shared map doesn't exist, or its owner stopped sharing it.")
+    return map_share.votes([share_id], voter)[share_id]
+
+
 @router.post("/shared/{share_id}/vote")
 async def vote_shared_map(share_id: str, req: MapVoteRequest, request: Request,
                           voter: Optional[str] = Depends(listener)) -> dict:

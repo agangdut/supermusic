@@ -168,3 +168,12 @@ def test_votes_go_with_the_share():
     client.post(f"/map/shared/{share['id']}/delete", json={"delete_token": share["delete_token"]})
     assert client.post(f"/map/shared/{share['id']}/vote", json={"up": True},
                        headers={"X-Listener-Id": "listener-bye-789"}).status_code == 404
+
+
+def test_votes_endpoint_knows_who_is_asking():
+    sid = client.post("/map/share", json={"map": _sample_map(), "title": "Count me", "sample": True}).json()["id"]
+    me = {"X-Listener-Id": "listener-count-321"}
+    client.post(f"/map/shared/{sid}/vote", json={"up": True}, headers=me)
+    assert client.get(f"/map/shared/{sid}/votes", headers=me).json() == {"votes": 1, "voted": True}
+    assert client.get(f"/map/shared/{sid}/votes").json() == {"votes": 1, "voted": False}
+    assert client.get("/map/shared/nope1234/votes").status_code == 404
