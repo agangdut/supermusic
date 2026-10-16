@@ -280,7 +280,7 @@ async def import_library(
     files: List[UploadFile] = File(..., description="Spotify / Apple Music exports or CSVs; several at once is fine."),
     enrich: bool = Form(True, description="Look songs up online (genre from Last.fm/MusicBrainz tags, year from Deezer) and analyse 30 s previews for tempo/key/energy."),
     listen: bool = Form(True, description="Also run each preview through CLAP for a 'sound' description (the slow 'Listen to previews' step). Needs enrich and the CLAP service."),
-    limit: int = Form(1500, ge=1, le=50_000),
+    limit: int = Form(500, ge=1, le=50_000),
     listen_limit: Optional[int] = Form(None, ge=1, le=50_000, description="Listen to at most this many previews (most-played songs first). Defaults to `limit`."),
     voter: Optional[str] = Depends(listener),
     me: Optional[str] = Depends(current_username),

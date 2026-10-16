@@ -104,3 +104,11 @@ def test_import_route_says_when_no_key(monkeypatch):
     monkeypatch.delenv("LASTFM_API_KEY", raising=False)
     r = TestClient(app).post("/csv/import-lastfm", json={"username": "ann"})
     assert r.status_code == 503 and "LASTFM_API_KEY" in r.json()["detail"]
+
+
+def test_stray_quotes_in_the_key_are_ignored(monkeypatch):
+    from app.core import config
+
+    monkeypatch.setenv("LASTFM_API_KEY", ' "abc123" ')  # what a sloppy compose line can pass in
+    config._load_dotenv()
+    assert lastfm_import.api_key() == "abc123" and lastfm_import.enabled()

@@ -33,6 +33,10 @@ function NoKeyNote() {
       <code className="text-amber-100">.env</code> (from{" "}
       <a href="https://www.last.fm/api/account/create" target="_blank" rel="noopener noreferrer" className="underline">last.fm/api</a>)
       and restart the server.
+      <span className="mt-1 block">
+        Already in <code className="text-amber-100">.env</code>? The server only reads it when it starts, so restart it:{" "}
+        <code className="text-amber-100">docker compose up -d --force-recreate backend</code>
+      </span>
     </p>
   );
 }
@@ -42,7 +46,7 @@ export function LastfmCard({ onImport, busy, initialUser = "" }) {
   const enabled = useLastfmEnabled();
   const [name, setName] = useState(initialUser);
   const [lookup, setLookup] = useState(true);
-  const [limit, setLimit] = useState("");
+  const [limit, setLimit] = useState("500");
   useEffect(() => { if (!initialUser) setName(rememberedLastfmUser()); }, [initialUser]);
 
   const go = () => {
@@ -86,7 +90,7 @@ export function LastfmCard({ onImport, busy, initialUser = "" }) {
         <label className="ml-5 flex items-center gap-2 text-xs text-gray-400">
           <span>Look up at most</span>
           <input
-            type="number" min="1" max="50000" placeholder="2000" value={limit}
+            type="number" min="1" max="50000" placeholder="500" value={limit}
             onChange={(e) => setLimit(e.target.value)}
             className="w-20 rounded border border-white/10 bg-black/30 px-2 py-0.5 text-xs text-white"
           />
