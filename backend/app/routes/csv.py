@@ -184,7 +184,7 @@ def lastfm_status() -> dict:
     return {"enabled": lastfm_import.enabled()}
 
 
-@router.post("/import-lastfm", response_model=Job)
+@router.post("/import-lastfm", response_model=Job, dependencies=[Depends(jobs.rate_limit("enrich", 20))])
 async def import_lastfm(req: LastfmImportRequest) -> Job:
     """Read a listener's library from Last.fm by username, then enrich it like any other import.
 
