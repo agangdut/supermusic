@@ -1,17 +1,14 @@
 name: Hugging Face Space
 
 # Publishes the backend to a Hugging Face Space (Docker) so the GitHub Pages site has an API.
-# Needs a repository secret HF_TOKEN (a Hugging Face write token); without it this does nothing.
+# Needs a repository secret HF_TOKEN (a Hugging Face write token) on an account with PRO, since
+# Docker Spaces need it. Run by hand from the Actions tab; then set the API_BASE variable.
 
 on:
-  push:
-    branches: [master]
-    paths: ["backend/**", "scripts/**", "requirements.txt", "deploy/hf-space/**", ".github/workflows/hf-space.yml"]
   workflow_dispatch:
 
 permissions:
   contents: read
-  actions: write
 
 concurrency:
   group: hf-space
@@ -36,12 +33,6 @@ jobs:
         run: |
           pip install huggingface_hub
           python deploy/hf-space/publish.py
-
-      - name: Rebuild the Pages site against the Space
-        if: env.HF_TOKEN != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref master
 
       - name: No token
         if: env.HF_TOKEN == ''

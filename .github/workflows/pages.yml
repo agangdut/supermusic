@@ -1,8 +1,8 @@
 name: Pages demo
 
 # Publishes the frontend as a static demo at https://agangdut.github.io/supermusic/.
-# The API runs on a Hugging Face Space (hf-space.yml) when the HF_TOKEN secret is set. Without
-# it, or while the Space is asleep, the Music Map still shows the sample library baked below.
+# With no API_BASE variable there is no server: the Music Map shows the sample library baked
+# below, and anything that needs the server (imports, transcription, accounts) is off.
 
 on:
   push:
@@ -24,7 +24,8 @@ jobs:
     env:
       NEXT_PUBLIC_DEMO: "1"
       NEXT_PUBLIC_BASE_PATH: /supermusic
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      # Set the repository variable API_BASE (e.g. https://<user>-supermusic.hf.space) once a server exists
+      NEXT_PUBLIC_API_BASE: ${{ vars.API_BASE }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,13 +37,6 @@ jobs:
         run: |
           pip install pandas numpy scikit-learn umap-learn
           python scripts/build_demo_map.py frontend/public/demo/sample-map.json
-
-      - name: Point the site at the Hugging Face Space, if there is one
-        if: env.HF_TOKEN != ''
-        run: |
-          pip install huggingface_hub
-          host=$(python -c "from huggingface_hub import HfApi; print(HfApi().whoami()['name'].replace('_','-').lower())")
-          echo "NEXT_PUBLIC_API_BASE=https://${host}-supermusic.hf.space" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v4
         with:

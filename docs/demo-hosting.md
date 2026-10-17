@@ -5,19 +5,23 @@ A quick way to show SuperMusic without renting a server. For real users, follow
 
 - **Website:** https://agangdut.github.io/supermusic/, a static export of the frontend built by
   `.github/workflows/pages.yml` on every push to `master`.
-- **API:** a Hugging Face Space (Docker, free CPU tier) built by `.github/workflows/hf-space.yml`
-  from `deploy/hf-space/` whenever the backend changes. It is created the first time it runs.
+- **API (optional, currently not running):** a Hugging Face Space (Docker) built by
+  `.github/workflows/hf-space.yml` from `deploy/hf-space/`. Docker Spaces need a Hugging Face PRO
+  subscription. Without a server the site shows only the sample Music Map.
 
 ## One-time setup
 
 1. In the repository's **Settings → Pages**, set **Source** to **GitHub Actions**.
-2. On Hugging Face, create a token with **Write** access (Settings → Access Tokens).
-3. In the repository's **Settings → Secrets and variables → Actions**, add it as `HF_TOKEN`.
-4. Run the **Hugging Face Space** workflow from the Actions tab. It creates
-   `<your HF username>/supermusic`, then rebuilds the website pointing at it. The Space's first
-   build takes 10 to 20 minutes because of the machine-learning libraries.
+That is all the static demo needs. To add the API later:
 
-## What works and what doesn't
+2. Subscribe to Hugging Face PRO and create a token with **Write** access (Settings → Access Tokens).
+3. In the repository's **Settings → Secrets and variables → Actions**, add it as the secret `HF_TOKEN`.
+4. Run the **Hugging Face Space** workflow from the Actions tab. It creates
+   `<your HF username>/supermusic`. The first build takes 10 to 20 minutes.
+5. Add the repository variable `API_BASE` = `https://<your HF username>-supermusic.hf.space`
+   and rerun the **Pages demo** workflow.
+
+## What works with the API
 
 - Works: Music Map, imports, CSV clean-up, accounts, sharing, audio to MIDI and stems (slowly, on
   2 CPU cores).
