@@ -205,24 +205,23 @@ export default function Atlas() {
 
         {selected && <SongCard t={selected} onClose={() => setSelectedId(null)} />}
 
-        {/* Phones: the panel waits behind one small button so the atlas gets the whole screen */}
-        {data && !empty && !sheetOpen && !selected && (
+        {/* Phones: the panel is a small pop-up box behind this button */}
+        {data && !empty && !selected && (
           <button
-            onClick={() => setSheetOpen(true)}
+            onClick={() => setSheetOpen((o) => !o)}
+            aria-expanded={sheetOpen}
             className="absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-full border border-white/15 bg-[#0b1121]/80 px-4 py-2 text-xs font-medium text-gray-100 shadow-lg shadow-black/40 backdrop-blur md:hidden"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4 text-fuchsia-300" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z M3 13l9 5 9-5" /></svg>
             {TABS.find((t) => t.id === tab)?.label}
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg>
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={sheetOpen ? "M6 9l6 6 6-6" : "M6 15l6-6 6 6"} /></svg>
           </button>
         )}
 
         {data && !empty && (
-          <aside className={`absolute inset-x-0 bottom-0 z-20 h-[60%] flex-col rounded-t-2xl border border-white/10 bg-[#0b1121]/95 backdrop-blur-md md:inset-x-auto md:bottom-3 md:right-3 md:top-3 md:flex md:h-auto md:w-[340px] md:rounded-2xl ${sheetOpen ? "flex" : "hidden"}`}>
-            <button onClick={() => setSheetOpen(false)} className="flex justify-center py-2 md:hidden" aria-label="Hide panel">
-              <span className="h-1 w-10 rounded-full bg-white/25" />
-            </button>
-            <div className="flex gap-1 border-b border-white/10 p-1.5">
+          <aside className={`absolute bottom-[3.75rem] left-3 z-20 h-[min(300px,45%)] w-[min(272px,calc(100%-24px))] flex-col rounded-2xl border border-white/10 bg-[#0b1121]/95 shadow-2xl shadow-black/50 backdrop-blur-md md:bottom-3 md:left-auto md:right-3 md:top-3 md:flex md:h-auto md:w-[340px] md:shadow-none ${sheetOpen && !selected ? "flex" : "hidden"}`}>
+            <div className="flex items-center border-b border-white/10">
+            <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto p-1.5 [scrollbar-width:none]">
               {TABS.map((t) => (
                 <button key={t.id} onClick={() => { setTab(t.id); setSheetOpen(true); }}
                   className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium ${tab === t.id ? "bg-white/10 text-white" : "text-gray-400 hover:text-gray-200"}`}>
@@ -230,7 +229,9 @@ export default function Atlas() {
                 </button>
               ))}
             </div>
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+            <button onClick={() => setSheetOpen(false)} aria-label="Close" className="shrink-0 px-3 text-gray-500 md:hidden">✕</button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5 md:p-3">
               {tab === "galaxies" && data.clusters.map((c) => (
                 <button key={c.id} onClick={() => { setSelectedId(null); setClusterFocus(clusterFocus === c.id ? null : c.id); }}
                   className={`block w-full rounded-xl border p-2.5 text-left ${clusterFocus === c.id ? "border-white/25 bg-white/[0.06]" : "border-white/5 hover:border-white/15"}`}>
@@ -241,7 +242,7 @@ export default function Atlas() {
                     </span>
                     <span className="text-xs text-gray-500">{c.size}</span>
                   </div>
-                  <div className="mt-1 truncate text-[11px] text-gray-400">{c.label}</div>
+                  <div className="mt-1 hidden truncate text-[11px] text-gray-400 md:block">{c.label}</div>
                   {c.top_artists?.length > 0 && <div className="truncate text-[11px] text-gray-500">{c.top_artists.slice(0, 3).map((a) => a.name).join(", ")}</div>}
                 </button>
               ))}

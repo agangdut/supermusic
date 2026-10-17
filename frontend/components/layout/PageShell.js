@@ -28,7 +28,6 @@ const ICON_PATHS = {
   artists: "M12 3a3 3 0 013 3v5a3 3 0 01-6 0V6a3 3 0 013-3z M6 11a6 6 0 0012 0 M12 17v4",
   studio: "M5 4v16 M12 4v16 M19 4v16 M3 9h4 M10 15h4 M17 7h4",
   you: "M12 12a4 4 0 100-8 4 4 0 000 8z M4 21a8 8 0 0116 0",
-  more: "M6.5 12a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z M13.5 12a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z M20.5 12a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z",
 };
 
 export function NavIcon({ name, className = "h-5 w-5" }) {
@@ -151,66 +150,30 @@ export default function PageShell({ children, bleed = false }) {
   );
 }
 
-/**
- * Phones: the only navigation, pinned to the bottom. "More" opens a sheet with the
- * pages and account links that don't fit as tabs.
- */
+/** Phones: the only navigation, pinned to the bottom. Studio and Artists stay desktop-only. */
 export function PhoneTabBar() {
   const router = useRouter();
   const { pathname } = router;
   const { user } = useAuth();
-  const [more, setMore] = useState(false);
-  useEffect(() => { setMore(false); }, [pathname]);
-  const extra = NAV.filter((n) => !PHONE_TABS.includes(n.href) && (!n.signedIn || user));
-  const moreActive = extra.some((n) => active(pathname, n.href)) || pathname === "/account";
   const me = user
-    ? { href: `/u/${user.username}`, label: "You", icon: "you" }
-    : { href: pathname === "/login" ? "/login" : `/login?next=${encodeURIComponent(router.asPath)}`, label: "Sign in", icon: "you" };
+    ? { href: `/u/${user.username}`, label: "You" }
+    : { href: pathname === "/login" ? "/login" : `/login?next=${encodeURIComponent(router.asPath)}`, label: "Sign in" };
+  const meActive = user ? active(pathname, me.href) || pathname === "/account" : pathname === "/login";
   const tab = (on) => `flex flex-col items-center gap-0.5 py-2 text-[10px] ${on ? "text-white" : "text-gray-500"}`;
   const icon = (on) => `h-5 w-5 ${on ? "text-fuchsia-300" : ""}`;
-  const row = "flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-gray-200 active:bg-white/10";
 
   return (
-    <div className="md:hidden">
-      {more && (
-        <>
-          <button aria-label="Close menu" onClick={() => setMore(false)} className="fixed inset-0 z-50 bg-black/50" />
-          <div className="fixed inset-x-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom))] z-50 rounded-t-2xl border-t border-white/10 bg-[#0f1630] p-2 shadow-2xl">
-            <div className="grid grid-cols-2 gap-1">
-              {extra.map((l) => (
-                <Link key={l.href} href={l.href} className={`${row} ${active(pathname, l.href) ? "bg-white/10 text-white" : ""}`}>
-                  <NavIcon name={l.icon} className="h-5 w-5 text-gray-400" />{l.label}
-                </Link>
-              ))}
-            </div>
-            <div className="my-1 h-px bg-white/10" />
-            {user ? (
-              <div className="grid grid-cols-2 gap-1">
-                <Link href="/account" className={row}>Account</Link>
-                <button className={`${row} text-left`} onClick={() => { signOut(); setMore(false); }}>Sign out</button>
-              </div>
-            ) : (
-              <Link href={me.href} className={row}><NavIcon name="you" className="h-5 w-5 text-gray-400" />Sign in or create an account</Link>
-            )}
-          </div>
-        </>
-      )}
-      <nav className="fixed inset-x-0 bottom-0 z-50 grid h-[calc(3.25rem+env(safe-area-inset-bottom))] grid-cols-6 border-t border-white/10 bg-[#0b1121]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
-        {NAV.filter((n) => PHONE_TABS.includes(n.href)).map((l) => (
-          <Link key={l.href} href={l.href} className={tab(active(pathname, l.href))}>
-            <NavIcon name={l.icon} className={icon(active(pathname, l.href))} />
-            {l.label}
-          </Link>
-        ))}
-        <button onClick={() => setMore((m) => !m)} aria-expanded={more} className={tab(more || moreActive)}>
-          <NavIcon name="more" className={icon(more || moreActive)} />
-          More
-        </button>
-        <Link href={me.href} className={tab(active(pathname, user ? me.href : "/login"))}>
-          {user ? <Avatar name={user.display_name} username={user.username} size={20} /> : <NavIcon name="you" className={icon(pathname === "/login")} />}
-          {me.label}
+    <nav className="fixed inset-x-0 bottom-0 z-50 grid h-[calc(3.25rem+env(safe-area-inset-bottom))] grid-cols-5 border-t border-white/10 bg-[#0b1121]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+      {NAV.filter((n) => PHONE_TABS.includes(n.href)).map((l) => (
+        <Link key={l.href} href={l.href} className={tab(active(pathname, l.href))}>
+          <NavIcon name={l.icon} className={icon(active(pathname, l.href))} />
+          {l.label}
         </Link>
-      </nav>
-    </div>
+      ))}
+      <Link href={me.href} className={tab(meActive)}>
+        {user ? <Avatar name={user.display_name} username={user.username} size={20} /> : <NavIcon name="you" className={icon(meActive)} />}
+        {me.label}
+      </Link>
+    </nav>
   );
 }
