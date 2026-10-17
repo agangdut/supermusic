@@ -425,7 +425,6 @@ export default function MapExplorer() {
   const blend = data?.blend;
   const isSample = data?.meta?.source === "sample" && !shared && !blend;
   const [sheetOpen, setSheetOpen] = useState(false); // phones: the side panel is a sheet at the bottom
-  const sheetDragRef = useRef(0);
   const [welcomeHidden, setWelcomeHidden] = useState(true);
   useEffect(() => {
     try { setWelcomeHidden(!!window.localStorage.getItem("sm-welcome-hidden")); } catch { setWelcomeHidden(false); }
@@ -777,38 +776,31 @@ export default function MapExplorer() {
             </div>
           )}
 
-        {/* Phones: the panel stays out of the way behind one small button until asked for */}
-        {data && !sheetOpen && !selected && !(isSample && !welcomeHidden) && (
+        {/* Phones: the panel is a small pop-up box behind this button */}
+        {data && !selected && !(isSample && !welcomeHidden) && (
           <button
-            onClick={() => setSheetOpen(true)}
+            onClick={() => setSheetOpen((o) => !o)}
+            aria-expanded={sheetOpen}
             className="absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-full border border-white/15 bg-[#0b1121]/80 px-4 py-2 text-xs font-medium text-gray-100 shadow-lg shadow-black/40 backdrop-blur md:hidden"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4 text-fuchsia-300" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z M3 13l9 5 9-5" /></svg>
             {TABS.find((t) => t.id === tab)?.label || "Clusters"}
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg>
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={sheetOpen ? "M6 9l6 6 6-6" : "M6 15l6-6 6 6"} /></svg>
           </button>
         )}
 
-        {/* Side panel (desktop) / bottom sheet (phones) */}
+        {/* Side panel (desktop) / small pop-up box above its button (phones) */}
         <aside
-          className={`absolute inset-x-0 bottom-0 z-30 h-[62%] flex-col rounded-t-2xl border border-white/10 bg-[#0b1121]/95 backdrop-blur-md
-                      md:inset-x-auto md:bottom-3 md:right-3 md:top-3 md:flex md:h-auto md:w-[380px] md:rounded-2xl ${sheetOpen ? "flex" : "hidden"}`}
+          className={`absolute bottom-[3.75rem] left-3 z-30 h-[min(300px,45%)] w-[min(272px,calc(100%-24px))] flex-col rounded-2xl border border-white/10 bg-[#0b1121]/95 shadow-2xl shadow-black/50 backdrop-blur-md
+                      md:bottom-3 md:left-auto md:right-3 md:top-3 md:flex md:h-auto md:w-[380px] md:shadow-none ${sheetOpen && !selected ? "flex" : "hidden"}`}
         >
-          <button
-            onClick={() => setSheetOpen(false)}
-            onTouchStart={(e) => { sheetDragRef.current = e.touches[0].clientY; }}
-            onTouchEnd={(e) => { if (e.changedTouches[0].clientY - sheetDragRef.current > 30) setSheetOpen(false); }}
-            className="flex shrink-0 justify-center py-2 md:hidden"
-            aria-label="Hide panel"
-          >
-            <span className="h-1 w-10 rounded-full bg-white/25" />
-          </button>
-          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 p-1.5 [scrollbar-width:none]">
+          <div className="flex shrink-0 items-center border-b border-white/10">
+          <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto p-1.5 [scrollbar-width:none]">
             {TABS.filter((t) => (!t.needsSound || hasSound) && (!t.needsBlend || blend)).map((t) => (
               <button
                 key={t.id}
                 onClick={() => { setTab(t.id); setSelectedId(null); setClusterFocus(null); setSheetOpen(true); }}
-                className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+                className={`shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium transition md:px-2.5 ${
                   tab === t.id ? "bg-white/10 text-white" : "text-gray-400 hover:text-gray-200"
                 }`}
               >
@@ -817,8 +809,10 @@ export default function MapExplorer() {
               </button>
             ))}
           </div>
+          <button onClick={() => setSheetOpen(false)} aria-label="Close" className="shrink-0 px-3 text-gray-500 md:hidden">✕</button>
+          </div>
 
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5 md:space-y-3 md:p-4">
             {tab === "compare" && blend && (
               <ComparePanel
                 blend={blend}
@@ -869,7 +863,7 @@ export default function MapExplorer() {
               <button
                 key={c.id}
                 onClick={() => { setSelectedId(null); setClusterFocus(clusterFocus === c.id ? null : c.id); }}
-                className={`block w-full rounded-xl border p-3 text-left transition ${
+                className={`block w-full rounded-xl border p-2.5 text-left transition md:p-3 ${
                   clusterFocus === c.id ? "border-white/25 bg-white/[0.06]" : "border-white/5 hover:border-white/15"
                 }`}
               >
@@ -883,11 +877,11 @@ export default function MapExplorer() {
                   </div>
                   <span className="shrink-0 text-xs text-gray-500">{c.size}</span>
                 </div>
-                <div className="mt-2"><SignalBar value={c.signal} color={colorFor(c.id)} /></div>
+                <div className="mt-2 hidden md:block"><SignalBar value={c.signal} color={colorFor(c.id)} /></div>
                 {c.top_artists?.length > 0 && (
                   <div className="mt-1.5 truncate text-[11px] text-gray-400">{c.top_artists.slice(0, 3).map((a) => a.name).join(", ")}</div>
                 )}
-                <div className="mt-1.5 text-[11px] text-gray-500">
+                <div className="mt-1.5 hidden text-[11px] text-gray-500 md:block">
                   {c.lift != null
                     ? `${Math.round(c.listening_share * 100)}% of your plays · ${c.lift >= 1 ? `${c.lift}× more than its size` : `${c.lift}× its size`}`
                     : "Signal = how tightly these tracks hang together"}
@@ -897,7 +891,7 @@ export default function MapExplorer() {
 
             {tab === "hidden" && (
               <>
-                <p className="text-xs leading-5 text-gray-400">
+                <p className="hidden text-xs leading-5 text-gray-400 md:block">
                   Pairs from different clusters that belong together anyway: songs you play back to back, songs on the same
                   playlists, musical matches (sound, key, tempo, mood), rare shared tags and collaborations. When those run
                   short, it adds an artist split across two clusters, songs from one album, and the closest neighbours
@@ -907,13 +901,13 @@ export default function MapExplorer() {
                   <p className="text-sm leading-6 text-gray-500">This map has only one cluster, so there is nothing to bridge.</p>
                 )}
                 {data?.hidden_connections.length > 0 && data.meta.hidden_by && (
-                  <p className="text-[11px] leading-5 text-gray-500">
+                  <p className="hidden text-[11px] leading-5 text-gray-500 md:block">
                     {Object.entries(data.meta.hidden_by).filter(([, c]) => c).map(([k, c]) => `${c} ${HIDDEN_VIA[k]}`).join(" · ")}
                     {!data.meta.played_with_tracks && " · import your Streaming_History_Audio files too to find songs you play back to back"}
                   </p>
                 )}
                 {data?.hidden_connections.map((h, i) => (
-                  <div key={i} className="rounded-xl border border-fuchsia-400/15 bg-fuchsia-400/[0.03] p-3">
+                  <div key={i} className="rounded-xl border border-fuchsia-400/15 bg-fuchsia-400/[0.03] p-2.5 md:p-3">
                     <TrackLine t={byId[h.source]} onClick={() => setSelectedId(h.source)} />
                     <div className="my-1 ml-4 text-fuchsia-300/70">↕</div>
                     <TrackLine t={byId[h.target]} onClick={() => setSelectedId(h.target)} />
@@ -996,14 +990,14 @@ export default function MapExplorer() {
                   </p>
                 )}
                 {hasListening && (
-                  <p className="text-xs leading-5 text-gray-400">
+                  <p className="hidden text-xs leading-5 text-gray-400 md:block">
                     Tracks you rarely play that sit right next to your favourites. Gold stars on the map.
                   </p>
                 )}
                 {data?.recommendations.map((r) => (
-                  <div key={r.id} className="rounded-xl border border-amber-200/15 bg-amber-200/[0.03] p-3">
+                  <div key={r.id} className="rounded-xl border border-amber-200/15 bg-amber-200/[0.03] p-2.5 md:p-3">
                     <TrackLine t={byId[r.id]} onClick={() => setSelectedId(r.id)} />
-                    <div className="mt-2 text-[11px] leading-5 text-gray-400">
+                    <div className="mt-2 text-[11px] leading-5 text-gray-400 max-md:line-clamp-2">
                       Because you play{" "}
                       <button className="text-amber-100 hover:underline" onClick={() => setSelectedId(r.because_you_play)}>
                         {byId[r.because_you_play]?.title}

@@ -8,7 +8,7 @@ import { MapCard, num } from "@/components/map/MapCards";
 import EventLine from "@/components/social/EventLine";
 import Avatar from "@/components/ui/Avatar";
 import { followList, followUser, getProfile, setMapListed, unshareMap, updateProfile } from "@/lib/api";
-import { updateUser, useAuth } from "@/lib/auth";
+import { signOut, updateUser, useAuth } from "@/lib/auth";
 
 function Stat({ value, label, onClick }) {
   const Tag = onClick ? "button" : "div";
@@ -160,7 +160,12 @@ export default function Profile() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {p.is_me ? (
-              <button onClick={() => setEditing((e) => !e)} className="rounded-xl border border-white/15 px-4 py-2 text-sm text-gray-200 hover:bg-white/5">Edit profile</button>
+              <>
+                <button onClick={() => setEditing((e) => !e)} className="rounded-xl border border-white/15 px-4 py-2 text-sm text-gray-200 hover:bg-white/5">Edit profile</button>
+                {/* Phones have no account menu in a top bar, so these live here */}
+                <Link href="/account" className="rounded-xl border border-white/15 px-4 py-2 text-sm text-gray-200 md:hidden">Account</Link>
+                <button onClick={() => { signOut(); router.push("/"); }} className="rounded-xl px-3 py-2 text-sm text-gray-400 md:hidden">Sign out</button>
+              </>
             ) : (
               <>
                 <button onClick={follow} disabled={busy}
