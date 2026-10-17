@@ -28,6 +28,7 @@ const ICON_PATHS = {
   artists: "M12 3a3 3 0 013 3v5a3 3 0 01-6 0V6a3 3 0 013-3z M6 11a6 6 0 0012 0 M12 17v4",
   studio: "M5 4v16 M12 4v16 M19 4v16 M3 9h4 M10 15h4 M17 7h4",
   you: "M12 12a4 4 0 100-8 4 4 0 000 8z M4 21a8 8 0 0116 0",
+  more: "M6.5 12a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z M13.5 12a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z M20.5 12a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z",
 };
 
 export function NavIcon({ name, className = "h-5 w-5" }) {
@@ -104,19 +105,17 @@ function UserMenu() {
 }
 
 /**
- * The app's frame: top bar, and on phones a bottom tab bar.
+ * The app's frame: a top bar on desktop, and on phones only the bottom tab bar.
  * bleed: the page fills the whole width with no padding (the map home page).
  */
 export default function PageShell({ children, bleed = false }) {
   const { pathname } = useRouter();
   const { user } = useAuth();
-  const [menu, setMenu] = useState(false);
-  useEffect(() => { setMenu(false); }, [pathname]);
   const nav = NAV.filter((n) => !n.signedIn || user);
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-[#0b1121] text-gray-200">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0b1121]/85 backdrop-blur-md">
+      <header className="sticky top-0 z-50 hidden border-b border-white/10 bg-[#0b1121]/85 backdrop-blur-md md:block">
         <div className="flex h-14 items-center gap-4 px-4 lg:px-6">
           <Brand />
           <nav className="ml-4 hidden items-center gap-0.5 md:flex">
@@ -130,21 +129,9 @@ export default function PageShell({ children, bleed = false }) {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={() => setMenu((m) => !m)} aria-label="More pages"
-              className="rounded-lg px-2.5 py-1.5 text-sm text-gray-300 hover:bg-white/5 md:hidden">⋯</button>
             <UserMenu />
           </div>
         </div>
-        {menu && (
-          <nav className="grid grid-cols-2 gap-1 border-t border-white/10 p-2 md:hidden">
-            {nav.map((l) => (
-              <Link key={l.href} href={l.href}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm ${active(pathname, l.href) ? "bg-white/10 text-white" : "text-gray-300"}`}>
-                <NavIcon name={l.icon} className="h-4 w-4 text-gray-400" />{l.label}
-              </Link>
-            ))}
-          </nav>
-        )}
       </header>
 
       <main className={bleed ? "flex-1" : "flex flex-1 justify-center px-4 pb-8 md:pb-16 lg:px-8"}>
@@ -159,16 +146,70 @@ export default function PageShell({ children, bleed = false }) {
         <a href="https://github.com/agangdut/supermusic" className="hover:text-gray-300">Source code</a>
       </footer>
 
-      {/* Phone tab bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-white/10 bg-[#0b1121]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-        {[...NAV.filter((n) => PHONE_TABS.includes(n.href)),
-          user ? { href: `/u/${user.username}`, label: "You", icon: "you" } : { href: "/login", label: "Sign in", icon: "you" }].map((l) => (
-          <Link key={l.href} href={l.href}
-            className={`flex flex-col items-center gap-0.5 py-2 text-[10px] ${active(pathname, l.href) ? "text-white" : "text-gray-500"}`}>
-            <NavIcon name={l.icon} className={`h-5 w-5 ${active(pathname, l.href) ? "text-fuchsia-300" : ""}`} />
+      <PhoneTabBar />
+    </div>
+  );
+}
+
+/**
+ * Phones: the only navigation, pinned to the bottom. "More" opens a sheet with the
+ * pages and account links that don't fit as tabs.
+ */
+export function PhoneTabBar() {
+  const router = useRouter();
+  const { pathname } = router;
+  const { user } = useAuth();
+  const [more, setMore] = useState(false);
+  useEffect(() => { setMore(false); }, [pathname]);
+  const extra = NAV.filter((n) => !PHONE_TABS.includes(n.href) && (!n.signedIn || user));
+  const moreActive = extra.some((n) => active(pathname, n.href)) || pathname === "/account";
+  const me = user
+    ? { href: `/u/${user.username}`, label: "You", icon: "you" }
+    : { href: pathname === "/login" ? "/login" : `/login?next=${encodeURIComponent(router.asPath)}`, label: "Sign in", icon: "you" };
+  const tab = (on) => `flex flex-col items-center gap-0.5 py-2 text-[10px] ${on ? "text-white" : "text-gray-500"}`;
+  const icon = (on) => `h-5 w-5 ${on ? "text-fuchsia-300" : ""}`;
+  const row = "flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-gray-200 active:bg-white/10";
+
+  return (
+    <div className="md:hidden">
+      {more && (
+        <>
+          <button aria-label="Close menu" onClick={() => setMore(false)} className="fixed inset-0 z-50 bg-black/50" />
+          <div className="fixed inset-x-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom))] z-50 rounded-t-2xl border-t border-white/10 bg-[#0f1630] p-2 shadow-2xl">
+            <div className="grid grid-cols-2 gap-1">
+              {extra.map((l) => (
+                <Link key={l.href} href={l.href} className={`${row} ${active(pathname, l.href) ? "bg-white/10 text-white" : ""}`}>
+                  <NavIcon name={l.icon} className="h-5 w-5 text-gray-400" />{l.label}
+                </Link>
+              ))}
+            </div>
+            <div className="my-1 h-px bg-white/10" />
+            {user ? (
+              <div className="grid grid-cols-2 gap-1">
+                <Link href="/account" className={row}>Account</Link>
+                <button className={`${row} text-left`} onClick={() => { signOut(); setMore(false); }}>Sign out</button>
+              </div>
+            ) : (
+              <Link href={me.href} className={row}><NavIcon name="you" className="h-5 w-5 text-gray-400" />Sign in or create an account</Link>
+            )}
+          </div>
+        </>
+      )}
+      <nav className="fixed inset-x-0 bottom-0 z-50 grid h-[calc(3.25rem+env(safe-area-inset-bottom))] grid-cols-6 border-t border-white/10 bg-[#0b1121]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+        {NAV.filter((n) => PHONE_TABS.includes(n.href)).map((l) => (
+          <Link key={l.href} href={l.href} className={tab(active(pathname, l.href))}>
+            <NavIcon name={l.icon} className={icon(active(pathname, l.href))} />
             {l.label}
           </Link>
         ))}
+        <button onClick={() => setMore((m) => !m)} aria-expanded={more} className={tab(more || moreActive)}>
+          <NavIcon name="more" className={icon(more || moreActive)} />
+          More
+        </button>
+        <Link href={me.href} className={tab(active(pathname, user ? me.href : "/login"))}>
+          {user ? <Avatar name={user.display_name} username={user.username} size={20} /> : <NavIcon name="you" className={icon(pathname === "/login")} />}
+          {me.label}
+        </Link>
       </nav>
     </div>
   );

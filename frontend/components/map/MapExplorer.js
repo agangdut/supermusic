@@ -425,6 +425,7 @@ export default function MapExplorer() {
   const blend = data?.blend;
   const isSample = data?.meta?.source === "sample" && !shared && !blend;
   const [sheetOpen, setSheetOpen] = useState(false); // phones: the side panel is a sheet at the bottom
+  const sheetDragRef = useRef(0);
   const [welcomeHidden, setWelcomeHidden] = useState(true);
   useEffect(() => {
     try { setWelcomeHidden(!!window.localStorage.getItem("sm-welcome-hidden")); } catch { setWelcomeHidden(false); }
@@ -476,7 +477,7 @@ export default function MapExplorer() {
       {/* The map fills the screen; everything else floats on it */}
       <section
         ref={mapRef}
-        className="relative h-[calc(100svh-9.75rem)] min-h-[460px] overflow-hidden md:h-[calc(100vh-6.25rem)]
+        className="relative h-[calc(100svh-6rem-env(safe-area-inset-bottom))] min-h-[420px] overflow-hidden md:h-[calc(100vh-6.25rem)]
                    bg-[radial-gradient(ellipse_at_center,_#1a1440_0%,_#0b1121_55%,_#05070f_100%)]"
       >
         {data && (
@@ -541,7 +542,7 @@ export default function MapExplorer() {
 
           {/* Colour by */}
           {data && lenses.length > 1 && (
-            <div className={`absolute bottom-[80px] right-3 z-20 max-h-[40%] w-[170px] overflow-y-auto md:bottom-auto md:top-3 md:right-[400px] md:block md:max-h-none md:w-[220px] ${selected || (isSample && !welcomeHidden) ? "hidden" : ""} rounded-xl bg-black/30 px-3 py-2 text-[11px] text-gray-300 backdrop-blur`}>
+            <div className={`absolute bottom-3 right-3 z-20 max-h-[40%] w-[170px] overflow-y-auto md:bottom-auto md:top-3 md:right-[400px] md:block md:max-h-none md:w-[220px] ${selected || (isSample && !welcomeHidden) ? "hidden" : sheetOpen ? "max-md:hidden" : ""} rounded-xl bg-black/30 px-3 py-2 text-[11px] text-gray-300 backdrop-blur`}>
               <label className="flex items-center justify-between gap-2">
                 <span className="shrink-0 text-gray-400">Colour by</span>
                 <select value={lens.lens.id} onChange={(e) => setLensId(e.target.value)}
@@ -557,7 +558,7 @@ export default function MapExplorer() {
                 </div>
               )}
               {lens.legend?.kind === "swatches" && (
-                <div className="mt-2 space-y-0.5">
+                <div className="mt-2 hidden space-y-0.5 md:block">
                   {lens.legend.items.map((it) => (
                     <div key={it.label} className="flex items-center gap-1.5 truncate">
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: it.color }} /> {it.label}
@@ -581,7 +582,7 @@ export default function MapExplorer() {
 
         {/* First visit: what am I looking at? */}
         {isSample && !welcomeHidden && !pending && !importJob && !gate && !selected && (
-          <div className="absolute bottom-16 left-3 z-20 w-[min(360px,calc(100%-24px))] rounded-2xl border border-fuchsia-400/25 bg-[#0b1121]/90 p-4 shadow-2xl backdrop-blur md:bottom-24">
+          <div className="absolute bottom-3 left-3 z-20 w-[min(360px,calc(100%-24px))] rounded-2xl border border-fuchsia-400/25 bg-[#0b1121]/90 p-4 shadow-2xl backdrop-blur md:bottom-24">
             <div className="flex items-start justify-between gap-2">
               <div className="text-sm font-semibold text-white">This is someone else&apos;s music</div>
               <button onClick={hideWelcome} className="text-gray-500 hover:text-white" aria-label="Close">✕</button>
@@ -728,7 +729,7 @@ export default function MapExplorer() {
 
           {/* Selected track card */}
           {selected && (
-            <div className="absolute inset-x-3 bottom-16 z-30 max-h-[45%] md:inset-x-auto md:bottom-3 md:left-3 md:max-h-[calc(100%-24px)] md:w-[320px] overflow-y-auto rounded-xl border border-white/10 bg-[#0b1121]/90 p-4 backdrop-blur">
+            <div className="absolute inset-x-3 bottom-3 z-30 max-h-[45%] md:inset-x-auto md:bottom-3 md:left-3 md:max-h-[calc(100%-24px)] md:w-[320px] overflow-y-auto rounded-xl border border-white/10 bg-[#0b1121]/90 p-4 backdrop-blur">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="truncate font-semibold text-white">{selected.title}</div>
@@ -776,12 +777,30 @@ export default function MapExplorer() {
             </div>
           )}
 
+        {/* Phones: the panel stays out of the way behind one small button until asked for */}
+        {data && !sheetOpen && !selected && !(isSample && !welcomeHidden) && (
+          <button
+            onClick={() => setSheetOpen(true)}
+            className="absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-full border border-white/15 bg-[#0b1121]/80 px-4 py-2 text-xs font-medium text-gray-100 shadow-lg shadow-black/40 backdrop-blur md:hidden"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 text-fuchsia-300" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z M3 13l9 5 9-5" /></svg>
+            {TABS.find((t) => t.id === tab)?.label || "Clusters"}
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg>
+          </button>
+        )}
+
         {/* Side panel (desktop) / bottom sheet (phones) */}
         <aside
-          className={`absolute inset-x-0 bottom-0 z-30 flex flex-col rounded-t-2xl border border-white/10 bg-[#0b1121]/90 backdrop-blur-md transition-[height] duration-300
-                      md:inset-x-auto md:bottom-3 md:right-3 md:top-3 md:h-auto md:w-[380px] md:rounded-2xl ${sheetOpen ? "h-[62%]" : "h-[68px]"}`}
+          className={`absolute inset-x-0 bottom-0 z-30 h-[62%] flex-col rounded-t-2xl border border-white/10 bg-[#0b1121]/95 backdrop-blur-md
+                      md:inset-x-auto md:bottom-3 md:right-3 md:top-3 md:flex md:h-auto md:w-[380px] md:rounded-2xl ${sheetOpen ? "flex" : "hidden"}`}
         >
-          <button onClick={() => setSheetOpen((o) => !o)} className="flex shrink-0 justify-center py-1.5 md:hidden" aria-label={sheetOpen ? "Hide panel" : "Show panel"}>
+          <button
+            onClick={() => setSheetOpen(false)}
+            onTouchStart={(e) => { sheetDragRef.current = e.touches[0].clientY; }}
+            onTouchEnd={(e) => { if (e.changedTouches[0].clientY - sheetDragRef.current > 30) setSheetOpen(false); }}
+            className="flex shrink-0 justify-center py-2 md:hidden"
+            aria-label="Hide panel"
+          >
             <span className="h-1 w-10 rounded-full bg-white/25" />
           </button>
           <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 p-1.5 [scrollbar-width:none]">
@@ -1031,7 +1050,7 @@ export default function MapExplorer() {
         {data && atTop && !pending && !importJob && !gate && (
           <button
             onClick={() => document.getElementById("map-facts")?.scrollIntoView({ behavior: "smooth" })}
-            className={`${(isSample && !welcomeHidden) || selected ? "hidden md:flex" : "flex"} absolute bottom-[84px] left-3 z-20 items-center md:-translate-x-1/2 gap-2 rounded-full border border-white/15 bg-[#0b1121]/80 px-4 py-2 text-xs font-medium text-gray-100 shadow-lg shadow-black/40 backdrop-blur transition hover:border-fuchsia-400/50 hover:text-white md:bottom-5 md:left-[calc((100%-400px)/2)]`}
+            className={`hidden md:flex absolute bottom-[84px] left-3 z-20 items-center md:-translate-x-1/2 gap-2 rounded-full border border-white/15 bg-[#0b1121]/80 px-4 py-2 text-xs font-medium text-gray-100 shadow-lg shadow-black/40 backdrop-blur transition hover:border-fuchsia-400/50 hover:text-white md:bottom-5 md:left-[calc((100%-400px)/2)]`}
           >
             Facts about this map
             <svg viewBox="0 0 24 24" className="h-4 w-4 animate-bounce text-fuchsia-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
