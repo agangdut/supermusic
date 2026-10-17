@@ -39,7 +39,7 @@ function SongCard({ t, onClose }) {
     }
   };
   return (
-    <div className="absolute inset-x-3 bottom-16 z-30 max-h-[50%] overflow-y-auto rounded-2xl border border-white/10 bg-[#0b1121]/90 p-4 backdrop-blur md:inset-x-auto md:bottom-3 md:left-3 md:max-h-[calc(100%-24px)] md:w-[340px]">
+    <div className="absolute inset-x-3 bottom-3 z-30 max-h-[50%] overflow-y-auto rounded-2xl border border-white/10 bg-[#0b1121]/90 p-4 backdrop-blur md:inset-x-auto md:bottom-3 md:left-3 md:max-h-[calc(100%-24px)] md:w-[340px]">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="truncate font-semibold text-white">{t.title}</div>
@@ -146,7 +146,7 @@ export default function Atlas() {
   return (
     <PageShell bleed>
       <Head><title>Community atlas · SuperMusic</title></Head>
-      <section className="relative h-[calc(100svh-7rem)] min-h-[460px] overflow-hidden bg-[radial-gradient(ellipse_at_center,_#1a1440_0%,_#0b1121_55%,_#05070f_100%)] md:h-[calc(100vh-3.5rem)]">
+      <section className="relative h-[calc(100svh-3.25rem-env(safe-area-inset-bottom))] min-h-[420px] overflow-hidden bg-[radial-gradient(ellipse_at_center,_#1a1440_0%,_#0b1121_55%,_#05070f_100%)] md:h-[calc(100vh-3.5rem)]">
         {data && !empty && (
           <Graph3D data={data} selectedId={selectedId} focusIds={focusIds} highlightIds={mine?.ids} focusCluster={clusterFocus} picks={[]} mode="clusters"
             onSelect={(id) => { setSelectedId(id); if (id != null) { setClusterFocus(null); setSheetOpen(false); } }} />
@@ -205,9 +205,21 @@ export default function Atlas() {
 
         {selected && <SongCard t={selected} onClose={() => setSelectedId(null)} />}
 
+        {/* Phones: the panel waits behind one small button so the atlas gets the whole screen */}
+        {data && !empty && !sheetOpen && !selected && (
+          <button
+            onClick={() => setSheetOpen(true)}
+            className="absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-full border border-white/15 bg-[#0b1121]/80 px-4 py-2 text-xs font-medium text-gray-100 shadow-lg shadow-black/40 backdrop-blur md:hidden"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 text-fuchsia-300" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z M3 13l9 5 9-5" /></svg>
+            {TABS.find((t) => t.id === tab)?.label}
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg>
+          </button>
+        )}
+
         {data && !empty && (
-          <aside className={`absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-2xl border border-white/10 bg-[#0b1121]/90 backdrop-blur-md transition-[height] duration-300 md:inset-x-auto md:bottom-3 md:right-3 md:top-3 md:h-auto md:w-[340px] md:rounded-2xl ${sheetOpen ? "h-[60%]" : "h-[52px]"}`}>
-            <button onClick={() => setSheetOpen((o) => !o)} className="flex justify-center pt-1.5 md:hidden" aria-label="Toggle panel">
+          <aside className={`absolute inset-x-0 bottom-0 z-20 h-[60%] flex-col rounded-t-2xl border border-white/10 bg-[#0b1121]/95 backdrop-blur-md md:inset-x-auto md:bottom-3 md:right-3 md:top-3 md:flex md:h-auto md:w-[340px] md:rounded-2xl ${sheetOpen ? "flex" : "hidden"}`}>
+            <button onClick={() => setSheetOpen(false)} className="flex justify-center py-2 md:hidden" aria-label="Hide panel">
               <span className="h-1 w-10 rounded-full bg-white/25" />
             </button>
             <div className="flex gap-1 border-b border-white/10 p-1.5">

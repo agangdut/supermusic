@@ -3,7 +3,7 @@ import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
-import { Brand } from "@/components/layout/PageShell";
+import { Brand, PhoneTabBar } from "@/components/layout/PageShell";
 import { signIn, signUp } from "@/lib/auth";
 
 const input = "mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-gray-600 focus:border-fuchsia-400/60 focus:outline-none";
@@ -34,7 +34,7 @@ export default function Login() {
   };
 
   return (
-    <div className="relative grid min-h-screen place-items-center overflow-hidden bg-[#0b1121] px-4 py-12 text-gray-200">
+    <div className="relative grid min-h-screen place-items-center overflow-hidden bg-[#0b1121] px-4 py-12 text-gray-200 max-md:pb-24">
       <Head><title>{signup ? "Create your account" : "Sign in"} · SuperMusic</title></Head>
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_#2a1660_0%,_#0b1121_55%)]" />
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-60"
@@ -93,6 +93,7 @@ export default function Login() {
           <br /><Link href="/" className="hover:text-gray-300">Back to the map</Link>
         </p>
       </div>
+      <PhoneTabBar />
     </div>
   );
 }
