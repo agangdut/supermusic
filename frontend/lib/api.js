@@ -171,12 +171,19 @@ export async function runAndWait(makeJobFn, { onUpdate, ...pollOpts } = {}) {
 
 /** POST /map/build — returns { tracks, edges, clusters, hidden_connections, insights, recommendations, meta } */
 export async function buildMap({ csv_path, sample = false, share_id, neighbors = 4, clusters = null, weights = {} }) {
-  // The GitHub Pages demo has no server: it shows the sample map baked by scripts/build_demo_map.py
+  const body = { csv_path, sample, share_id, neighbors, clusters, weights };
+  // On the GitHub Pages demo the API may be missing or asleep: fall back to the sample map
+  // baked by scripts/build_demo_map.py
   if (process.env.NEXT_PUBLIC_DEMO && sample) {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/demo/sample-map.json`);
-    if (res.ok) return res.json();
+    try {
+      return await postJSON("/map/build", body);
+    } catch (e) {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/demo/sample-map.json`);
+      if (res.ok) return res.json();
+      throw e;
+    }
   }
-  return postJSON("/map/build", { csv_path, sample, share_id, neighbors, clusters, weights });
+  return postJSON("/map/build", body);
 }
 
 /** "Songs you may like" for one track of the map (same library, same slider weights). */
