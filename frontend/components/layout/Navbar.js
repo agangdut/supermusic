@@ -44,7 +44,7 @@ export default function Navbar({
             ☰
           </button>
           <Link href="/" className="flex items-center gap-2 font-semibold">
-            <img src="/favicon.ico" alt="" className="h-5 w-5" />
+            <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/favicon.ico`} alt="" className="h-5 w-5" />
             <span>{title}</span>
           </Link>
           <nav className="ml-4 hidden sm:flex items-center gap-3 text-sm">

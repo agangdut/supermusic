@@ -1,0 +1,66 @@
+name: Pages demo
+
+# Publishes the frontend as a static demo at https://agangdut.github.io/supermusic/.
+# There is no backend there: the Music Map shows the bundled sample library (baked to JSON
+# below), and anything that needs the server (imports, transcription, accounts) is off.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_DEMO: "1"
+      NEXT_PUBLIC_BASE_PATH: /supermusic
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Bake the sample map
+        run: |
+          pip install pandas numpy scikit-learn umap-learn
+          python scripts/build_demo_map.py frontend/public/demo/sample-map.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build static site
+        working-directory: frontend
+        run: |
+          # Shared-map preview pages render on the server, which a static export can't do
+          rm -f "pages/s/[id].js"
+          npm ci
+          npm run build
+          touch out/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
