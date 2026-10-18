@@ -95,6 +95,7 @@ function UserMenu() {
           <Link href="/feed" className={item} onClick={() => setOpen(false)}>Feed &amp; weekly digest</Link>
           <Link href="/artists" className={item} onClick={() => setOpen(false)}>Your tracks</Link>
           <Link href="/account" className={item} onClick={() => setOpen(false)}>Account</Link>
+          {user.is_admin && <Link href="/admin" className={item} onClick={() => setOpen(false)}>Admin</Link>}
           <div className="my-1 h-px bg-white/10" />
           <button className={item} onClick={() => { signOut(); setOpen(false); }}>Sign out</button>
         </div>

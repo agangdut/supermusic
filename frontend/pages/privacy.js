@@ -5,15 +5,17 @@ import LegalPage, { Contact } from "@/components/layout/LegalPage";
 export default function Privacy() {
   return (
     <LegalPage title="Privacy" updated="October 2026">
-      <p>SuperMusic keeps as little about you as it can to work. There are no ads, no tracking cookies and no analytics services.</p>
+      <p>SuperMusic keeps as little about you as it can to work. There are no ads, no tracking cookies and no outside analytics services.</p>
 
       <h2>What we keep</h2>
       <ul>
-        <li><b>Your account:</b> username, display name, bio, and your email if you gave one. Your password is stored only as a one-way hash.</li>
+        <li><b>Your account:</b> username, display name, bio, and your email if you gave one (used only to send you a password reset link). Your password is stored only as a one-way hash.</li>
         <li><b>Songs you upload</b> for stems or MIDI, and the results: kept so you can download them, then deleted automatically after about a week.</li>
         <li><b>Libraries you import</b> (CSVs, Spotify or Apple Music exports): used to draw your map. The song list behind your own map is kept while you have an account. Uploaded export files are deleted after about a week.</li>
         <li><b>Maps you share:</b> stored until you delete them. A listed map is public. You choose whether play counts and listening times are included.</li>
         <li><b>Song fixes, votes, follows, pins and quiz scores</b> you make. Votes also store a one-way hash of your IP address, so one person can&apos;t vote many times.</li>
+        <li><b>Visit counts:</b> when a page opens, SuperMusic records which page it was (not which profile or map), the site you came from, and a code made from your IP address and browser that changes every day. The code can&apos;t be turned back into your address or used to follow you from one day to the next; it only lets us count visitors. If your browser sends &quot;Do Not Track&quot; or Global Privacy Control, nothing is counted.</li>
+        <li><b>Reports</b> you send about a map, profile, note or track, with your account or browser id, so the site&apos;s admins can review them.</li>
         <li><b>Server logs</b> with IP addresses, kept for a short time to fix problems and stop abuse.</li>
       </ul>
 

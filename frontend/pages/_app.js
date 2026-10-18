@@ -1,9 +1,10 @@
 // frontend/pages/_app.js
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import Head from "next/head";
 import "@/styles/globals.css";
 import PageTransitionOverlay from "@/components/layout/PageTransitionOverlay";
 import BackgroundWorkNotice from "@/components/layout/BackgroundWorkNotice";
+import { countPageView } from "@/utils/pageViews";
 
 // Pages that stay mounted (just hidden) when you switch away, so running jobs,
 // uploads and the map you built are still there when you come back
@@ -14,6 +15,9 @@ export default function MyApp({ Component, pageProps, router }) {
   const path = router.pathname;
   const keep = KEEP_ALIVE.includes(path);
   if (keep && !kept.current[path]) kept.current[path] = <Component {...pageProps} />;
+
+  // Visitor stats for the admin page: the page's route only (e.g. /u/[username]), no cookies
+  useEffect(() => { if (router.isReady) countPageView(path); }, [path, router.isReady]);
 
   return (
     <>

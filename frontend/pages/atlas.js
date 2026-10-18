@@ -7,6 +7,7 @@ import { useRouter } from "next/router";
 import PageShell from "@/components/layout/PageShell";
 import { clusterName, colorFor } from "@/components/map/colors";
 import { ago } from "@/components/social/EventLine";
+import ReportButton from "@/components/social/ReportButton";
 import { addAtlasPin, atlasMine, atlasPins, atlasSong, deleteAtlasPin, getAtlas, myMap } from "@/lib/api";
 import { listenerId } from "@/utils/fetcher";
 import { useAuth } from "@/lib/auth";
@@ -65,7 +66,9 @@ function SongCard({ t, onClose }) {
             <div className="text-gray-200">{p.text}</div>
             <div className="mt-0.5 flex justify-between text-[10px] text-gray-500">
               <span>{p.username ? <Link href={`/u/${p.username}`} className="hover:text-gray-300">{p.author}</Link> : p.author} · {ago(p.at)}</span>
-              {p.voter === me && <button onClick={() => deleteAtlasPin(p.id).then(load)} className="hover:text-rose-300">remove</button>}
+              {p.voter === me
+                ? <button onClick={() => deleteAtlasPin(p.id).then(load)} className="hover:text-rose-300">remove</button>
+                : <ReportButton kind="pin" target={p.id} label="report" className="hover:text-rose-300" />}
             </div>
           </div>
         ))}
@@ -265,14 +268,19 @@ export default function Atlas() {
                   <p className="text-[11px] leading-5 text-gray-500">Tracks artists uploaded, placed next to the songs they sound like. Click one to light up its galaxy.</p>
                   {data.artist_tracks?.length === 0 && <p className="text-xs text-gray-500">None yet. <Link href="/artists" className="text-fuchsia-300 hover:underline">Add yours</Link>.</p>}
                   {data.artist_tracks?.map((t) => (
-                    <button key={t.id} onClick={() => { setSelectedId(null); setClusterFocus(t.galaxy?.id ?? null); }}
-                      className={`block w-full rounded-xl border p-2.5 text-left ${router.query.track === t.id ? "border-fuchsia-400/40" : "border-white/5 hover:border-white/15"}`}>
+                    <div key={t.id} role="button" tabIndex={0}
+                      onClick={() => { setSelectedId(null); setClusterFocus(t.galaxy?.id ?? null); }}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(null); setClusterFocus(t.galaxy?.id ?? null); } }}
+                      className={`block w-full cursor-pointer rounded-xl border p-2.5 text-left ${router.query.track === t.id ? "border-fuchsia-400/40" : "border-white/5 hover:border-white/15"}`}>
                       <div className="truncate text-sm text-white">{t.title}</div>
                       <div className="truncate text-[11px] text-gray-500">
                         {t.artist || t.owner} · lands in <span style={{ color: colorFor(t.galaxy?.id) }}>{t.galaxy?.name}</span>
                       </div>
-                      {t.owner && <Link href={`/u/${t.owner}`} onClick={(e) => e.stopPropagation()} className="text-[11px] text-fuchsia-300 hover:underline">@{t.owner}</Link>}
-                    </button>
+                      <div className="flex items-center justify-between">
+                        {t.owner ? <Link href={`/u/${t.owner}`} onClick={(e) => e.stopPropagation()} className="text-[11px] text-fuchsia-300 hover:underline">@{t.owner}</Link> : <span />}
+                        {t.owner !== user?.username && <ReportButton kind="track" target={t.id} label="report" className="text-[11px] text-gray-600 hover:text-rose-300" />}
+                      </div>
+                    </div>
                   ))}
                 </>
               )}

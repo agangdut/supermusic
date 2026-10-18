@@ -23,6 +23,12 @@ In `.env`, set at least:
 |---|---|
 | `SITE_DOMAIN` | your domain, e.g. `supermusic.example.com` |
 | `JWT_SECRET_KEY` | the output of `openssl rand -hex 32` |
+| `CONTACT_EMAIL` | where people write about privacy, copyright or a lost password |
+
+Two more are worth setting soon after the first start:
+
+- `SM_ADMINS`: your username on the site. Sign up first, then add it and restart the backend. `/admin` then shows visitor stats and anything people reported, with buttons to take it down.
+- `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`: an email service so people who forget their password get a reset link. Resend's free plan is enough: verify your domain there (it shows the DNS records to add), then use `smtp.resend.com`, user `resend` and your API key as the password. Until this is set, the "Forgot your password?" page asks people to write to `CONTACT_EMAIL`.
 
 The other settings are explained in the file. The defaults are safe for a launch: only signed-in people can run heavy jobs, one heavy job runs at a time, uploads are deleted after 7 days, and downloading from YouTube links is off.
 
@@ -67,6 +73,7 @@ To restore, stop the site, put `supermusic.db` back in `data/` and unpack `share
 ## 5. Watch it
 
 - An uptime check (UptimeRobot, Better Stack and others have free plans) on `https://<your domain>/api/healthz` tells you when the site is down.
+- The admin page (`/admin`, for the usernames in `SM_ADMINS`) shows visitors per day, the most viewed pages, where visitors came from, and reports waiting for you.
 - `docker compose -f docker-compose.prod.yml logs -f backend` shows what the backend is doing.
 - `df -h` and `docker system df` show disk use. Old uploads and results are deleted after `SM_KEEP_DAYS` days.
 
