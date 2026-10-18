@@ -88,7 +88,7 @@ Where ours differs:
 | Note timing | Finds the beat (beat_this) and moves every note earlier by the model's measured lag, up to about 25 ms | Raw model times, no lag correction. With a 50 ms scoring window, 25 ms matters |
 | MIDI file | Pushes everything later by whole bars so bar 1 starts on the first downbeat, at the detected tempo, velocity 100, overlapping notes trimmed | Notes at the times heard, velocity 90, no trimming. `eval_pop` takes the official bar shift back out before scoring |
 | Audio decoding | Its own resampler | ffmpeg (converts any format first) |
-| PyTorch | 2.13, CUDA 13 (needs an NVIDIA driver from mid 2025 or newer) | 2.5.1, CUDA 12.4 |
+| PyTorch | 2.13, CUDA 13 (needs an NVIDIA driver from mid 2025 or newer) | 2.6.0, CUDA 12.4 |
 | After transcription (app only, not in the benchmark) | Nothing | Dynamics shaped to follow the song, piano pedal, repeated notes split apart, GAME replaces the Lead vocal |
 
 The benchmark above (pitched F1 0.445) ran before fast mode became the default, so it measured the official decoding.

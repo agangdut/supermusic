@@ -1,11 +1,12 @@
 # GAME (Generative Adaptive MIDI Extractor, OpenVPI, 2026): turns singing into notes.
 # Code MIT; model weights CC BY-NC-SA 4.0 (non-commercial), downloaded on first use.
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+# All four GPU services use the same base image, so Docker downloads and stores it once.
+FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libsndfile1 git && rm -rf /var/lib/apt/lists/*
 
 ARG GAME_COMMIT=f4239345f0fed21890d362c74a35fd857724aa82
-RUN git clone https://github.com/openvpi/GAME /opt/game && git -C /opt/game checkout $GAME_COMMIT
+RUN git clone https://github.com/openvpi/GAME /opt/game && git -C /opt/game checkout $GAME_COMMIT && rm -rf /opt/game/.git
 
 RUN --mount=type=cache,target=/root/.cache/pip pip install --default-timeout=300 \
     click colorednoise "einops>=0.7.0" h5py librosa lightning loguru matplotlib mido "numpy<2.0.0" \

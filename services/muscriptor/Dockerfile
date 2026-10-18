@@ -1,7 +1,8 @@
 # MuScriptor multi-instrument transcription (Kyutai + Mirelo, 2026), on the GPU when available.
 # Weights are CC BY-NC 4.0 and gated on Hugging Face: accept the licence on
 # https://huggingface.co/MuScriptor/muscriptor-medium and put HF_TOKEN in .env.
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+# All four GPU services use the same base image, so Docker downloads and stores it once.
+FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libsndfile1 && rm -rf /var/lib/apt/lists/*
 
