@@ -126,7 +126,7 @@ flowchart TB
     end
 
     subgraph fe["frontend :3000"]
-        NEXT[next start]
+        NEXT["Next.js server (standalone)"]
     end
 
     subgraph be["backend :8000 (python 3.10, CPU torch)"]
