@@ -2,12 +2,14 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install system dependencies. --no-install-recommends skips the optional extras
+# apt would add (desktop graphics and sound libraries, a few hundred MB) that a
+# server never uses.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     fluidsynth \
     fluid-soundfont-gm \
-    && if [ "$(uname -m)" = "aarch64" ]; then apt-get install -y build-essential; fi \
+    && if [ "$(uname -m)" = "aarch64" ]; then apt-get install -y --no-install-recommends build-essential; fi \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements

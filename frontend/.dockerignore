@@ -3,3 +3,6 @@ node_modules
 tmp_uploads
 .env*
 !.env.example
+Dockerfile*
+.dockerignore
+npm-debug.log*
