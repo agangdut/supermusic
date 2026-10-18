@@ -25,6 +25,10 @@ With Docker, put settings in a `.env` file next to `docker-compose.yml` (start f
 | `SM_FIG_DPI` | `140` | Resolution of chart images |
 | `SM_PIANO_CHECKPOINT` | `data/models/piano_transcription.pth` | Piano model weights (downloaded on first use) |
 | `SM_SOUNDFONT` | FluidR3 GM | Soundfont used for the piano MP3 preview |
+| `SM_ADMINS` | _(empty)_ | Usernames (comma separated) that can open the admin page at `/admin`: reports from visitors and visitor stats |
+| `SMTP_HOST` · `SMTP_PORT` · `SMTP_USER` · `SMTP_PASSWORD` | _(empty)_ · `587` | Any SMTP service (Resend, Postmark, Brevo, Mailgun, SES) for password reset emails. Port 465 uses TLS from the start, anything else STARTTLS. Without `SMTP_HOST`, development prints reset links to the log and production says reset isn't available |
+| `MAIL_FROM` | _(empty)_ | Sender of those emails, e.g. `SuperMusic <hello@your-domain.com>`, on a domain your mail service verified |
+| `SITE_URL` | `https://$SITE_DOMAIN`, else `http://localhost:3000` | The site's address, for links in emails |
 | `SM_DB_PATH` | `data/supermusic.db` | The SQLite file holding accounts, shared song stats, votes and jobs. Back it up |
 
 ## Limits for a public site

@@ -22,6 +22,7 @@ from app.routes import map as map_routes
 from app.routes import community as community_routes
 from app.routes import people as people_routes
 from app.routes import community_atlas as atlas_routes
+from app.routes import admin as admin_routes
 from app.core.piano_transcription import warm_up as piano_warm_up
 from app.core import cleanup
 from fastapi.exceptions import RequestValidationError
@@ -126,6 +127,9 @@ app.include_router(people_routes.router)
 
 # Community atlas, artists' tracks, games
 app.include_router(atlas_routes.router)
+
+# Reports, the admin page, visitor stats
+app.include_router(admin_routes.router)
 
 
 @app.on_event("startup")

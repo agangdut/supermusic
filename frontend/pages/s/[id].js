@@ -6,6 +6,7 @@ import Link from "next/link";
 import PageShell from "@/components/layout/PageShell";
 import { Galaxies, Highlights, num } from "@/components/map/MapCards";
 import UpvoteButton from "@/components/map/UpvoteButton";
+import ReportButton from "@/components/social/ReportButton";
 import { sharedMapCard } from "@/lib/api";
 
 const INTERNAL_API = process.env.API_INTERNAL_BASE || process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
@@ -93,6 +94,7 @@ export default function ShareLanding({ id, meta, url, origin }) {
               <UpvoteButton id={id} votes={meta.votes ?? 0} voted={!!meta.voted} check />
               <span className="text-xs text-gray-500">Like it? Upvote it.</span>
             </div>
+            <div className="text-center"><ReportButton kind="map" target={id} label="Report this map" /></div>
           </div>
         </div>
       </div>

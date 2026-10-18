@@ -87,7 +87,24 @@ async function start(path, body) {
 }
 
 export const signIn = (username, password) => start("/auth/login", { username, password });
-export const signUp = (username, password, display_name) => start("/auth/register", { username, password, display_name: display_name || null });
+export const signUp = (username, password, display_name, email) =>
+  start("/auth/register", { username, password, display_name: display_name || null, email: email || null });
+
+/** Emails a reset link to the account with this username or email (same answer either way). */
+export const forgotPassword = (login) => apiFetch("/auth/forgot", { method: "POST", body: JSON.stringify({ login }) });
+
+/** { enabled }: false when the site can't send email, so there's no reset. */
+export const resetAvailable = () => apiFetch("/auth/reset-available");
+
+/** Sets a new password with the token from the emailed link, and signs in. */
+export const resetPassword = (token, password) => start("/auth/reset", { token, password });
+
+/** Add, change or (blank) remove the email reset links go to. */
+export async function setEmail(email, password) {
+  const r = await apiFetch("/auth/me/email", { method: "POST", body: JSON.stringify({ email: email || null, password }) });
+  if (state.user) set({ user: { ...state.user, email: r.email } });
+  return r;
+}
 
 export function signOut() {
   set({ token: null, user: null });
@@ -107,7 +124,7 @@ export async function refreshMe() {
 }
 
 export function updateUser(user) {
-  set({ user });
+  set({ user: { ...state.user, ...user } }); // keeps fields only /auth/me sends (email, is_admin)
 }
 
 /** { user, token, ready }: re-renders when someone signs in or out (in any tab). */

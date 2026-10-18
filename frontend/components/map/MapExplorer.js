@@ -19,6 +19,7 @@ import { availableLenses, buildLens, RAMP_CSS } from "@/components/map/lenses";
 import RadioPanel from "@/components/map/RadioPanel";
 import ShareDialog from "@/components/map/ShareDialog";
 import UpvoteButton from "@/components/map/UpvoteButton";
+import ReportButton from "@/components/social/ReportButton";
 import SongStatsEditor from "@/components/map/SongStatsEditor";
 import PeoplePanel from "@/components/map/PeoplePanel";
 
@@ -527,6 +528,7 @@ export default function MapExplorer() {
                 : <button disabled title="Only the person who made this map can share it" className={`${ghost} cursor-not-allowed opacity-40 hover:bg-black/20`}>Share</button>)}
               {shared && <Link href={`/?compare=${encodeURIComponent(shared.id)}`} className={ghost}>Compare with mine</Link>}
               {shared && <UpvoteButton id={shared.id} votes={shared.votes ?? 0} voted={!!shared.voted} />}
+              {shared && shared.owner !== user?.username && <ReportButton kind="map" target={shared.id} className={ghost} />}
               {(shared || blend || !isSample) && (
                 <button
                   onClick={() => { setShared(null); openedRef.current = null; router.replace("/", undefined, { shallow: true }); const mine = myMap(); const src = mine?.csv_path && !isSample && (shared || blend) ? { csv_path: mine.csv_path } : { sample: true }; setSource(src); load(src, weights); }}
