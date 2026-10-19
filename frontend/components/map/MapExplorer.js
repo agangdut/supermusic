@@ -16,6 +16,7 @@ import ImportProgress, { BuildProgress } from "@/components/map/ImportProgress";
 import StatsPanel from "@/components/map/StatsPanel";
 import ClusterAtlas from "@/components/map/ClusterAtlas";
 import { availableLenses, buildLens, RAMP_CSS } from "@/components/map/lenses";
+import { findBlackHoles, sharePct } from "@/components/map/blackholes";
 import RadioPanel from "@/components/map/RadioPanel";
 import ShareDialog from "@/components/map/ShareDialog";
 import UpvoteButton from "@/components/map/UpvoteButton";
@@ -398,6 +399,7 @@ export default function MapExplorer() {
   }, [data, selectedId, clusterFocus, tab, found, station]);
 
   const selected = selectedId != null ? byId[selectedId] : null;
+  const blackHoles = useMemo(() => findBlackHoles(data?.tracks), [data]);
   const [editing, setEditing] = useState(false); // "Fix stats" open on the selected song
   useEffect(() => { setEditing(false); }, [selectedId]);
 
@@ -751,6 +753,12 @@ export default function MapExplorer() {
                 {selected.energy != null && <Chip>energy {Math.round(selected.energy * 100)}</Chip>}
                 {selected.year && <Chip>{selected.year}</Chip>}
                 {selected.plays != null && <Chip>{selected.plays} plays</Chip>}
+                {blackHoles.has(selected.id) && (
+                  <span className="rounded-md border border-amber-300/30 bg-amber-300/[0.08] px-1.5 py-0.5 text-[11px] text-amber-200"
+                    title="This song holds a big share of all the plays on this map">
+                    Black hole · {sharePct(blackHoles.get(selected.id))} of all plays
+                  </span>
+                )}
                 {selected.vibes?.map((v) => (
                   <span key={v} className="rounded-md border border-sky-300/20 bg-sky-300/[0.06] px-1.5 py-0.5 text-[11px] text-sky-200">{v}</span>
                 ))}
