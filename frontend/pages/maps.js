@@ -81,6 +81,23 @@ function Charts() {
           </li>
         ))}
       </Board>
+      <Board title="Top checkers by genre" hint="Most song-stat fixes other listeners agreed with, per genre."
+        empty={!Object.keys(b.checkers || {}).length && "No agreed fixes yet. Click one of your top songs on your map and answer a quick check."}>
+        {Object.entries(b.checkers || {}).slice(0, 8).map(([genre, people]) => (
+          <li key={genre} className="flex items-center gap-3">
+            <span className="w-24 shrink-0 truncate text-xs text-gray-400">{genre}</span>
+            <span className="min-w-0 flex-1 truncate text-sm">
+              {people.map((p, i) => (
+                <span key={p.username}>
+                  {i > 0 && <span className="text-gray-600">, </span>}
+                  <Link href={`/u/${p.username}`} className={i === 0 ? "text-amber-200 hover:text-white" : "text-gray-300 hover:text-white"}>{p.username}</Link>
+                  <span className="text-[11px] text-gray-500"> {p.agreed}</span>
+                </span>
+              ))}
+            </span>
+          </li>
+        ))}
+      </Board>
       <Board title="Music quiz" hint="Best runs this week, out of 10."
         empty={!b.quiz.length && "Nobody has played this week."}>
         {b.quiz.map((q, i) => (

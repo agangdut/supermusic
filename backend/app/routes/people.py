@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from app.core import artist, digest, games, map_share, social
+from app.core import artist, checks, digest, games, map_share, social
 from app.middleware.auth import current_username, require_username
 from app.routes.community import listener
 
@@ -39,6 +39,8 @@ async def profile(username: str, viewer: Optional[str] = Depends(current_usernam
     maps = await run_in_threadpool(map_share.by_owner, name, me, voter)
     upvotes = sum(m.get("votes", 0) for m in maps)
     rep = await run_in_threadpool(social.reputation, name, upvotes)
+    impact = await run_in_threadpool(checks.impact, f"user:{name}")
+    rep = {**rep, "maps_reached": impact["maps_reached"], "settled_this_month": impact["settled_this_month"]}
     return {
         **social.public_user(u),
         "is_me": me,
@@ -133,4 +135,5 @@ async def leaderboards(voter: Optional[str] = Depends(listener)) -> dict:
         "contributors": contributors,
         "radio": games.radio_charts(),
         "quiz": games.quiz_leaders(),
+        "checkers": await run_in_threadpool(checks.top_checkers),
     }
