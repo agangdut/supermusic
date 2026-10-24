@@ -49,7 +49,7 @@ def _get_user(username: str) -> Optional[dict]:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify password against hash."""
-    if len(plain_password) < 8 or len(plain_password) > 72:
+    if len(plain_password) < 8 or len(plain_password.encode('utf-8')) > 72:
         return False
     return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
 
