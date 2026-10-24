@@ -6,6 +6,8 @@ import { apiFetch } from "@/utils/fetcher";
 
 const TOKEN = "sm-token";
 const USER = "sm-user";
+/** Where the Studio keeps its job list (hooks/useUploadJobs.js). */
+export const WORKSPACE_KEY = "supermusic.workspace";
 const listeners = new Set();
 
 function read(key) {
@@ -107,6 +109,14 @@ export async function setEmail(email, password) {
 }
 
 export function signOut() {
+  // Studio jobs belong to the account; don't leave them for the next person on this browser
+  for (const store of ["localStorage", "sessionStorage"]) {
+    try {
+      window[store].removeItem(WORKSPACE_KEY);
+    } catch {
+      // storage blocked: nothing saved
+    }
+  }
   set({ token: null, user: null });
 }
 
