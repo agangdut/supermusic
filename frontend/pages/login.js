@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
-import AuthLayout, { authButton, authInput as input } from "@/components/layout/AuthLayout";
+import AuthLayout, { PasswordInput, authButton, authInput as input } from "@/components/layout/AuthLayout";
 import { signIn, signUp } from "@/lib/auth";
 
 export default function Login() {
@@ -14,7 +14,6 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const [show, setShow] = useState(false);
   const signup = mode === "signup";
   // The page is prerendered, so ?mode=signup only shows up once the router is ready
   useEffect(() => { if (router.isReady && router.query.mode === "signup") setMode("signup"); }, [router.isReady, router.query.mode]);
@@ -41,8 +40,7 @@ export default function Login() {
       intro={signup
         ? "Get a profile for your maps, follow people whose taste you like, and compare libraries."
         : "Sign in to see your feed, your maps and your weekly digest."}
-      below={<>Maps you shared from this browser before signing in move onto your account.
-        <br /><Link href="/" className="hover:text-gray-300">Back to the map</Link></>}
+      below="Maps you shared from this browser before signing in move onto your account."
     >
       <form onSubmit={submit} className="mt-5 space-y-3">
         <label className="block">
@@ -67,12 +65,9 @@ export default function Login() {
           <span className="flex items-baseline justify-between text-xs text-gray-400">
             Password
             {!signup && <Link href="/forgot" className="text-[11px] text-fuchsia-300 hover:underline">Forgot it?</Link>}
-            <button type="button" onClick={() => setShow(!show)} className="text-[11px] text-fuchsia-300 hover:underline">
-                {show ? "Hide" : "Show"}
-              </button>
           </span>
-          <input type={show ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required
-            minLength={signup ? 8 : 1} maxLength={72} autoComplete={signup ? "new-password" : "current-password"} className={input} />
+          <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required
+            minLength={signup ? 8 : 1} maxLength={72} autoComplete={signup ? "new-password" : "current-password"} />
           {signup && <span className="mt-1 block text-[11px] text-gray-500">At least 8 characters.</span>}
         </label>
         {error && <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{error}</p>}
