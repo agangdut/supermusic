@@ -16,6 +16,7 @@ export default function Login() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [show, setShow] = useState(false)
   const signup = mode === "signup";
 
   const submit = async (e) => {
@@ -64,7 +65,7 @@ export default function Login() {
             )}
             <label className="block">
               <span className="text-xs text-gray-400">Password</span>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
+              <input type={show ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required
                 minLength={signup ? 8 : 1} maxLength={72} autoComplete={signup ? "new-password" : "current-password"} className={input} />
               {signup && <span className="mt-1 block text-[11px] text-gray-500">At least 8 characters.</span>}
             </label>
