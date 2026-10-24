@@ -6,7 +6,7 @@ import { useRouter } from "next/router";
 
 import PageShell from "@/components/layout/PageShell";
 import { setBackgroundWork } from "@/lib/backgroundWork";
-import { blendMaps, buildMap, getImport, getMapEstimate, getSharedMap, importLibrary, likeSongs, myMap, radioPlayed, rememberMyMap, searchSound, skipListening } from "@/lib/api";
+import { blendMaps, buildMap, getImport, getNeedsCheck, getMapEstimate, getSharedMap, importLibrary, likeSongs, myMap, radioPlayed, rememberMyMap, searchSound, skipListening } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { handCsvToStudio, missingDetails } from "@/lib/handoff";
 import { LastfmButton } from "@/components/upload/LastfmImport";
@@ -22,6 +22,7 @@ import ShareDialog from "@/components/map/ShareDialog";
 import UpvoteButton from "@/components/map/UpvoteButton";
 import ReportButton from "@/components/social/ReportButton";
 import SongStatsEditor from "@/components/map/SongStatsEditor";
+import QuickCheck from "@/components/map/QuickCheck";
 import PeoplePanel from "@/components/map/PeoplePanel";
 
 const Graph3D = dynamic(() => import("@/components/map/Graph3D"), {
@@ -403,6 +404,31 @@ export default function MapExplorer() {
   const [editing, setEditing] = useState(false); // "Fix stats" open on the selected song
   useEffect(() => { setEditing(false); }, [selectedId]);
 
+  // Quick checks: of your most played songs, the ones with a stat listeners haven't settled.
+  // Only on your own map: those are the songs you know.
+  const [toCheck, setToCheck] = useState([]); // track ids, most played first
+  const [checkedIds, setCheckedIds] = useState(() => new Set());
+  useEffect(() => {
+    setToCheck([]);
+    setCheckedIds(new Set());
+    if (!data?.tracks?.length || shared || data?.blend || data?.meta?.source === "community atlas") return undefined;
+    let live = true;
+    const top = [...data.tracks].sort((a, b) => (b.plays ?? 0) - (a.plays ?? 0)).slice(0, 150);
+    getNeedsCheck(top.map((t) => ({ artist: t.artist || "", title: t.title, bpm: t.bpm, key: t.key, genre: t.genre, year: t.year })), 100)
+      .then((r) => {
+        if (!live) return;
+        const ids = new Map(top.map((t) => [`${t.artist || ""}|${t.title}`, t.id]));
+        setToCheck(r.songs.map((x) => ids.get(`${x.artist}|${x.title}`)).filter((id) => id != null));
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [data, shared]);
+  const checkLeft = toCheck.filter((id) => !checkedIds.has(id) && id !== selectedId);
+  const nextCheck = () => {
+    if (selectedId != null) setCheckedIds((s) => new Set(s).add(selectedId));
+    if (checkLeft.length) setSelectedId(checkLeft[0]);
+  };
+
   // "Songs you may like" for the clicked track, from the same library
   const [likes, setLikes] = useState(null); // { id, basis, results } | { id, error }
   useEffect(() => {
@@ -568,6 +594,12 @@ export default function MapExplorer() {
                     </div>
                   ))}
                 </div>
+              )}
+              {checkLeft.length > 0 && (
+                <button type="button" onClick={nextCheck}
+                  className="mt-2 block w-full rounded-md border border-emerald-300/30 bg-emerald-300/[0.06] px-2 py-1 text-left text-[11px] leading-4 text-emerald-200 hover:bg-emerald-300/10">
+                  ✓ {checkLeft.length} of your top songs need a quick check
+                </button>
               )}
             </div>
           )}
@@ -763,6 +795,10 @@ export default function MapExplorer() {
                   <span key={v} className="rounded-md border border-sky-300/20 bg-sky-300/[0.06] px-1.5 py-0.5 text-[11px] text-sky-200">{v}</span>
                 ))}
               </div>
+              {toCheck.includes(selected.id) && !checkedIds.has(selected.id) && (
+                <QuickCheck track={selected} onChange={(patch) => patchTrack(selected.id, patch)}
+                  onNextSong={checkLeft.length ? nextCheck : null} songsLeft={checkLeft.length} onMore={() => setEditing(true)} />
+              )}
               <button
                 onClick={() => setEditing((e) => !e)}
                 className="mt-2 text-[11px] text-sky-300 hover:underline"
