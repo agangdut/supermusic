@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
-import AuthLayout, { authButton, authInput as input } from "@/components/layout/AuthLayout";
+import AuthLayout, { PasswordInput, authButton, authInput as input } from "@/components/layout/AuthLayout";
 import { signIn, signUp } from "@/lib/auth";
 
 export default function Login() {
@@ -40,8 +40,7 @@ export default function Login() {
       intro={signup
         ? "Get a profile for your maps, follow people whose taste you like, and compare libraries."
         : "Sign in to see your feed, your maps and your weekly digest."}
-      below={<>Maps you shared from this browser before signing in move onto your account.
-        <br /><Link href="/" className="hover:text-gray-300">Back to the map</Link></>}
+      below="Maps you shared from this browser before signing in move onto your account."
     >
       <form onSubmit={submit} className="mt-5 space-y-3">
         <label className="block">
@@ -67,8 +66,8 @@ export default function Login() {
             Password
             {!signup && <Link href="/forgot" className="text-[11px] text-fuchsia-300 hover:underline">Forgot it?</Link>}
           </span>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
-            minLength={signup ? 8 : 1} maxLength={72} autoComplete={signup ? "new-password" : "current-password"} className={input} />
+          <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required
+            minLength={signup ? 8 : 1} maxLength={72} autoComplete={signup ? "new-password" : "current-password"} />
           {signup && <span className="mt-1 block text-[11px] text-gray-500">At least 8 characters.</span>}
         </label>
         {error && <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{error}</p>}
