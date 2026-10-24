@@ -28,7 +28,7 @@ USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,50}$")
 # Reputation points
 POINTS_AGREED = 10   # a fix of yours matches what listeners agreed on
 POINTS_FIRST = 5     # ...and you were the first to suggest it
-POINTS_FIX = 1       # any fix
+POINTS_FIX = 0       # a fix nobody agrees with earns nothing, so guessing never pays
 POINTS_UPVOTE = 2    # an upvote on one of your maps
 LEVELS = [(0, "Listener"), (25, "Tuner"), (100, "Curator"), (300, "Cartographer"), (1000, "Astronomer")]
 
@@ -257,6 +257,9 @@ def reputation_for(voters: List[str], upvotes: Dict[str, int]) -> Dict[str, Dict
             s["agreed"] += 1
             if first.get(k) == r["voter"]:
                 s["first"] += 1
+    from app.core import checks
+
+    agreed_fixes = checks.agreed_fixes(ids)
     out = {}
     for u, s in stats.items():
         up = int(upvotes.get(u, 0))
@@ -268,13 +271,18 @@ def reputation_for(voters: List[str], upvotes: Dict[str, int]) -> Dict[str, Dict
             badges.append({"id": "trusted", "label": "Trusted ear", "hint": "10+ fixes that listeners agreed with"})
         if up >= 10:
             badges.append({"id": "popular", "label": "Crowd favourite", "hint": "10+ upvotes on shared maps"})
-        out[u] = {"points": points, **s, "upvotes": up, **_level(points), "badges": badges}
+        badges += checks.badges(agreed_fixes.get(f"user:{u}", []))
+        out[u] = {"points": points, **s, "upvotes": up, **_level(points), "badges": badges,
+                  "rewards": checks.rewards(s["agreed"])}
     return out
 
 
 def reputation(username: str, upvotes: int = 0) -> Dict[str, Any]:
+    from app.core import checks
+
     return reputation_for([username], {username: upvotes}).get(username) or {
-        "points": 0, "fixes": 0, "agreed": 0, "first": 0, "upvotes": upvotes, **_level(0), "badges": []}
+        "points": 0, "fixes": 0, "agreed": 0, "first": 0, "upvotes": upvotes, **_level(0), "badges": [],
+        "rewards": checks.rewards(0)}
 
 
 def top_contributors(owners_upvotes: Dict[str, int], limit: int = 20) -> List[Dict[str, Any]]:

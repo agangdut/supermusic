@@ -10,7 +10,7 @@ from app.core import jobs
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from app.core import artist, atlas, games, social
+from app.core import artist, atlas, checks, games, social
 from app.middleware.auth import current_username, require_username
 from app.routes.community import listener
 
@@ -154,6 +154,15 @@ async def quiz_question(voter: Optional[str] = Depends(listener)) -> dict:
         return await run_in_threadpool(games.question, voter)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/games/quiz/check")
+async def quiz_check(voter: Optional[str] = Depends(listener)) -> dict:
+    """A bonus "help check" question between quiz rounds (not scored); answering it is a song-stat vote."""
+    import random
+    import secrets
+
+    return {"question": await run_in_threadpool(checks.quiz_check, voter, random.Random(secrets.randbits(64)))}
 
 
 class AnswerRequest(BaseModel):

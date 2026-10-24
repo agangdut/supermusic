@@ -24,7 +24,7 @@ function show(field, v) {
 }
 
 // What the map should show for a stat after an edit: your answer, else what listeners agreed on
-function patchFor(field, value) {
+export function patchFor(field, value) {
   if (field === "genre") return { genre: value ? value.join(", ") : value };
   if (field === "key") return { key: value, camelot: null };
   return { [field]: value };

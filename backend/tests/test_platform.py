@@ -165,7 +165,7 @@ def test_digest_and_leaderboards():
     client.post("/map/radio/played", json={"station": "cluster:1", "label": "Andromeda radio"},
                 headers={"X-Listener-Id": "radio-fan-1234"})
     lb = client.get("/leaderboards").json()
-    assert set(lb) == {"maps", "contributors", "radio", "quiz"}
+    assert set(lb) == {"maps", "contributors", "radio", "quiz", "checkers"}
     assert any(r["station"] == "cluster:1" for r in lb["radio"])
 
 
@@ -176,5 +176,5 @@ def test_reputation_counts_agreed_fixes():
     client.post("/community/vote", json={**song, "value": 120}, headers={**a_auth, "X-Forwarded-For": "10.0.0.1"})
     client.post("/community/vote", json={**song, "value": 121}, headers={**b_auth, "X-Forwarded-For": "10.0.0.2"})
     rep = client.get(f"/users/{a}").json()["reputation"]
-    assert rep["agreed"] == 1 and rep["first"] == 1 and rep["points"] >= 16
+    assert rep["agreed"] == 1 and rep["first"] == 1 and rep["points"] == 15  # 10 agreed + 5 first; unagreed fixes earn nothing
     assert any(e["kind"] == "fix_agreed" for e in client.get("/feed", headers=a_auth).json()["items"])

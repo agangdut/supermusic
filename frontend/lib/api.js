@@ -288,6 +288,19 @@ export async function voteSongStat({ artist, title, field, value }) {
   return postJSON("/community/vote", { artist: artist || "", title, field, value });
 }
 
+/** POST /community/check — one yes/no question about a song's stats ({question: null} when nothing's left). */
+export async function getSongCheck({ artist, title, bpm, key, genre, year, skip = [] }) {
+  return postJSON("/community/check", { artist: artist || "", title, bpm, key, genre, year, skip });
+}
+
+/** POST /community/needs-check — of these songs (most played first), the ones worth a quick check. */
+export async function getNeedsCheck(songs, limit = 50) {
+  return postJSON("/community/needs-check", { songs, limit });
+}
+
+/** GET /community/impact — your agreed fixes, public maps they reach, badges and rewards. */
+export const getCheckImpact = () => apiFetch("/community/impact");
+
 /** GET /community/activity */
 export async function getCommunityActivity(limit = 20) {
   return apiFetch(`/community/activity?limit=${limit}`);
@@ -365,3 +378,4 @@ export const deleteTrack = (id) => apiFetch(`/artist/tracks/${encodeURIComponent
 export const quizQuestion = () => apiFetch("/games/quiz");
 export const quizAnswer = (id, choice) => postJSON("/games/quiz/answer", { id, choice });
 export const quizFinish = (name) => postJSON("/games/quiz/finish", { name });
+export const quizCheck = () => apiFetch("/games/quiz/check");

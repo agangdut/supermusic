@@ -3,7 +3,8 @@ import Head from "next/head";
 import Link from "next/link";
 
 import PageShell from "@/components/layout/PageShell";
-import { getLeaderboards, quizAnswer, quizFinish, quizQuestion } from "@/lib/api";
+import { CheckCard } from "@/components/map/QuickCheck";
+import { getLeaderboards, quizAnswer, quizCheck, quizFinish, quizQuestion } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 function Song({ s }) {
@@ -22,6 +23,8 @@ function Song({ s }) {
   );
 }
 
+const BONUS_AFTER = [3, 7];
+
 export default function Play() {
   const { user } = useAuth();
   const [q, setQ] = useState(null);
@@ -32,7 +35,10 @@ export default function Play() {
   const [leaders, setLeaders] = useState([]);
   const [started, setStarted] = useState(false);
 
+  const [bonus, setBonus] = useState(null); // a "help check" question between rounds, not scored
+
   const next = useCallback(async () => {
+    setBonus(null);
     setRes(null);
     setError(null);
     try {
@@ -61,6 +67,19 @@ export default function Play() {
     } catch (e) {
       setError(e.message || String(e));
     }
+  };
+
+  // After rounds 3 and 7, a bonus question that helps fix the atlas's song stats
+  const nextOrBonus = async () => {
+    if (res && BONUS_AFTER.includes(res.round) && !bonus) {
+      try {
+        const { question } = await quizCheck();
+        if (question) { setBonus(question); return; }
+      } catch {
+        // No bonus this time
+      }
+    }
+    next();
   };
 
   const restart = () => { setFinished(null); setQ(null); setRes(null); setStarted(true); next(); };
@@ -117,7 +136,13 @@ export default function Play() {
                   </p>
                   {res.done
                     ? <button onClick={() => setFinished({ pending: true, score: res.score, rounds: res.rounds })} className="rounded-xl bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15">See your score</button>
-                    : <button onClick={next} className="rounded-xl bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15">Next →</button>}
+                    : !bonus && <button onClick={nextOrBonus} className="rounded-xl bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15">Next →</button>}
+                </div>
+              )}
+              {bonus && (
+                <div className="mt-4">
+                  <p className="mb-2 text-xs text-gray-400">Bonus round, no score: help fix the atlas. Answer if you know it.</p>
+                  <CheckCard q={bonus} tone="quiz" onNext={next} nextLabel="Back to the quiz" />
                 </div>
               )}
             </div>

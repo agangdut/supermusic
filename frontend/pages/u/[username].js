@@ -44,6 +44,30 @@ function Reputation({ rep }) {
         <div><dt className="text-gray-500">First to tag</dt><dd className="text-base font-semibold text-white">{rep.first}</dd></div>
         <div><dt className="text-gray-500">Map upvotes</dt><dd className="text-base font-semibold text-white">{rep.upvotes}</dd></div>
       </dl>
+      {(rep.maps_reached > 0 || rep.settled_this_month > 0) && (
+        <p className="mt-4 rounded-lg bg-emerald-300/[0.06] px-3 py-2 text-xs leading-5 text-emerald-100">
+          {rep.maps_reached > 0 && <>Fixes others agreed with now show on <b>{rep.maps_reached}</b> public map{rep.maps_reached === 1 ? "" : "s"}. </>}
+          {rep.settled_this_month > 0 && <>Helped settle <b>{rep.settled_this_month}</b> song{rep.settled_this_month === 1 ? "" : "s"} this month.</>}
+        </p>
+      )}
+      {rep.rewards && (
+        <div className="mt-4 text-xs">
+          {rep.rewards.earned.map((r) => (
+            <div key={r.id} className="text-amber-200">🎁 Earned: {r.label} <span className="text-gray-500">(given out when it goes on sale)</span></div>
+          ))}
+          {rep.rewards.next && (
+            <div className="mt-1">
+              <div className="flex justify-between text-gray-400">
+                <span>Next reward: {rep.rewards.next.label}</span>
+                <span>{rep.rewards.next.at - rep.rewards.next.left}/{rep.rewards.next.at}</span>
+              </div>
+              <div className="mt-1 h-1 rounded-full bg-white/5">
+                <div className="h-1 rounded-full bg-amber-300/70" style={{ width: `${((rep.rewards.next.at - rep.rewards.next.left) / rep.rewards.next.at) * 100}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       {rep.badges?.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-1.5">
           {rep.badges.map((b) => (
@@ -52,7 +76,7 @@ function Reputation({ rep }) {
         </div>
       )}
       <p className="mt-4 text-[11px] leading-5 text-gray-500">
-        Earned by fixing song stats on your map (a fix other listeners agree with counts 10, being first to suggest it 5 more) and by upvotes on shared maps.
+        Earned by fixing song stats (a fix other listeners agree with counts 10, being first to suggest it 5 more) and by upvotes on shared maps. Fixes nobody agrees with earn nothing. Rewards count agreed fixes.
       </p>
     </section>
   );
