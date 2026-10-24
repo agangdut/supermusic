@@ -3,7 +3,7 @@ import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
-import AuthLayout, { authButton, authInput as input } from "@/components/layout/AuthLayout";
+import AuthLayout, { PasswordInput, authButton } from "@/components/layout/AuthLayout";
 import { resetPassword } from "@/lib/auth";
 
 export default function Reset() {
@@ -44,14 +44,14 @@ export default function Reset() {
         <form onSubmit={submit} className="mt-5 space-y-3">
           <label className="block">
             <span className="text-xs text-gray-400">New password</span>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} maxLength={72}
-              autoComplete="new-password" className={input} />
+            <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} maxLength={72}
+              autoComplete="new-password" />
             <span className="mt-1 block text-[11px] text-gray-500">At least 8 characters.</span>
           </label>
           <label className="block">
             <span className="text-xs text-gray-400">The same again</span>
-            <input type="password" value={again} onChange={(e) => setAgain(e.target.value)} required minLength={8} maxLength={72}
-              autoComplete="new-password" className={input} />
+            <PasswordInput value={again} onChange={(e) => setAgain(e.target.value)} required minLength={8} maxLength={72}
+              autoComplete="new-password" />
           </label>
           {error && (
             <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
