@@ -58,6 +58,14 @@ def test_register_login_me():
     assert r.json()["username"] == "tester"
 
 
+def test_register_password_length():
+    r = client.post("/auth/register", json={"username": "long", "password": "é" * 40})
+    assert r.status_code == 400, r.text
+    r = client.post("/auth/register", json={"username": "good", "password": "x" * 8})
+    assert r.status_code == 200, r.text
+    r = client.post("/auth/register", json={"username": "good2", "password": "x" * 72})
+    assert r.status_code == 200, r.text
+
 def test_midi_convert_rejects_unknown_stem():
     r = client.post("/midi/convert", json={"source_path": "x.wav", "model": "stems", "stems": ["kazoo"]})
     assert r.status_code == 422

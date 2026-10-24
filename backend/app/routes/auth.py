@@ -49,11 +49,15 @@ def _get_user(username: str) -> Optional[dict]:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify password against hash."""
+    if len(plain_password) < 8 or len(plain_password) > 72:
+        return False
     return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
 
 
 def get_password_hash(password: str) -> str:
     """Hash password."""
+    if len(password) < 8 or len(password.encode('utf-8')) > 72:
+        raise HTTPException(status_code=400, detail="Password must be 8-72 characters.")
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 

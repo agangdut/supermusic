@@ -14,6 +14,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [show, setShow] = useState(false);
   const signup = mode === "signup";
   // The page is prerendered, so ?mode=signup only shows up once the router is ready
   useEffect(() => { if (router.isReady && router.query.mode === "signup") setMode("signup"); }, [router.isReady, router.query.mode]);
@@ -66,8 +67,11 @@ export default function Login() {
           <span className="flex items-baseline justify-between text-xs text-gray-400">
             Password
             {!signup && <Link href="/forgot" className="text-[11px] text-fuchsia-300 hover:underline">Forgot it?</Link>}
+            <button type="button" onClick={() => setShow(!show)} className="text-[11px] text-fuchsia-300 hover:underline">
+                {show ? "Hide" : "Show"}
+              </button>
           </span>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
+          <input type={show ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required
             minLength={signup ? 8 : 1} maxLength={72} autoComplete={signup ? "new-password" : "current-password"} className={input} />
           {signup && <span className="mt-1 block text-[11px] text-gray-500">At least 8 characters.</span>}
         </label>
