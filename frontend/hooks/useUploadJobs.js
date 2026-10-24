@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, API_BASE } from "@/utils/fetcher";
 import { setBackgroundWork } from "@/lib/backgroundWork";
+import { useAuth, WORKSPACE_KEY } from "@/lib/auth";
 import { midiConvert, stemsSeparate, csvEnrich, enrichFiles, importLastfm, getJob, areaForJobType, normalizeJobArtifacts, toArtifactUrl } from "@/lib/api";
 
 // Map backend status to frontend status
@@ -30,21 +31,44 @@ export const jobLabel = (j) => {
 };
 
 
-// MIDI files as URLs, plus the melody score when the job measured one
-const midiResult = (result) => ({
+// MIDI files as URLs, plus the melody score when the job measured one.
+// jobId ties a result to its job, so it goes away when the server forgets the job.
+const midiResult = (result, jobId) => ({
   ...normalizeJobArtifacts({ result }).result.artifacts,
   melody: result?.metrics?.melody,
+  jobId,
 });
 
 // The CSV result: download link, the server path the Music Map can open, and what was done
-const csvResult = (result) => ({
+const csvResult = (result, jobId) => ({
   url: toArtifactUrl(result?.artifacts?.csv),
   zip: toArtifactUrl(result?.artifacts?.zip),
   library_csv: result?.library_csv || null,
   metrics: result?.metrics || null,
+  jobId,
 });
 
-const STORAGE_KEY = "supermusic.workspace";
+// Signed in: jobs stay in localStorage. Signed out: sessionStorage, cleared when the browser closes.
+const workspaceStore = (signedIn) => {
+  try {
+    return signedIn ? window.localStorage : window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+const otherStore = (signedIn) => workspaceStore(!signedIn);
+
+// Does the server still have this job? Only a clear "not found" counts as gone.
+const jobIsGone = async (j) => {
+  const area = areaForJobType(j.job_type);
+  if (!area) return false;
+  try {
+    await getJob(area, j.id);
+    return false;
+  } catch (err) {
+    return /not found|404/i.test(String(err?.message || err));
+  }
+};
 
 export default function useUploadJobs() {
   const [audioFile, setAudioFile] = useState(null);
@@ -60,6 +84,8 @@ export default function useUploadJobs() {
   const [latestCsv, setLatestCsv] = useState(null);
 
   const runningRef = useRef(false);
+  const { token, ready: authReady } = useAuth();
+  const signedIn = !!token;
 
   const runningCount = useMemo(
     () => jobs.filter((j) => !isTerminal(j.status)).length,
@@ -73,24 +99,67 @@ export default function useUploadJobs() {
   // Running jobs pick up polling again; ones that never got a server id are dropped.
   const [restored, setRestored] = useState(false);
   useEffect(() => {
+    if (!authReady || restored) return;
+    let saved = null;
     try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-      if (saved) {
-        setJobs((saved.jobs || []).filter((j) => j.job_type || isTerminal(j.status)));
-        setLatestMidi(saved.latestMidi || null);
-        setLatestStems(saved.latestStems || null);
-        setLatestStemsJobId(saved.latestStemsJobId || null);
-        setLatestCsv(saved.latestCsv || null);
-      }
+      saved = JSON.parse(workspaceStore(signedIn)?.getItem(WORKSPACE_KEY) || "null");
+      // Signed out: drop history an older version kept in localStorage
+      if (!signedIn) otherStore(signedIn)?.removeItem(WORKSPACE_KEY);
     } catch { /* storage blocked or corrupt: start fresh */ }
     setRestored(true);
-  }, []);
+    if (!saved) return;
+
+    const savedJobs = (saved.jobs || []).filter((j) => j.job_type || isTerminal(j.status));
+    setJobs(savedJobs);
+    setLatestMidi(saved.latestMidi || null);
+    setLatestStems(saved.latestStems || null);
+    setLatestStemsJobId(saved.latestStemsJobId || null);
+    setLatestCsv(saved.latestCsv || null);
+
+    // Ask the server about every saved job once, and drop the ones it no longer has
+    // (it was reset, or cleaned up old jobs), along with their results
+    (async () => {
+      const toCheck = new Map(savedJobs.filter((j) => j.id && j.job_type).map((j) => [j.id, j]));
+      // Results can outlive a cleared job list, so check their jobs too
+      for (const [id, job_type] of [
+        [saved.latestMidi?.jobId, "midi_conversion"],
+        [saved.latestCsv?.jobId, "csv_enrichment"],
+        [saved.latestStemsJobId, "stem_separation"],
+      ]) if (id && !toCheck.has(id)) toCheck.set(id, { id, job_type });
+      const checks = await Promise.all([...toCheck.values()].map(async (j) => [j.id, await jobIsGone(j)]));
+      const gone = new Set(checks.filter(([, g]) => g).map(([id]) => id));
+      // Results saved before they carried a job id can't be checked, so they go too
+      const keep = (id) => !!id && !gone.has(id);
+      setJobs((prev) => prev.filter((j) => !gone.has(j.id)));
+      setLatestMidi((r) => (r && keep(r.jobId) ? r : null));
+      setLatestCsv((r) => (r && keep(r.jobId) ? r : null));
+      if (!keep(saved.latestStemsJobId)) {
+        setLatestStems(null);
+        setLatestStemsJobId(null);
+      }
+    })();
+  }, [authReady, restored, signedIn]);
   useEffect(() => {
     if (!restored) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ jobs, latestMidi, latestStems, latestStemsJobId, latestCsv }));
+      workspaceStore(signedIn)?.setItem(WORKSPACE_KEY, JSON.stringify({ jobs, latestMidi, latestStems, latestStemsJobId, latestCsv }));
+      otherStore(signedIn)?.removeItem(WORKSPACE_KEY);
     } catch { /* storage full or blocked: not critical */ }
-  }, [restored, jobs, latestMidi, latestStems, latestStemsJobId, latestCsv]);
+  }, [restored, signedIn, jobs, latestMidi, latestStems, latestStemsJobId, latestCsv]);
+
+  // Signing out clears the Studio history (signOut() also wipes the saved copy)
+  const wasSignedIn = useRef(null);
+  useEffect(() => {
+    if (!authReady) return;
+    if (wasSignedIn.current && !signedIn) {
+      setJobs([]);
+      setLatestMidi(null);
+      setLatestStems(null);
+      setLatestStemsJobId(null);
+      setLatestCsv(null);
+    }
+    wasSignedIn.current = signedIn;
+  }, [authReady, signedIn]);
 
   // toast helper
   const notify = useCallback((msg, kind = "info") => {
@@ -123,12 +192,12 @@ export default function useUploadJobs() {
     const artifacts = data.result?.artifacts;
     if (data.status === "done" && artifacts) {
       if (j.job_type === "midi_conversion" && artifacts.midi) {
-        setLatestMidi(midiResult(data.result));
+        setLatestMidi(midiResult(data.result, j.id));
       } else if (j.job_type === "stem_separation") {
         setLatestStems(normalizeJobArtifacts({ result: { artifacts } }).result.artifacts);
         setLatestStemsJobId(j.id);
       } else if (j.job_type === "csv_enrichment" && (artifacts.csv || artifacts.zip)) {
-        setLatestCsv(csvResult(data.result));
+        setLatestCsv(csvResult(data.result, j.id));
       }
     }
   }, []);
@@ -224,7 +293,7 @@ export default function useUploadJobs() {
 
         // If job is already done, handle success
         if ((job.status === "done" || mappedJob.status === "success") && job.result) {
-          if (onSuccessData) onSuccessData(job.result);
+          if (onSuccessData) onSuccessData(job.result, job.id);
           notify(successMsg, "ok");
         } else if (mappedJob.status === "failed") {
           notify(`${failMsg}: ${job.error_hint || job.error_detail || "unknown error"}`, "err");
@@ -293,9 +362,9 @@ export default function useUploadJobs() {
         }),
         "Transcription complete 🎹",
         "Transcription failed ❌",
-        (result) => {
+        (result, id) => {
           if (result?.artifacts?.midi) {
-            setLatestMidi(midiResult(result));
+            setLatestMidi(midiResult(result, id));
           }
         }
       );
@@ -321,9 +390,9 @@ export default function useUploadJobs() {
       () => midiConvert({ stem_job_id: latestStemsJobId, model: "stems", stems, playable, hand_span: handSpan }),
       "Transcription complete 🎹",
       "Transcription failed ❌",
-      (result) => {
+      (result, id) => {
         if (result?.artifacts?.midi) {
-          setLatestMidi(midiResult(result));
+          setLatestMidi(midiResult(result, id));
         }
       }
     );
@@ -347,9 +416,10 @@ export default function useUploadJobs() {
         () => stemsSeparate({ audio_path: audioPath }),
         "Stem separation complete 🎛️",
         "Stem separation failed ❌",
-        (result) => {
+        (result, id) => {
           if (result?.artifacts) {
             setLatestStems(normalizeJobArtifacts({ result }).result.artifacts);
+            setLatestStemsJobId(id);
           }
         }
       );
@@ -372,8 +442,8 @@ export default function useUploadJobs() {
       () => enrichFiles(csvFiles, { lookup, limit, output }),
       "CSV enrichment complete ✅",
       "CSV enrichment failed ❌",
-      (result) => {
-        if (result?.artifacts?.csv || result?.artifacts?.zip) setLatestCsv(csvResult(result));
+      (result, id) => {
+        if (result?.artifacts?.csv || result?.artifacts?.zip) setLatestCsv(csvResult(result, id));
       }
     );
   }, [csvFiles, createJob, notify]);
@@ -390,8 +460,8 @@ export default function useUploadJobs() {
       () => importLastfm({ username: name, lookup, limit }),
       "Last.fm import complete ✅",
       "Last.fm import failed ❌",
-      (result) => {
-        if (result?.artifacts?.csv) setLatestCsv(csvResult(result));
+      (result, id) => {
+        if (result?.artifacts?.csv) setLatestCsv(csvResult(result, id));
       }
     );
   }, [createJob, notify]);
