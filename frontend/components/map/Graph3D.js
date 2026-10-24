@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph3D from "react-force-graph-3d";
 import * as THREE from "three";
 import { colorFor } from "./colors";
+import { findBlackHoles, sharePct } from "./blackholes";
 
 const HIDDEN_COLOR = "#f0abfc";
 const PICK_COLOR = "#fde68a";
@@ -80,6 +81,97 @@ function getRingTexture() {
   return ringTexture;
 }
 
+// ---- Black holes: a dark disc with a bright photon ring, in a tilted spinning accretion disk ----
+let horizonTexture = null;
+function getHorizonTexture() {
+  if (horizonTexture) return horizonTexture;
+  const size = 256, c = size / 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  // Warm glow around the edge, as if light bends round the hole
+  const halo = ctx.createRadialGradient(c, c, c * 0.3, c, c, c);
+  halo.addColorStop(0, "rgba(255,190,110,0.9)");
+  halo.addColorStop(0.42, "rgba(255,170,90,0.55)");
+  halo.addColorStop(0.7, "rgba(255,120,60,0.12)");
+  halo.addColorStop(1, "rgba(255,100,40,0)");
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, size, size);
+  // Photon ring
+  ctx.strokeStyle = "rgba(255,244,220,1)";
+  ctx.lineWidth = 5;
+  ctx.shadowColor = "#ffd9a0";
+  ctx.shadowBlur = 14;
+  ctx.beginPath();
+  ctx.arc(c, c, c * 0.36, 0, Math.PI * 2);
+  ctx.stroke();
+  // Event horizon: pure black, it hides the stars behind it
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.arc(c, c, c * 0.34, 0, Math.PI * 2);
+  ctx.fill();
+  horizonTexture = new THREE.CanvasTexture(canvas);
+  return horizonTexture;
+}
+
+let diskTexture = null;
+function getDiskTexture() {
+  if (diskTexture) return diskTexture;
+  const size = 256, c = size / 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const g = ctx.createRadialGradient(c, c, c * 0.38, c, c, c);
+  g.addColorStop(0, "rgba(255,250,235,0.95)");
+  g.addColorStop(0.25, "rgba(255,196,110,0.8)");
+  g.addColorStop(0.6, "rgba(240,110,50,0.35)");
+  g.addColorStop(1, "rgba(160,50,30,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  // Uneven streaks, so you can see it turning
+  ctx.globalCompositeOperation = "destination-out";
+  for (let i = 0; i < 26; i++) {
+    const r = c * (0.42 + 0.55 * ((i * 37) % 26) / 26);
+    const a = (i * 2.399) % (Math.PI * 2);
+    ctx.strokeStyle = `rgba(0,0,0,${0.25 + 0.4 * ((i * 13) % 7) / 7})`;
+    ctx.lineWidth = 2 + (i % 4) * 2;
+    ctx.beginPath();
+    ctx.arc(c, c, r, a, a + 0.6 + (i % 5) * 0.35);
+    ctx.stroke();
+  }
+  diskTexture = new THREE.CanvasTexture(canvas);
+  return diskTexture;
+}
+
+// World size of a black hole: bigger share of plays, bigger hole
+const blackHoleSize = (share) => Math.min(30, 16 + 80 * share);
+
+function makeBlackHole(size) {
+  const group = new THREE.Group();
+  const diskMat = new THREE.MeshBasicMaterial({
+    map: getDiskTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending, opacity: 0.9,
+  });
+  const disk = new THREE.Mesh(new THREE.RingGeometry(size * 0.2, size * 0.75, 64), diskMat);
+  disk.rotation.x = -1.2; // tilted, so it reads as a disk and not a halo
+  disk.rotation.y = 0.25;
+  disk.onBeforeRender = () => { disk.rotation.z = -performance.now() / 4000; };
+  // Normal blending (not additive) so the black centre covers what is behind it
+  const horizonMat = new THREE.SpriteMaterial({ map: getHorizonTexture(), transparent: true, depthWrite: false });
+  const horizon = new THREE.Sprite(horizonMat);
+  horizon.scale.set(size, size, 1);
+  horizon.renderOrder = 10;
+  group.add(disk, horizon);
+  // Fades like a star's glow material when the map focuses elsewhere
+  const fader = {
+    set opacity(v) { diskMat.opacity = v; horizonMat.opacity = Math.min(1, v * 1.1); },
+    get opacity() { return diskMat.opacity; },
+  };
+  const dispose = () => { disk.geometry.dispose(); diskMat.dispose(); horizonMat.dispose(); };
+  return { group, fader, dispose };
+}
+
 function textSprite(text, color) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
@@ -147,6 +239,8 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
     return data.tracks.map((t) => (maxEng > 0 ? 2.5 + 5.5 * ((t.engagement ?? 0) / maxEng) : 3.5));
   }, [data]);
 
+  const blackHoles = useMemo(() => findBlackHoles(data?.tracks), [data]);
+
   const graph = useMemo(() => {
     glowMats.current.clear();
     if (!data || large) return { nodes: [], links: [] };
@@ -178,6 +272,21 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
     const lit = !f || f.has(node.id);
     const isPick = mode === "picks" && pickSet.has(node.id);
     const hl = glowSet?.has(node.id);
+    const share = blackHoles.get(node.id);
+    if (share != null) {
+      const s = blackHoleSize(share);
+      const bh = makeBlackHole(s);
+      bh.fader.opacity = lit ? 0.9 : DIM;
+      glowMats.current.set(node.id, bh.fader);
+      if (node.id === selectedId || hl || isPick) {
+        const ring = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: getRingTexture(), transparent: true, depthWrite: false, color: hl ? HIGHLIGHT_COLOR : isPick ? PICK_COLOR : "#ffffff",
+        }));
+        ring.scale.set(s * 1.25, s * 1.25, 1);
+        bh.group.add(ring);
+      }
+      return bh.group;
+    }
     const color = hl ? HIGHLIGHT_COLOR : isPick ? PICK_COLOR : colorOfTrack(node);
     const mat = new THREE.SpriteMaterial({
       map: getGlowTexture(),
@@ -200,7 +309,7 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
     }
     return group;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, mode, pickSet, data, colorOf, glowSet]);
+  }, [selectedId, mode, pickSet, data, colorOf, glowSet, blackHoles]);
 
   // Fade tracks and cluster names in and out of focus
   useEffect(() => {
@@ -365,16 +474,26 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
       neb.userData.cluster = cid;
       nebulae.add(neb);
     }
+    // The handful of black holes are ordinary objects on top of the cloud
+    const holes = [];
+    for (const t of data.tracks) {
+      const share = blackHoles.get(t.id);
+      if (share == null) continue;
+      const bh = makeBlackHole(blackHoleSize(share));
+      bh.group.position.set(t.x, t.y, t.z);
+      holes.push({ id: t.id, ...bh });
+    }
     const scene = fg.scene();
-    scene.add(nebulae, points, lines, ring);
-    cloud.current = { points, lines, ring, geometry, nebulae };
+    scene.add(nebulae, points, lines, ring, ...holes.map((h) => h.group));
+    cloud.current = { points, lines, ring, geometry, nebulae, holes };
     return () => {
-      scene.remove(nebulae, points, lines, ring);
+      scene.remove(nebulae, points, lines, ring, ...holes.map((h) => h.group));
+      holes.forEach((h) => h.dispose());
       nebulae.children.forEach((n) => n.material.dispose());
       geometry.dispose(); material.dispose(); lines.geometry.dispose(); lines.material.dispose();
       cloud.current = null;
     };
-  }, [data, large]);
+  }, [data, large, blackHoles]);
 
   // Star sizes in world units -> pixels, the same maths three.js uses for sprites
   useEffect(() => {
@@ -399,6 +518,7 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
       tmp.set(hl ? HIGHLIGHT_COLOR : isPick ? PICK_COLOR : colorOfTrack(t));
       col.setXYZ(i, tmp.r, tmp.g, tmp.b);
       alpha.setX(i, !focus || focus.has(t.id) ? (hl ? 1 : 0.9) : DIM * 0.6);
+      if (blackHoles.has(t.id)) alpha.setX(i, 0); // drawn as a black hole instead
       const s = sizes[i];
       sz.setX(i, t.id === selectedId ? s * 2.6 : hl ? Math.max(s, 4) * 2 : isPick ? Math.max(s, 5) * 2 : s * 1.6);
     });
@@ -407,15 +527,17 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
     for (const neb of c.nebulae.children) {
       neb.material.opacity = !litClusters ? 0.16 : litClusters.has(neb.userData.cluster) ? 0.22 : 0.04;
     }
+    for (const h of c.holes) h.fader.opacity = !focus || focus.has(h.id) ? 0.9 : DIM;
     const sel = selectedId != null ? data.tracks[selectedId] : null;
     c.ring.visible = !!sel;
     if (sel) {
-      const s = sizes[selectedId] * 2.6 * 1.1;
+      const share = blackHoles.get(sel.id);
+      const s = share != null ? blackHoleSize(share) * 1.25 : sizes[selectedId] * 2.6 * 1.1;
       c.ring.position.set(sel.x, sel.y, sel.z);
       c.ring.scale.set(s, s, 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [large, data, colorOf, focus, selectedId, mode, pickSet, sizes, glowSet]);
+  }, [large, data, colorOf, focus, selectedId, mode, pickSet, sizes, glowSet, blackHoles]);
 
   // Links: the same rules as the small map, minus the animated particles
   useEffect(() => {
@@ -484,6 +606,7 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
             {[hover.t.genre, hover.t.key && `${hover.t.key} (${hover.t.camelot})`, hover.t.bpm && `${Math.round(hover.t.bpm)} BPM`,
               hover.t.plays != null && `${hover.t.plays} plays`].filter(Boolean).join(" · ")}
           </div>
+          {blackHoles.has(hover.t.id) && <div className="text-amber-300">Black hole · {sharePct(blackHoles.get(hover.t.id))} of all plays</div>}
         </div>
       )}
       <ForceGraph3D
@@ -500,7 +623,8 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
         nodeLabel={(n) =>
           `<div style="font:12px Inter,system-ui;padding:6px 8px;background:#0b1121ee;border:1px solid #ffffff22;border-radius:8px;color:#e5e7eb">
              <b>${n.title}</b>${n.artist ? ` · ${n.artist}` : ""}<br/>
-             <span style="color:#9ca3af">${[n.genre, n.key && `${n.key} (${n.camelot})`, n.bpm && `${Math.round(n.bpm)} BPM`, n.plays != null && `${n.plays} plays`].filter(Boolean).join(" · ")}</span>
+             <span style="color:#9ca3af">${[n.genre, n.key && `${n.key} (${n.camelot})`, n.bpm && `${Math.round(n.bpm)} BPM`, n.plays != null && `${n.plays} plays`].filter(Boolean).join(" · ")}</span>${
+             blackHoles.has(n.id) ? `<br/><span style="color:#fcd34d">Black hole · ${sharePct(blackHoles.get(n.id))} of all plays</span>` : ""}
            </div>`
         }
         onNodeClick={(n) => onSelect?.(n.id)}

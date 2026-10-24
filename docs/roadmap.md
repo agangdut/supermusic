@@ -4,7 +4,7 @@ What's planned, roughly in order. Ideas and pull requests are welcome; open an i
 
 ## The website
 
-- Email: password reset, and the weekly digest by email
+- The weekly digest by email (password reset emails already work once SMTP is set)
 - Screens for what the API can already do: paste a link to download, batch processing, "download all" as a zip
 - Live job progress pushed to the page instead of checked every two seconds
 - Play stems in the browser (MIDI already has a piano preview)

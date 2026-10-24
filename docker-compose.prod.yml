@@ -44,6 +44,13 @@ services:
       - SM_ENV=production
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env (openssl rand -hex 32)}
       - CORS_ORIGINS=https://${SITE_DOMAIN}
+      - SITE_DOMAIN=${SITE_DOMAIN}
+      - SM_ADMINS=${SM_ADMINS:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - MAIL_FROM=${MAIL_FROM:-}
       - SM_REQUIRE_LOGIN_FOR_JOBS=${SM_REQUIRE_LOGIN_FOR_JOBS:-1}
       - SM_ENABLE_DOWNLOADS=${SM_ENABLE_DOWNLOADS:-0}
       - SM_HEAVY_WORKERS=${SM_HEAVY_WORKERS:-1}

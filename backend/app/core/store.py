@@ -18,6 +18,9 @@ Tables:
   radio_plays stations people started, for the radio charts
   quiz_scores rounds of the music quiz, for its leaderboard
   jobs        stem, MIDI and CSV jobs and their results, so a restart keeps them
+  password_resets  one-time links emailed to people who forgot their password (hashed)
+  reports     things visitors reported (a map, a profile, a note, a track) for the admin page
+  page_views  one row per page view for the visitor stats (no IP address, no cookie)
 """
 from __future__ import annotations
 
@@ -126,6 +129,36 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS jobs_time ON jobs (updated_at);
+CREATE TABLE IF NOT EXISTS password_resets (
+    token_sha256 TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    expires_at REAL NOT NULL,
+    used_at REAL
+);
+CREATE INDEX IF NOT EXISTS password_resets_user ON password_resets (username);
+CREATE TABLE IF NOT EXISTS reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,           -- map, profile, pin, track
+    target TEXT NOT NULL,         -- share id, username, pin id or track id
+    reason TEXT NOT NULL,
+    details TEXT,
+    reporter TEXT NOT NULL,       -- "user:<name>" or "anon:<browser id>"
+    status TEXT NOT NULL DEFAULT 'open',   -- open, removed, dismissed
+    created_at REAL NOT NULL,
+    resolved_by TEXT,
+    resolved_at REAL
+);
+CREATE INDEX IF NOT EXISTS reports_status ON reports (status, created_at);
+CREATE INDEX IF NOT EXISTS reports_target ON reports (kind, target);
+CREATE TABLE IF NOT EXISTS page_views (
+    day TEXT NOT NULL,            -- YYYY-MM-DD (UTC)
+    path TEXT NOT NULL,           -- the page's route, e.g. /u/[username]
+    visitor TEXT NOT NULL,        -- a hash that changes every day, so visits can't be linked across days
+    referrer TEXT,                -- the site they came from (host only)
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS page_views_day ON page_views (day);
 """
 
 # Columns added after a table first shipped: (table, column, definition)

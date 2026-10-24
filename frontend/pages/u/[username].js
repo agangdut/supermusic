@@ -7,6 +7,7 @@ import PageShell from "@/components/layout/PageShell";
 import { MapCard, num } from "@/components/map/MapCards";
 import EventLine from "@/components/social/EventLine";
 import Avatar from "@/components/ui/Avatar";
+import ReportButton from "@/components/social/ReportButton";
 import { followList, followUser, getProfile, setMapListed, unshareMap, updateProfile } from "@/lib/api";
 import { signOut, updateUser, useAuth } from "@/lib/auth";
 
@@ -164,6 +165,7 @@ export default function Profile() {
                 <button onClick={() => setEditing((e) => !e)} className="rounded-xl border border-white/15 px-4 py-2 text-sm text-gray-200 hover:bg-white/5">Edit profile</button>
                 {/* Phones have no account menu in a top bar, so these live here */}
                 <Link href="/account" className="rounded-xl border border-white/15 px-4 py-2 text-sm text-gray-200 md:hidden">Account</Link>
+                {user?.is_admin && <Link href="/admin" className="rounded-xl border border-white/15 px-4 py-2 text-sm text-gray-200 md:hidden">Admin</Link>}
                 <button onClick={() => { signOut(); router.push("/"); }} className="rounded-xl px-3 py-2 text-sm text-gray-400 md:hidden">Sign out</button>
               </>
             ) : (
@@ -177,6 +179,7 @@ export default function Profile() {
                     Compare with mine
                   </Link>
                 )}
+                <ReportButton kind="profile" target={p.username} className="rounded-xl px-3 py-2 text-xs text-gray-500 hover:text-rose-300" />
               </>
             )}
           </div>

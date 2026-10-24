@@ -16,9 +16,11 @@ import ImportProgress, { BuildProgress } from "@/components/map/ImportProgress";
 import StatsPanel from "@/components/map/StatsPanel";
 import ClusterAtlas from "@/components/map/ClusterAtlas";
 import { availableLenses, buildLens, RAMP_CSS } from "@/components/map/lenses";
+import { findBlackHoles, sharePct } from "@/components/map/blackholes";
 import RadioPanel from "@/components/map/RadioPanel";
 import ShareDialog from "@/components/map/ShareDialog";
 import UpvoteButton from "@/components/map/UpvoteButton";
+import ReportButton from "@/components/social/ReportButton";
 import SongStatsEditor from "@/components/map/SongStatsEditor";
 import PeoplePanel from "@/components/map/PeoplePanel";
 
@@ -397,6 +399,7 @@ export default function MapExplorer() {
   }, [data, selectedId, clusterFocus, tab, found, station]);
 
   const selected = selectedId != null ? byId[selectedId] : null;
+  const blackHoles = useMemo(() => findBlackHoles(data?.tracks), [data]);
   const [editing, setEditing] = useState(false); // "Fix stats" open on the selected song
   useEffect(() => { setEditing(false); }, [selectedId]);
 
@@ -527,6 +530,7 @@ export default function MapExplorer() {
                 : <button disabled title="Only the person who made this map can share it" className={`${ghost} cursor-not-allowed opacity-40 hover:bg-black/20`}>Share</button>)}
               {shared && <Link href={`/?compare=${encodeURIComponent(shared.id)}`} className={ghost}>Compare with mine</Link>}
               {shared && <UpvoteButton id={shared.id} votes={shared.votes ?? 0} voted={!!shared.voted} />}
+              {shared && shared.owner !== user?.username && <ReportButton kind="map" target={shared.id} className={ghost} />}
               {(shared || blend || !isSample) && (
                 <button
                   onClick={() => { setShared(null); openedRef.current = null; router.replace("/", undefined, { shallow: true }); const mine = myMap(); const src = mine?.csv_path && !isSample && (shared || blend) ? { csv_path: mine.csv_path } : { sample: true }; setSource(src); load(src, weights); }}
@@ -749,6 +753,12 @@ export default function MapExplorer() {
                 {selected.energy != null && <Chip>energy {Math.round(selected.energy * 100)}</Chip>}
                 {selected.year && <Chip>{selected.year}</Chip>}
                 {selected.plays != null && <Chip>{selected.plays} plays</Chip>}
+                {blackHoles.has(selected.id) && (
+                  <span className="rounded-md border border-amber-300/30 bg-amber-300/[0.08] px-1.5 py-0.5 text-[11px] text-amber-200"
+                    title="This song holds a big share of all the plays on this map">
+                    Black hole · {sharePct(blackHoles.get(selected.id))} of all plays
+                  </span>
+                )}
                 {selected.vibes?.map((v) => (
                   <span key={v} className="rounded-md border border-sky-300/20 bg-sky-300/[0.06] px-1.5 py-0.5 text-[11px] text-sky-200">{v}</span>
                 ))}
