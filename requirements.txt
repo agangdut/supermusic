@@ -24,6 +24,7 @@ python-multipart
 pydantic
 python-dotenv
 httpx
+modal  # only used when SM_MODAL_ENGINES is set
 
 # Visualization
 plotly

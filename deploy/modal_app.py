@@ -1,26 +1,27 @@
 """
-SuperMusic on Modal (https://modal.com): the whole site, with the models on GPUs.
+SuperMusic's model servers on Modal's GPUs (https://modal.com), and optionally the whole site.
 
-    pip install modal && modal setup            # once, signs this computer in
-    modal secret create supermusic SITE_DOMAIN=<workspace>--supermusic.modal.run \\
-        JWT_SECRET_KEY=$(openssl rand -hex 32) CONTACT_EMAIL=you@example.com
-    CONTACT_EMAIL=you@example.com modal deploy deploy/modal_app.py
+The usual setup: your own server runs the site with your domain
+(docker-compose.prod.yml), and only the transcription engines run here, on GPUs
+that start when a job needs one and stop a couple of minutes after:
 
-docs/deploy-modal.md explains every step and setting.
+    pip install modal && modal setup                      # once, signs this computer in
+    modal secret create supermusic HF_TOKEN=hf_...         # HF_TOKEN only for MuScriptor
+    modal deploy deploy/modal_app.py
 
-What runs where:
+then set SM_MODAL_ENGINES, MODAL_TOKEN_ID and MODAL_TOKEN_SECRET in the
+server's .env. docs/deploy-modal.md explains every step.
 
-- `web`: one always-on CPU container with the API (FastAPI), the website
-  (Next.js) and Caddy joining them on one address, like docker-compose.prod.yml.
-  Stems, Basic Pitch, Piano and Pop2Piano run here. It is the only container
-  that touches the `supermusic-data` volume (accounts database, uploads,
-  results), so there is never more than one of it.
-- `YourMT3`, `MuScriptor`, `Game`: the transcription engines, each on a GPU that
-  starts when a job needs it and stops a couple of minutes after the last one.
+What runs here:
+
+- `YourMT3`, `MuScriptor`, `Game`: the transcription engines, each on a GPU.
   The backend sends them the audio and gets the MIDI back
   (backend/app/core/modal_engines.py). Their model weights are kept on the
   `supermusic-models` volume so they download only once.
-- `Clap`: Music Map sound search, on a small CPU container that also stops when idle.
+- `Clap`: Music Map sound search, on a small CPU container that stops when idle.
+- `web` (only with SM_MODAL_SITE=1 when deploying): the whole site in one
+  always-on container, at https://<workspace>--supermusic.modal.run. Your own
+  domain on that needs Modal's Team plan.
 """
 from __future__ import annotations
 
@@ -34,106 +35,110 @@ APP_NAME = "supermusic"
 GPU = os.getenv("SM_MODAL_GPU", "T4")  # T4 is the cheapest; L4 is about 1.5x faster
 
 app = modal.App(APP_NAME)
-data = modal.Volume.from_name("supermusic-data", create_if_missing=True, version=2)
 models = modal.Volume.from_name("supermusic-models", create_if_missing=True, version=2)
 secret = modal.Secret.from_name("supermusic")
+data = modal.Volume.from_name("supermusic-data", create_if_missing=True, version=2) if os.getenv("SM_MODAL_SITE") == "1" else None
 
 
 # ---------------------------------------------------------------------------
-# The site: API + website + Caddy in one container
+# The site: API + website + Caddy in one container. Only deployed with
+# SM_MODAL_SITE=1 (the web image carries the setting, so its container finds `web`).
 # ---------------------------------------------------------------------------
 
-web_image = (
-    modal.Image.from_registry("node:20-bookworm-slim", add_python="3.10")
-    .apt_install("ffmpeg", "fluidsynth", "fluid-soundfont-gm", "curl", "ca-certificates")
-    .run_commands(
-        "curl -fsSL https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_amd64.tar.gz"
-        " | tar -xz -C /usr/local/bin caddy"
+if os.getenv("SM_MODAL_SITE") == "1":
+
+    web_image = (
+        modal.Image.from_registry("node:20-bookworm-slim", add_python="3.10")
+        .apt_install("ffmpeg", "fluidsynth", "fluid-soundfont-gm", "curl", "ca-certificates")
+        .run_commands(
+            "curl -fsSL https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_amd64.tar.gz"
+            " | tar -xz -C /usr/local/bin caddy"
+        )
+        # CPU-only torch first, so demucs doesn't pull several GB of CUDA wheels
+        .pip_install("torch", "torchaudio", index_url="https://download.pytorch.org/whl/cpu",
+                     extra_index_url="https://pypi.org/simple")
+        .pip_install_from_requirements(str(ROOT / "requirements.txt"))
+        .pip_install("modal")
+        # NEXT_PUBLIC_ values are baked into the website when it is built
+        .env({
+            "NEXT_PUBLIC_API_BASE": "/api",
+            "NEXT_PUBLIC_CONTACT_EMAIL": os.getenv("CONTACT_EMAIL", ""),
+            "NEXT_PUBLIC_SPOTIFY_CLIENT_ID": os.getenv("SPOTIFY_CLIENT_ID", ""),
+            "NEXT_TELEMETRY_DISABLED": "1",
+            "SM_MODAL_SITE": "1",
+        })
+        .add_local_dir(str(ROOT / "frontend"), "/srv/frontend", copy=True,
+                       ignore=["node_modules", ".next", "out", "**/.env*"])
+        .run_commands(
+            "cd /srv/frontend && npm ci --no-audit --no-fund && npm run build"
+            " && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public"
+        )
+        .add_local_file(str(ROOT / "deploy" / "Caddyfile.modal"), "/etc/caddy/Caddyfile")
+        .add_local_dir(str(ROOT / "backend"), "/app/backend", ignore=["tests", "**/__pycache__", "data"])
+        .add_local_dir(str(ROOT / "scripts"), "/app/scripts", ignore=["**/__pycache__"])
     )
-    # CPU-only torch first, so demucs doesn't pull several GB of CUDA wheels
-    .pip_install("torch", "torchaudio", index_url="https://download.pytorch.org/whl/cpu",
-                 extra_index_url="https://pypi.org/simple")
-    .pip_install_from_requirements(str(ROOT / "requirements.txt"))
-    .pip_install("modal")
-    # NEXT_PUBLIC_ values are baked into the website when it is built
-    .env({
-        "NEXT_PUBLIC_API_BASE": "/api",
-        "NEXT_PUBLIC_CONTACT_EMAIL": os.getenv("CONTACT_EMAIL", ""),
-        "NEXT_PUBLIC_SPOTIFY_CLIENT_ID": os.getenv("SPOTIFY_CLIENT_ID", ""),
-        "NEXT_TELEMETRY_DISABLED": "1",
-    })
-    .add_local_dir(str(ROOT / "frontend"), "/srv/frontend", copy=True,
-                   ignore=["node_modules", ".next", "out", "**/.env*"])
-    .run_commands(
-        "cd /srv/frontend && npm ci --no-audit --no-fund && npm run build"
-        " && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public"
+
+    # Defaults for the backend; anything in the "supermusic" secret overrides them.
+    WEB_DEFAULTS = {
+        "SM_ENV": "production",
+        "PYTHONPATH": "/app:/app/backend",
+        "SM_DATA_DIR": "/app/data",
+        "SM_RAW_DIR": "/app/data/raw",
+        "SM_INTERIM_DIR": "/app/data/interim",
+        "SM_PROCESSED_DIR": "/app/data/processed",
+        "SUPERMUSIC_ARTIFACT_DIR": "/app/data/artifacts",
+        "TORCH_HOME": "/app/data/models/torch",
+        "SM_REQUIRE_LOGIN_FOR_JOBS": "1",
+        "SM_ENABLE_DOWNLOADS": "0",
+        "SM_HEAVY_WORKERS": "1",
+        "SM_MAX_ACTIVE_JOBS": "3",
+        "SM_JOBS_PER_HOUR": "20",
+        "SM_MAX_UPLOAD_MB": "100",
+        "SM_MAX_SONG_MINUTES": "15",
+        "SM_KEEP_DAYS": "7",
+        # The engines below. Leave MuScriptor and GAME (Lead vocal) out of this list on a
+        # site that makes money: their licences are non-commercial.
+        "SM_MODAL_ENGINES": "yourmt3,muscriptor,game,clap",
+        "SM_MODAL_APP": APP_NAME,
+    }
+
+
+    @app.function(
+        image=web_image,
+        volumes={"/app/data": data},
+        secrets=[secret],
+        # Billed for what it reserves when idle (1 core, 2 GB) and what it uses during jobs (up to 8 cores, 16 GB)
+        cpu=(1.0, 8.0),
+        memory=(2048, 16384),
+        # Exactly one: jobs in progress and the waiting line live in its memory, and only one
+        # container may write the database on the volume
+        min_containers=1,
+        max_containers=1,
+        timeout=600,
     )
-    .add_local_file(str(ROOT / "deploy" / "Caddyfile.modal"), "/etc/caddy/Caddyfile")
-    .add_local_dir(str(ROOT / "backend"), "/app/backend", ignore=["tests", "**/__pycache__", "data"])
-    .add_local_dir(str(ROOT / "scripts"), "/app/scripts", ignore=["**/__pycache__"])
-)
+    @modal.concurrent(max_inputs=500)
+    @modal.web_server(8080, startup_timeout=600, label=APP_NAME)
+    def web():
+        import subprocess
 
-# Defaults for the backend; anything in the "supermusic" secret overrides them.
-WEB_DEFAULTS = {
-    "SM_ENV": "production",
-    "PYTHONPATH": "/app:/app/backend",
-    "SM_DATA_DIR": "/app/data",
-    "SM_RAW_DIR": "/app/data/raw",
-    "SM_INTERIM_DIR": "/app/data/interim",
-    "SM_PROCESSED_DIR": "/app/data/processed",
-    "SUPERMUSIC_ARTIFACT_DIR": "/app/data/artifacts",
-    "TORCH_HOME": "/app/data/models/torch",
-    "SM_REQUIRE_LOGIN_FOR_JOBS": "1",
-    "SM_ENABLE_DOWNLOADS": "0",
-    "SM_HEAVY_WORKERS": "1",
-    "SM_MAX_ACTIVE_JOBS": "3",
-    "SM_JOBS_PER_HOUR": "20",
-    "SM_MAX_UPLOAD_MB": "100",
-    "SM_MAX_SONG_MINUTES": "15",
-    "SM_KEEP_DAYS": "7",
-    # The engines below. Leave MuScriptor and GAME (Lead vocal) out of this list on a
-    # site that makes money: their licences are non-commercial.
-    "SM_MODAL_ENGINES": "yourmt3,muscriptor,game,clap",
-    "SM_MODAL_APP": APP_NAME,
-}
+        env = {**WEB_DEFAULTS, **os.environ}
+        domain = env.get("SITE_DOMAIN", "").strip()
+        if domain and not env.get("CORS_ORIGINS"):
+            env["CORS_ORIGINS"] = f"https://{domain}"
+        for d in ("raw", "interim", "processed", "artifacts", "models"):
+            Path("/app/data", d).mkdir(parents=True, exist_ok=True)
 
-
-@app.function(
-    image=web_image,
-    volumes={"/app/data": data},
-    secrets=[secret],
-    # Billed for what it reserves when idle (1 core, 2 GB) and what it uses during jobs (up to 8 cores, 16 GB)
-    cpu=(1.0, 8.0),
-    memory=(2048, 16384),
-    # Exactly one: jobs in progress and the waiting line live in its memory, and only one
-    # container may write the database on the volume
-    min_containers=1,
-    max_containers=1,
-    timeout=600,
-)
-@modal.concurrent(max_inputs=500)
-@modal.web_server(8080, startup_timeout=600, label=APP_NAME)
-def web():
-    import subprocess
-
-    env = {**WEB_DEFAULTS, **os.environ}
-    domain = env.get("SITE_DOMAIN", "").strip()
-    if domain and not env.get("CORS_ORIGINS"):
-        env["CORS_ORIGINS"] = f"https://{domain}"
-    for d in ("raw", "interim", "processed", "artifacts", "models"):
-        Path("/app/data", d).mkdir(parents=True, exist_ok=True)
-
-    subprocess.Popen(
-        ["python", "-m", "uvicorn", "app.main:app", "--app-dir", "backend", "--host", "127.0.0.1", "--port", "8000",
-         "--proxy-headers", "--forwarded-allow-ips", "*"],
-        cwd="/app", env=env,
-    )
-    subprocess.Popen(
-        ["node", "server.js"], cwd="/srv/frontend/.next/standalone",
-        env={**env, "NODE_ENV": "production", "HOSTNAME": "127.0.0.1", "PORT": "3000",
-             "API_INTERNAL_BASE": "http://127.0.0.1:8000"},
-    )
-    subprocess.Popen(["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"], env=env)
+        subprocess.Popen(
+            ["python", "-m", "uvicorn", "app.main:app", "--app-dir", "backend", "--host", "127.0.0.1", "--port", "8000",
+             "--proxy-headers", "--forwarded-allow-ips", "*"],
+            cwd="/app", env=env,
+        )
+        subprocess.Popen(
+            ["node", "server.js"], cwd="/srv/frontend/.next/standalone",
+            env={**env, "NODE_ENV": "production", "HOSTNAME": "127.0.0.1", "PORT": "3000",
+                 "API_INTERNAL_BASE": "http://127.0.0.1:8000"},
+        )
+        subprocess.Popen(["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"], env=env)
 
 
 # ---------------------------------------------------------------------------

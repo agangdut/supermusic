@@ -67,6 +67,10 @@ services:
       - MUSCRIPTOR_URL=http://muscriptor:8200
       - CLAP_URL=http://clap:8300
       - GAME_URL=http://game:8300
+      # Run the transcription engines on Modal's GPUs instead (docs/deploy-modal.md)
+      - SM_MODAL_ENGINES=${SM_MODAL_ENGINES:-}
+      - MODAL_TOKEN_ID=${MODAL_TOKEN_ID:-}
+      - MODAL_TOKEN_SECRET=${MODAL_TOKEN_SECRET:-}
     volumes:
       - ./data:/app/data
     deploy:

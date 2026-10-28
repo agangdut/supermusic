@@ -48,7 +48,7 @@ Then open http://localhost:3000. The first build takes several minutes because i
 
 Your uploads and results are saved in `./data`. The [usage guide](docs/usage.md) covers every screen and the API, and [configuration](docs/configuration.md) lists every setting.
 
-To put SuperMusic on the internet, follow [Running SuperMusic as a public website](docs/deploy.md) for a server of your own, or [Running SuperMusic on Modal](docs/deploy-modal.md) to have Modal host it with the models on GPUs.
+To put SuperMusic on the internet, follow [Running SuperMusic as a public website](docs/deploy.md) for a server of your own, and [Transcription on Modal's GPUs](docs/deploy-modal.md) to run the models on GPUs billed by the second.
 
 <details>
 <summary>Run it without Docker</summary>

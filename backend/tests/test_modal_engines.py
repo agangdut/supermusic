@@ -98,18 +98,10 @@ def test_muscriptor_reports_progress(engine, song, tmp_path, monkeypatch):
 
     seen = []
     monkeypatch.setattr(progress, "report_detail", lambda msg, **kw: seen.append(msg))
-    monkeypatch.setenv("HF_TOKEN", "x")
     assert muscriptor_client.available()
     midi = muscriptor_client.transcribe_muscriptor(song, out_dir=tmp_path, dynamics=False)
     assert midi.read_bytes() == b"MThd" and midi.name == "song.mid"
     assert any("section 1 of 2" in m for m in seen)
-
-
-def test_muscriptor_needs_a_token_on_modal(engine, monkeypatch):
-    from app.core import muscriptor_client
-
-    monkeypatch.delenv("HF_TOKEN", raising=False)
-    assert not muscriptor_client.available()
 
 
 def test_clap_embeds_through_modal(engine):

@@ -24,7 +24,7 @@ URL = os.getenv("MUSCRIPTOR_URL", "http://muscriptor:8200")
 def available() -> bool:
     """Running, and able to load its model (already loaded, or has a Hugging Face token)."""
     if modal_engines.enabled("muscriptor"):
-        return bool(os.getenv("HF_TOKEN"))  # the GPU side gets the same secret
+        return True  # leave it out of SM_MODAL_ENGINES when the Modal secret has no HF_TOKEN
     try:
         with urllib.request.urlopen(f"{URL}/health", timeout=3) as r:
             h = json.loads(r.read())
