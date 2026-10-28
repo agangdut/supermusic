@@ -48,7 +48,7 @@ Then open http://localhost:3000. The first build takes several minutes because i
 
 Your uploads and results are saved in `./data`. The [usage guide](docs/usage.md) covers every screen and the API, and [configuration](docs/configuration.md) lists every setting.
 
-To put SuperMusic on the internet with your own domain and HTTPS, follow [Running SuperMusic as a public website](docs/deploy.md).
+To put SuperMusic on the internet, follow [Running SuperMusic as a public website](docs/deploy.md) for a server of your own, or [Running SuperMusic on Modal](docs/deploy-modal.md) to have Modal host it with the models on GPUs.
 
 <details>
 <summary>Run it without Docker</summary>
@@ -91,7 +91,7 @@ backend/    API: routes, job pipelines, accounts, tests
 frontend/   Website (Next.js and Tailwind)
 services/   Model servers, one container each
 scripts/    Benchmarks and dataset tools
-deploy/     Production setup: Caddy, settings template, backups
+deploy/     Production setup: Caddy, settings template, backups, Modal app
 docs/       Guides, benchmarks, API reference
 ```
 

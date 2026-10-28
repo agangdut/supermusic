@@ -1,0 +1,43 @@
+# The site inside its Modal container (deploy/modal_app.py). Modal already serves
+# HTTPS, so Caddy only joins the website and the API on one address, as
+# deploy/Caddyfile does on a server of your own.
+{
+	admin off
+	auto_https off
+	# Modal's front door says who the visitor is in X-Forwarded-For; pass it on so
+	# per-address limits see visitors, not Modal. Only Modal can reach this port.
+	servers {
+		trusted_proxies static 0.0.0.0/0 ::/0
+	}
+}
+
+:8080 {
+	encode zstd gzip
+
+	request_body {
+		max_size 300MB
+	}
+
+	# /api/map/build -> backend /map/build
+	handle_path /api/* {
+		reverse_proxy 127.0.0.1:8000 {
+			transport http {
+				read_timeout 5m
+				write_timeout 5m
+			}
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+}

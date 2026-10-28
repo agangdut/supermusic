@@ -15,6 +15,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+from app.core import modal_engines
 from app.core.config import settings
 
 URL = os.getenv("MUSCRIPTOR_URL", "http://muscriptor:8200")
@@ -22,6 +23,8 @@ URL = os.getenv("MUSCRIPTOR_URL", "http://muscriptor:8200")
 
 def available() -> bool:
     """Running, and able to load its model (already loaded, or has a Hugging Face token)."""
+    if modal_engines.enabled("muscriptor"):
+        return bool(os.getenv("HF_TOKEN"))  # the GPU side gets the same secret
     try:
         with urllib.request.urlopen(f"{URL}/health", timeout=3) as r:
             h = json.loads(r.read())
@@ -59,19 +62,14 @@ def transcribe_muscriptor(audio_path: str | Path, out_dir: Path | None = None, i
 
     audio_path = Path(audio_path)
     out_dir = (out_dir or (settings.PROCESSED_DIR / "midi")) / uuid.uuid4().hex
-    job = _call("POST", "/jobs", {"audio_path": str(audio_path.resolve()), "out_dir": str(out_dir),
-                                  "instruments": instruments, "fast": fast, "beam_size": beam_size})
-    deadline = time.time() + 3 * 3600
-    while time.time() < deadline:
-        st = _call("GET", f"/jobs/{job['id']}")
-        if st["status"] == "done":
-            break
-        if st["status"] == "error":
-            raise RuntimeError(st.get("error") or "MuScriptor failed")
+    body = {"audio_path": str(audio_path.resolve()), "out_dir": str(out_dir),
+            "instruments": instruments, "fast": fast, "beam_size": beam_size}
+
+    def show(st: dict) -> None:
         cpu = " on the CPU, which is slow" if st.get("device") == "cpu" else ""
         if not st.get("total"):
             doing = {"loading": "loading the model (the very first run also downloads it)",
-                     "waiting": "waiting for another song to finish"}.get(st["status"], "getting the audio ready")
+                     "waiting": "waiting for another song to finish"}.get(st.get("status"), "getting the audio ready")
             report_detail(f"{label}: {doing}{cpu}…")
         else:
             done, total = st["completed"], st["total"]
@@ -79,9 +77,23 @@ def transcribe_muscriptor(audio_path: str | Path, out_dir: Path | None = None, i
             eta = f", about {_fmt(left)} left" if left and done else ""
             report_detail(f"{label}{cpu}: section {done} of {total} ({round(100 * done / total)}%){eta}",
                           fraction=done / total, remaining_s=left if done else None)
-        time.sleep(2)
+
+    if modal_engines.enabled("muscriptor"):
+        report_detail(f"{label}: starting a GPU…")
+        st = modal_engines.run_job("muscriptor", body, show)
     else:
-        raise RuntimeError("MuScriptor took more than 3 hours; giving up")
+        job = _call("POST", "/jobs", body)
+        deadline = time.time() + 3 * 3600
+        while time.time() < deadline:
+            st = _call("GET", f"/jobs/{job['id']}")
+            if st["status"] == "done":
+                break
+            if st["status"] == "error":
+                raise RuntimeError(st.get("error") or "MuScriptor failed")
+            show(st)
+            time.sleep(2)
+        else:
+            raise RuntimeError("MuScriptor took more than 3 hours; giving up")
     midi = Path(st["midi_path"])
     final = out_dir / f"{audio_path.stem}.mid"
     if midi != final:

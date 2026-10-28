@@ -59,6 +59,7 @@ Sign-ups, sign-ins, uploads, imports and map builds also have fixed per-hour lim
 | `MUSCRIPTOR_MODEL` | `medium` | `small`, `medium` or `large` (large needs a GPU with more than 6 GB) |
 | `MUSCRIPTOR_FAST` | `0` | `1` transcribes 4 five-second sections at once, about 30% faster, but it can cut held notes where sections join, so it's off by default |
 | `CLAP_URL` | `http://clap:8300` | Where the backend finds the CLAP service that gives songs a "sound" description for the Music Map |
+| `SM_MODAL_ENGINES` | _(empty)_ | Model servers to run on Modal instead of at the addresses above, e.g. `yourmt3,muscriptor,game,clap`. Set for you on Modal ([guide](deploy-modal.md)) |
 | `CLAP_MODEL` | `laion/clap-htsat-unfused` | CLAP checkpoint. `laion/larger_clap_music` returned the same songs for every search in testing, so it isn't recommended |
 | `GAME_URL` | `http://game:8300` | Where the backend finds the GAME singing transcriber. If it isn't reachable, Full band and Auto use MuScriptor's own voice track |
 | `GAME_MODEL` | `medium` | `small`, `medium` or `large` GAME weights (non-commercial licence, downloaded on first use) |

@@ -1,6 +1,6 @@
 # Running SuperMusic as a public website
 
-This guide puts SuperMusic on one Linux server with its own domain and HTTPS. It takes about an hour the first time.
+This guide puts SuperMusic on one Linux server with its own domain and HTTPS. It takes about an hour the first time. To have Modal host it instead, with no server to manage, see [Running SuperMusic on Modal](deploy-modal.md).
 
 ## What you need
 

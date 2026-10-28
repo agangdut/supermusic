@@ -13,12 +13,15 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+from app.core import modal_engines
 from app.core.config import settings
 
 URL = os.getenv("GAME_URL", "http://game:8300")
 
 
 def available() -> bool:
+    if modal_engines.enabled("game"):
+        return True
     try:
         with urllib.request.urlopen(f"{URL}/health", timeout=3) as r:
             return r.status == 200
@@ -31,8 +34,11 @@ def separate_vocals(audio_path: str | Path, out_dir: Path) -> tuple[Path, Path]:
     audio_path = Path(audio_path).resolve()
     if settings.DATA_DIR.resolve() not in audio_path.parents:  # the GAME container only sees data/
         raise RuntimeError("audio is outside the shared data folder")
-    body = json.dumps({"audio_path": str(audio_path), "out_dir": str(out_dir)}).encode()
-    req = urllib.request.Request(f"{URL}/separate", data=body, headers={"Content-Type": "application/json"})
+    body = {"audio_path": str(audio_path), "out_dir": str(out_dir)}
+    if modal_engines.enabled("game"):
+        res = modal_engines.post("game", "/separate", body)
+        return Path(res["vocals"]), Path(res["no_vocals"])
+    req = urllib.request.Request(f"{URL}/separate", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=1800) as r:
             res = json.loads(r.read())
@@ -44,6 +50,8 @@ def separate_vocals(audio_path: str | Path, out_dir: Path) -> tuple[Path, Path]:
 
 
 def on_gpu() -> bool:
+    if modal_engines.enabled("game"):
+        return True
     try:
         with urllib.request.urlopen(f"{URL}/health", timeout=3) as r:
             return json.loads(r.read()).get("device") == "cuda"
@@ -54,8 +62,10 @@ def on_gpu() -> bool:
 def transcribe_singing(vocal_path: str | Path, out_dir: Path | None = None) -> Path:
     vocal_path = Path(vocal_path)
     out_dir = (out_dir or (settings.PROCESSED_DIR / "midi")) / uuid.uuid4().hex
-    body = json.dumps({"audio_path": str(vocal_path.resolve()), "out_dir": str(out_dir)}).encode()
-    req = urllib.request.Request(f"{URL}/transcribe", data=body, headers={"Content-Type": "application/json"})
+    body = {"audio_path": str(vocal_path.resolve()), "out_dir": str(out_dir)}
+    if modal_engines.enabled("game"):
+        return Path(modal_engines.post("game", "/transcribe", body)["midi_path"])
+    req = urllib.request.Request(f"{URL}/transcribe", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=3600) as r:
             return Path(json.loads(r.read())["midi_path"])

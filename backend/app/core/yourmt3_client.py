@@ -14,12 +14,15 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+from app.core import modal_engines
 from app.core.config import settings
 
 URL = os.getenv("YOURMT3_URL", "http://yourmt3:8100")
 
 
 def available() -> bool:
+    if modal_engines.enabled("yourmt3"):
+        return True
     try:
         with urllib.request.urlopen(f"{URL}/health", timeout=3) as r:
             return bool(json.loads(r.read()).get("loaded"))
@@ -30,8 +33,11 @@ def available() -> bool:
 def transcribe_multi(audio_path: str | Path, out_dir: Path | None = None) -> Path:
     audio_path = Path(audio_path)
     out_dir = (out_dir or (settings.PROCESSED_DIR / "midi")) / uuid.uuid4().hex
-    body = json.dumps({"audio_path": str(audio_path.resolve()), "out_dir": str(out_dir)}).encode()
-    req = urllib.request.Request(f"{URL}/transcribe", data=body, headers={"Content-Type": "application/json"})
+    body = {"audio_path": str(audio_path.resolve()), "out_dir": str(out_dir)}
+    if modal_engines.enabled("yourmt3"):
+        midi = Path(modal_engines.post("yourmt3", "/transcribe", body)["midi_path"])
+        return _finish(midi, out_dir, audio_path)
+    req = urllib.request.Request(f"{URL}/transcribe", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=3600) as r:
             midi = Path(json.loads(r.read())["midi_path"])
@@ -39,6 +45,10 @@ def transcribe_multi(audio_path: str | Path, out_dir: Path | None = None) -> Pat
         raise RuntimeError(json.loads(e.read() or b"{}").get("detail", f"YourMT3+ error {e.code}"))
     except urllib.error.URLError:
         raise RuntimeError("The YourMT3+ service isn't running. Start it with: docker compose up -d yourmt3")
+    return _finish(midi, out_dir, audio_path)
+
+
+def _finish(midi: Path, out_dir: Path, audio_path: Path) -> Path:
     final = out_dir / f"{audio_path.stem}.mid"
     shutil.move(str(midi), final)
     return final
