@@ -21,7 +21,7 @@ In `.env`, set at least:
 
 | Setting | Value |
 |---|---|
-| `SITE_DOMAIN` | your domain, e.g. `supermusic.example.com` |
+| `SITE_DOMAIN` | your domain, e.g. `supermusic.example.com`. `www.` sends visitors there; to make `www.` the main address, set `SITE_DOMAIN=www.example.com` and `REDIRECT_DOMAIN=example.com` |
 | `JWT_SECRET_KEY` | the output of `openssl rand -hex 32` |
 | `CONTACT_EMAIL` | where people write about privacy, copyright or a lost password |
 
