@@ -14,6 +14,7 @@
 | Page | Read it to |
 |---|---|
 | [Running SuperMusic as a public website](deploy.md) | put it on a server with your own domain, HTTPS and backups |
+| [Transcription on Modal's GPUs](deploy-modal.md) | run the transcription models on GPUs billed by the second, or host the whole site on Modal |
 | [Free demo hosting](demo-hosting.md) | show it on GitHub Pages with the API on a Hugging Face Space |
 | [Configuration](configuration.md) | change any setting: keys, limits, folders, models, ports |
 | [API reference](api.md) | call the API yourself |

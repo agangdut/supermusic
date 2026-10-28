@@ -1,6 +1,6 @@
 # Running SuperMusic as a public website
 
-This guide puts SuperMusic on one Linux server with its own domain and HTTPS. It takes about an hour the first time.
+This guide puts SuperMusic on one Linux server with its own domain and HTTPS. It takes about an hour the first time. To run the transcription models on GPUs billed by the second, add [Transcription on Modal's GPUs](deploy-modal.md) once the site is up.
 
 ## What you need
 
@@ -50,7 +50,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 The first build downloads the machine-learning libraries and takes 10 to 20 minutes. When it's done, open `https://<your domain>`. Caddy gets the HTTPS certificate by itself the first time someone visits, which needs the domain's DNS to already point at the server.
 
-To also run the extra transcription engines (Full band with YourMT3+ and MuScriptor, and the Lead vocal model), add the `engines` profile. Each needs about 3 to 4 GB of memory:
+To also run the extra transcription engines (Full band with YourMT3+ and MuScriptor, and the Lead vocal model) on this server, add the `engines` profile. Each needs about 3 to 4 GB of memory. To run them on Modal's GPUs instead, which is much faster and leaves the server free (4 cores and 8 GB is then enough), follow [Transcription on Modal's GPUs](deploy-modal.md).
 
 ```bash
 docker compose -f docker-compose.prod.yml --profile engines up -d --build

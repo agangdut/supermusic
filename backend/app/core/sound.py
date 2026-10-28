@@ -73,6 +73,10 @@ def matrix(df: pd.DataFrame) -> Optional[np.ndarray]:
 # ---------------------------------------------------------------------------
 
 def available() -> bool:
+    from app.core import modal_engines
+
+    if modal_engines.enabled("clap"):
+        return True
     try:
         with urllib.request.urlopen(f"{URL}/health", timeout=3) as r:
             return bool(json.loads(r.read()).get("model"))
@@ -81,6 +85,10 @@ def available() -> bool:
 
 
 def _post(path: str, data: bytes, content_type: str, timeout: float = 120) -> dict:
+    from app.core import modal_engines
+
+    if modal_engines.enabled("clap"):
+        return modal_engines.post_raw("clap", path, data, content_type)
     req = urllib.request.Request(f"{URL}{path}", data=data, method="POST", headers={"Content-Type": content_type})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
