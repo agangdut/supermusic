@@ -1,6 +1,6 @@
 # Free demo hosting: GitHub Pages + Hugging Face Spaces
 
-A quick way to show SuperMusic without renting a server. For real users, follow
+The live site is [www.supermusic.dev](https://www.supermusic.dev). This page is for a quick way to show your own copy without renting a server. For real users, follow
 [Running SuperMusic as a public website](deploy.md) instead.
 
 - **Website:** https://agangdut.github.io/supermusic/, a static export of the frontend built by
