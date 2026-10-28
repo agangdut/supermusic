@@ -33,7 +33,7 @@
 	}
 }
 
-# www.<domain> sends visitors to the main address
-www.{$SITE_DOMAIN} {
+# REDIRECT_DOMAIN (www.<domain> unless set) sends visitors to the main address
+{$REDIRECT_DOMAIN} {
 	redir https://{$SITE_DOMAIN}{uri} permanent
 }
