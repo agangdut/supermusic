@@ -3,8 +3,8 @@
 import { useRef, useState } from "react";
 import PrimaryButton from "./PrimaryButton";
 import ThemedCard from "./ThemedCard";
+import { LIBRARY_ACCEPT } from "./accept";
 
-const ACCEPT = ".csv,.json,.txt,.tsv";
 const fmtSize = (b) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
 
 export default function CsvCard({
@@ -59,7 +59,7 @@ export default function CsvCard({
         ref={inputRef}
         type="file"
         multiple
-        accept={ACCEPT}
+        accept={LIBRARY_ACCEPT}
         onChange={(e) => { add(e.target.files); e.target.value = ""; }}
         className="hidden"
       />

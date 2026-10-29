@@ -24,6 +24,7 @@ import ReportButton from "@/components/social/ReportButton";
 import SongStatsEditor from "@/components/map/SongStatsEditor";
 import QuickCheck from "@/components/map/QuickCheck";
 import PeoplePanel from "@/components/map/PeoplePanel";
+import { LIBRARY_ACCEPT } from "@/components/upload/accept";
 
 const Graph3D = dynamic(() => import("@/components/map/Graph3D"), {
   ssr: false,
@@ -489,7 +490,7 @@ export default function MapExplorer() {
       <Head>
         <title>{shared ? `${shared.title} · SuperMusic` : "SuperMusic · your music as a galaxy"}</title>
       </Head>
-      <input ref={fileRef} type="file" multiple accept=".csv,.json,.txt" onChange={onFile} className="hidden" />
+      <input ref={fileRef} type="file" multiple accept={LIBRARY_ACCEPT} onChange={onFile} className="hidden" />
 
       {sharing && data && (
         <ShareDialog
