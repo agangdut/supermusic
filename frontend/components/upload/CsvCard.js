@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import PrimaryButton from "./PrimaryButton";
 import ThemedCard from "./ThemedCard";
-import { LIBRARY_ACCEPT } from "./accept";
+import { isLibraryFile } from "./accept";
 
 const fmtSize = (b) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
 
@@ -22,7 +22,7 @@ export default function CsvCard({
 
   // Picking again adds to the list (an account export is many files); same name = same file
   const add = (list) => {
-    const picked = Array.from(list || []).filter((f) => /\.(csv|json|txt|tsv)$/i.test(f.name));
+    const picked = Array.from(list || []).filter(isLibraryFile);
     if (!picked.length) return;
     setCsvFiles((prev) => {
       const byName = new Map((prev || []).map((f) => [f.name, f]));
@@ -59,7 +59,6 @@ export default function CsvCard({
         ref={inputRef}
         type="file"
         multiple
-        accept={LIBRARY_ACCEPT}
         onChange={(e) => { add(e.target.files); e.target.value = ""; }}
         className="hidden"
       />

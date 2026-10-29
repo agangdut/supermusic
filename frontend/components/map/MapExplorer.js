@@ -24,7 +24,7 @@ import ReportButton from "@/components/social/ReportButton";
 import SongStatsEditor from "@/components/map/SongStatsEditor";
 import QuickCheck from "@/components/map/QuickCheck";
 import PeoplePanel from "@/components/map/PeoplePanel";
-import { LIBRARY_ACCEPT } from "@/components/upload/accept";
+import { isLibraryFile, NOT_LIBRARY_FILE } from "@/components/upload/accept";
 
 const Graph3D = dynamic(() => import("@/components/map/Graph3D"), {
   ssr: false,
@@ -282,8 +282,10 @@ export default function MapExplorer() {
   useEffect(() => { setBackgroundWork("mapImport", importing ? 1 : 0); }, [importing]);
 
   const onFile = (e) => {
-    const files = Array.from(e.target.files || []);
+    const picked = Array.from(e.target.files || []);
     e.target.value = "";
+    const files = picked.filter(isLibraryFile);
+    if (picked.length && !files.length) setError(NOT_LIBRARY_FILE);
     if (files.length) {
       setPending(files);
       setPendingMissing([]);
@@ -490,7 +492,7 @@ export default function MapExplorer() {
       <Head>
         <title>{shared ? `${shared.title} · SuperMusic` : "SuperMusic · your music as a galaxy"}</title>
       </Head>
-      <input ref={fileRef} type="file" multiple accept={LIBRARY_ACCEPT} onChange={onFile} className="hidden" />
+      <input ref={fileRef} type="file" multiple onChange={onFile} className="hidden" />
 
       {sharing && data && (
         <ShareDialog
