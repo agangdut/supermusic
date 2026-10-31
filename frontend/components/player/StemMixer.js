@@ -9,25 +9,45 @@ function Waveform({ buffer, color, position, duration }) {
   useEffect(() => {
     const c = ref.current;
     if (!c || !buffer) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = c.clientWidth;
-    const h = c.clientHeight;
-    c.width = w * dpr;
-    c.height = h * dpr;
-    const g = c.getContext("2d");
-    g.scale(dpr, dpr);
-    const data = buffer.getChannelData(0);
-    const step = Math.max(1, Math.floor(data.length / w));
-    g.fillStyle = color;
-    for (let x = 0; x < w; x++) {
-      let peak = 0;
-      for (let i = x * step; i < (x + 1) * step && i < data.length; i += 16) peak = Math.max(peak, Math.abs(data[i]));
-      const bar = Math.max(1, peak * h);
-      g.fillRect(x, (h - bar) / 2, 1, bar);
-    }
+    const draw = () => {
+      const w = c.clientWidth;
+      const h = c.clientHeight;
+      if (!w || !h) return; // not laid out yet: the ResizeObserver below draws it once it is
+      const dpr = window.devicePixelRatio || 1;
+      c.width = Math.round(w * dpr);
+      c.height = Math.round(h * dpr);
+      const g = c.getContext("2d");
+      if (!g) return;
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, w, h);
+      const data = buffer.getChannelData(0);
+      const step = Math.max(1, Math.floor(data.length / w));
+      g.fillStyle = color;
+      for (let x = 0; x < w; x++) {
+        let peak = 0;
+        for (let i = x * step; i < (x + 1) * step && i < data.length; i += 16) peak = Math.max(peak, Math.abs(data[i]));
+        const bar = Math.max(1, peak * h);
+        g.fillRect(x, (h - bar) / 2, 1, bar);
+      }
+    };
+    draw();
+    // Draw again when the size changes, and when the browser threw the picture away
+    // (Chrome can drop canvases in a background tab while the stems download)
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(draw) : null;
+    ro?.observe(c);
+    const onVisible = () => { if (document.visibilityState === "visible") draw(); };
+    c.addEventListener("contextrestored", draw);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("resize", draw);
+    return () => {
+      ro?.disconnect();
+      c.removeEventListener("contextrestored", draw);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("resize", draw);
+    };
   }, [buffer, color]);
   return (
-    <div className="relative h-8 flex-1">
+    <div className="relative h-8 min-w-0 flex-1">
       <canvas ref={ref} className="h-full w-full opacity-70" />
       {duration > 0 && <div className="absolute top-0 h-full w-px bg-white" style={{ left: `${(position / duration) * 100}%` }} />}
     </div>
