@@ -13,6 +13,10 @@ SM_REQUIRE_LOGIN_FOR_JOBS=1 turns heavy jobs off for signed-out visitors.
 
 rate_limit() caps lighter endpoints that still cost something (sign-ups, uploads,
 imports) per visitor's address.
+
+While the site is being updated (deploy/update.sh), the data/updating file exists:
+new jobs are turned away with "try again in a minute" and busy() tells the script
+how many are still going, so the server only restarts once they've all finished.
 """
 from __future__ import annotations
 
@@ -21,6 +25,7 @@ import os
 import threading
 import time
 from collections import defaultdict, deque
+from pathlib import Path
 from typing import Awaitable, Callable, Deque, Dict, List, Optional
 
 from fastapi import BackgroundTasks, Depends, HTTPException, Request
@@ -71,6 +76,7 @@ def client_ip(request: Request) -> str:
 
 def job_owner(request: Request, me: Optional[str] = Depends(current_username)) -> str:
     """Who is starting a heavy job, checked against the limits above (a FastAPI dependency)."""
+    not_updating()
     if me:
         owner = f"user:{me}"
     elif login_required():
@@ -159,3 +165,52 @@ def rate_limit(name: str, per_hour: int, env: Optional[str] = None):
             hits.append(now)
 
     return check
+
+
+# ------------------------------------------------------------------------------
+# Updates without stopping anyone's job (deploy/update.sh)
+# ------------------------------------------------------------------------------
+UPDATING_MESSAGE = "The site is updating. Try again in a minute or two."
+
+_busy_counters: List[Callable[[], int]] = []
+
+
+def _updating_file() -> Path:
+    from app.core.config import settings
+
+    return Path(settings.DATA_DIR) / "updating"
+
+
+UPDATING_EXPIRES_S = 3 * 3600  # a pause left behind by a crashed update doesn't block jobs forever
+
+
+def updating() -> bool:
+    """True while an update waits for the running jobs to finish."""
+    try:
+        return time.time() - _updating_file().stat().st_mtime < UPDATING_EXPIRES_S
+    except OSError:
+        return False
+
+
+def not_updating() -> None:
+    """A dependency for anything that starts a job: refused while an update is waiting."""
+    if updating():
+        raise HTTPException(status_code=503, detail=UPDATING_MESSAGE)
+
+
+def count_busy(counter: Callable[[], int]) -> None:
+    """Register work kept outside the job store (e.g. Music Map imports) so busy() counts it."""
+    _busy_counters.append(counter)
+
+
+def busy() -> int:
+    """Jobs waiting or running right now, in this server process."""
+    from app.utils.storage import job_store
+
+    n = sum(1 for j in list(dict.values(job_store)) if j.status in (JobStatus.queued, JobStatus.running))
+    for counter in _busy_counters:
+        try:
+            n += int(counter())
+        except Exception:
+            pass
+    return n

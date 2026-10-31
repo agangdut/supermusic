@@ -81,11 +81,21 @@ To restore, stop the site, put `supermusic.db` back in `data/` and unpack `share
 
 ```bash
 cd /srv/supermusic
-git pull
-docker compose -f docker-compose.prod.yml up -d --build
+./deploy/update.sh
 ```
 
-Jobs that are running during an update stop, and show as "stopped by a server restart" with a button to start them again. Finished results are kept.
+This updates the site without stopping anyone's job:
+
+1. It pulls the new code and builds it while the old site keeps running.
+2. It puts the new website live. Anyone who opens the site from then on gets the new pages; people already on it keep theirs until they reload.
+3. It pauses new jobs (people who press Start see "The site is updating. Try again in a minute or two.") and waits until the jobs already waiting or running have finished. It prints how many are left every 15 seconds.
+4. It swaps in the new backend, which takes a few seconds, and lets jobs start again.
+
+If jobs are still running after an hour (`MAX_WAIT_MINUTES=60`), it lets jobs start again, keeps the old backend running and stops; run it again later. `./deploy/update.sh --now` doesn't wait: jobs that are running stop and show "stopped by a server restart" with a button to start them again. Finished results are always kept.
+
+If the script is interrupted, it lifts the pause itself. If it couldn't (the server crashed mid-update), delete `data/updating`; the pause also runs out by itself after 3 hours. `https://<your domain>/api/healthz/jobs` shows how many jobs are going and whether an update is waiting.
+
+For a few minutes during step 3 the new website talks to the old backend. That's fine for most changes. If an update adds a new backend feature that the new pages need straight away, its button may fail until the swap; in that case use `--now` at a quiet moment.
 
 ## Capacity
 

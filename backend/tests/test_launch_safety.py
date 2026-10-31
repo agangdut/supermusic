@@ -115,6 +115,37 @@ def test_login_can_be_required_for_jobs(monkeypatch, user_dir):
     assert r.status_code == 401 and "Sign in" in r.json()["detail"]
 
 
+def test_updates_wait_for_running_jobs(monkeypatch, tmp_path, user_dir):
+    import os
+
+    flag = tmp_path / "updating"
+    monkeypatch.setattr(jobs, "_updating_file", lambda: flag)
+    dict.clear(storage.job_store)
+    assert client.get("/healthz/jobs").json() == {"busy": 0, "updating": False}
+
+    running = Job(job_type=JobType.STEM_SEPARATION)
+    running.mark_running("working")
+    storage.put_job(running)
+    assert client.get("/healthz/jobs").json()["busy"] == 1
+
+    # deploy/update.sh pauses new jobs while it waits; the running one carries on
+    flag.touch()
+    song = user_dir / "song.wav"
+    song.write_bytes(b"x")
+    r = client.post("/stems/separate", json={"audio_path": str(song)})
+    assert r.status_code == 503 and "updating" in r.json()["detail"]
+    assert "updating" in client.post("/csv/import-lastfm", json={"username": "x"}).json()["detail"]
+    assert client.get("/healthz/jobs").json() == {"busy": 1, "updating": True}
+
+    running.mark_success({"artifacts": {}}, "ok")
+    assert client.get("/healthz/jobs").json()["busy"] == 0
+
+    # A pause left behind by an update that crashed runs out by itself
+    old = time.time() - jobs.UPDATING_EXPIRES_S - 60
+    os.utime(flag, (old, old))
+    assert not jobs.updating()
+
+
 def test_downloads_only_from_known_sites(monkeypatch):
     r = client.post("/tracks/download", json={"url": "http://169.254.169.254/latest/meta-data"})
     assert r.status_code == 400
