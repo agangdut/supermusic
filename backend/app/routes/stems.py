@@ -21,7 +21,28 @@ from app.core.progress import estimate_seconds, report, reporting, run_with_cont
 
 router = APIRouter(prefix="/stems", tags=["stems"])
 
-STEM_BITRATE = "192k"
+STEM_BITRATE = "192k"   # the most a stem gets
+MIN_STEM_KBPS = 96      # below this, stems start to sound watery
+
+
+def stem_bitrate(audio_path: Path) -> str:
+    """The original's bitrate, between MIN_STEM_KBPS and STEM_BITRATE: a stem is never
+    a bigger file than the song it came from (a 128 kbps MP3 gives 128 kbps stems)."""
+    import shutil as sh
+    import subprocess
+
+    top = int(STEM_BITRATE.rstrip("k"))
+    ffprobe = sh.which("ffprobe")
+    if not ffprobe:
+        return STEM_BITRATE
+    try:
+        out = subprocess.run([ffprobe, "-v", "error", "-select_streams", "a:0", "-show_entries",
+                              "stream=bit_rate:format=bit_rate", "-of", "csv=p=0", str(audio_path)],
+                             capture_output=True, text=True, timeout=30).stdout
+        bps = next(int(x) for x in out.replace(",", "\n").split() if x.strip().isdigit())
+    except Exception:
+        return STEM_BITRATE
+    return f"{max(MIN_STEM_KBPS, min(top, round(bps / 1000)))}k"
 
 
 class StemSeparationRequest(BaseModel):
@@ -64,12 +85,13 @@ async def separate_stems(req: StemSeparationRequest, bg: BackgroundTasks, owner:
                 report("Saving the stem files…")
                 j.progress = 90
 
-                # MP3 (192 kbps) instead of WAV: about 7x smaller, so the stem player in the
-                # browser loads a 4-minute song in ~23 MB instead of ~170 MB
+                # MP3 at the original's bitrate (96-192 kbps) instead of WAV: up to 14x smaller,
+                # so the stem player loads a 4-minute song in ~15-23 MB instead of ~170 MB
                 artifacts: Dict[str, str] = {}
+                bitrate = stem_bitrate(audio_path)
                 for stem_name, stem_path in stems_dict.items():
                     mp3 = await loop.run_in_executor(
-                        None, convert_audio_format, stem_path, Path(stem_path).with_suffix(".mp3"), "mp3", STEM_BITRATE
+                        None, convert_audio_format, stem_path, Path(stem_path).with_suffix(".mp3"), "mp3", bitrate
                     )
                     artifacts[stem_name] = save_artifact(
                         j, output_name(audio_path, stem_name, ".mp3"), mp3.read_bytes()

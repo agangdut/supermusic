@@ -60,6 +60,26 @@ def _save_upload(file: UploadFile, allowed_extensions: set[str], subdir: str = "
     return file_path
 
 
+UNREADABLE = ("This file can't be played as audio. It may be damaged or only partly downloaded. "
+              "Try the original MP3 or WAV.")
+
+
+def _unreadable(path: Path) -> bool:
+    """True when ffprobe finds no audio in the file (an error page saved as .wav, a cut-off download)."""
+    import shutil
+    import subprocess
+
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return False
+    try:
+        out = subprocess.run([ffprobe, "-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_name",
+                              "-of", "csv=p=0", str(path)], capture_output=True, text=True, timeout=30)
+    except Exception:
+        return False
+    return out.returncode != 0 or not out.stdout.strip()
+
+
 def _check_length(path: Path) -> None:
     """Long recordings (a two-hour mix) would hold a worker for hours: turn them away."""
     try:
@@ -72,6 +92,9 @@ def _check_length(path: Path) -> None:
 
             minutes = float(librosa.get_duration(path=str(path))) / 60
         except Exception:
+            if _unreadable(path):
+                path.unlink(missing_ok=True)
+                raise HTTPException(status_code=400, detail=UNREADABLE)
             return  # can't tell; the job itself will say if the file is unreadable
     if minutes > MAX_SONG_MINUTES:
         path.unlink(missing_ok=True)
