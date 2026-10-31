@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -41,7 +42,12 @@ def separate_stems(audio_path: str | Path, out_dir: Path | None = None, model: s
     cmd = [demucs, "-n", model, "-o", str(out_dir), str(audio_path)]
     if two_stems:  # e.g. "vocals" → vocals.wav + no_vocals.wav, about twice as fast
         cmd[1:1] = ["--two-stems", two_stems]
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    # Lower priority than the website: Demucs takes every CPU core for minutes, and
+    # without this the Atlas, Map and everything else crawl while stems are made
+    nicer = (lambda: os.nice(10)) if hasattr(os, "nice") else None
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, preexec_fn=nicer)
+    if proc.returncode in (-9, 137):
+        raise RuntimeError("demucs was killed: the server ran out of memory on this song")
     if proc.returncode != 0:
         raise RuntimeError(f"demucs failed ({proc.returncode}):\n{proc.stdout}")
 
