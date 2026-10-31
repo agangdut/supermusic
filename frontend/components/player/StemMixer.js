@@ -34,10 +34,51 @@ function Waveform({ buffer, color, position, duration }) {
   );
 }
 
+const mb = (bytes) => (bytes / 1048576).toFixed(bytes < 10485760 ? 1 : 0);
+
+// Download one stem, telling `onBytes` how far along it is, then decode it for playback
+async function loadStem(ctx, url, onBytes, signal) {
+  const r = await fetch(url, { signal });
+  if (!r.ok) {
+    const err = new Error(r.status === 404 ? "gone" : `The server answered ${r.status}`);
+    err.status = r.status;
+    throw err;
+  }
+  const total = Number(r.headers.get("content-length")) || 0;
+  let data;
+  if (r.body?.getReader) {
+    const reader = r.body.getReader();
+    const chunks = [];
+    let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      got += value.length;
+      onBytes(got, total);
+    }
+    data = new Uint8Array(got);
+    let at = 0;
+    for (const c of chunks) { data.set(c, at); at += c.length; }
+    data = data.buffer;
+  } else {
+    data = await r.arrayBuffer();
+    onBytes(data.byteLength, data.byteLength);
+  }
+  try {
+    return await ctx.decodeAudioData(data);
+  } catch {
+    throw new Error("Your browser couldn't play this stem (it may have run out of memory on a long song)");
+  }
+}
+
 export default function StemMixer({ stems }) {
   const entries = Object.entries(stems || {}).filter(([, u]) => typeof u === "string" && /\.(wav|mp3|flac|ogg)$/i.test(u));
   const [buffers, setBuffers] = useState({});
   const [loading, setLoading] = useState(true);
+  const [bytes, setBytes] = useState({}); // name -> [downloaded, total]
+  const [failed, setFailed] = useState({}); // name -> reason
+  const [attempt, setAttempt] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [vol, setVol] = useState({});
@@ -51,27 +92,40 @@ export default function StemMixer({ stems }) {
 
   useEffect(() => {
     let cancelled = false;
+    const abort = typeof AbortController !== "undefined" ? new AbortController() : null;
     setLoading(true);
     setBuffers({});
+    setBytes({});
+    setFailed({});
     ctxRef.current = ctxRef.current || new AudioContext();
-    Promise.all(
+    // Each stem on its own: one that fails (deleted, too big to decode) doesn't hold up the
+    // others, and never leaves the mixer stuck on "Loading stems…"
+    Promise.allSettled(
       entries.map(async ([name, url]) => {
-        const r = await fetch(url);
-        const b = await ctxRef.current.decodeAudioData(await r.arrayBuffer());
+        const b = await loadStem(ctxRef.current, url, (got, total) => {
+          if (!cancelled) setBytes((x) => ({ ...x, [name]: [got, total] }));
+        }, abort?.signal);
         return [name, b];
       }),
-    ).then((pairs) => {
-      if (!cancelled) {
-        setBuffers(Object.fromEntries(pairs));
-        setLoading(false);
-      }
+    ).then((results) => {
+      if (cancelled) return;
+      const ok = {};
+      const bad = {};
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled") ok[r.value[0]] = r.value[1];
+        else bad[entries[i][0]] = r.reason;
+      });
+      setBuffers(ok);
+      setFailed(bad);
+      setLoading(false);
     });
     return () => {
       cancelled = true;
+      abort?.abort();
       stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, attempt]);
 
   const duration = Math.max(0, ...Object.values(buffers).map((b) => b.duration));
   const gainFor = (name) => (solo ? (solo === name ? 1 : 0) : muted[name] ? 0 : vol[name] ?? 1);
@@ -128,10 +182,44 @@ export default function StemMixer({ stems }) {
   };
 
   if (!entries.length) return null;
-  if (loading) return <div className="p-4 text-sm text-gray-400">Loading stems…</div>;
+  if (loading) {
+    const got = Object.values(bytes).reduce((a, [g]) => a + g, 0);
+    const total = Object.values(bytes).length === entries.length ? Object.values(bytes).reduce((a, [, t]) => a + t, 0) : 0;
+    const pct = total ? Math.min(100, Math.round((got / total) * 100)) : null;
+    return (
+      <div className="space-y-2 p-4 text-sm text-gray-400">
+        <div>
+          {got === 0 ? "Loading stems…" : total && got >= total ? "Getting the stems ready to play…" : `Downloading stems… ${mb(got)}${total ? ` of ${mb(total)}` : ""} MB`}
+        </div>
+        {pct !== null && (
+          <div className="h-1.5 w-full overflow-hidden rounded bg-white/10">
+            <div className="h-full bg-gradient-to-r from-fuchsia-500 to-indigo-500 transition-all" style={{ width: `${pct}%` }} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const failedNames = Object.keys(failed);
+  const allGone = failedNames.length > 0 && Object.values(failed).every((e) => e?.status === 404);
+  const which = failedNames.length === entries.length ? "the stems" : `the ${failedNames.join(", ")} stem${failedNames.length > 1 ? "s" : ""}`;
+  const problem = failedNames.length > 0 && (
+    <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">
+      {allGone
+        ? `${which[0].toUpperCase()}${which.slice(1)} ${failedNames.length > 1 ? "aren't" : "isn't"} on the server any more (results are kept for a week). Separate the song again to get ${failedNames.length > 1 ? "them" : "it"} back.`
+        : `Couldn't load ${which}: ${failed[failedNames[0]]?.message || "unknown error"}.`}
+      {!allGone && (
+        <button onClick={() => setAttempt((n) => n + 1)} className="ml-2 rounded bg-white/10 px-2 py-0.5 text-xs text-white hover:bg-white/20">
+          Try again
+        </button>
+      )}
+    </div>
+  );
+  if (!Object.keys(buffers).length) return <div className="p-1">{problem}</div>;
 
   return (
     <div className="space-y-3">
+      {problem}
       <div className="flex items-center gap-3">
         <button
           onClick={() => (playing ? pause() : start(position))}

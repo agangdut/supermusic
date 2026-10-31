@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from app.core import jobs
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
@@ -23,14 +23,16 @@ AUDIO_SUFFIXES = {".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac", ".opus"}
 # ---- atlas -------------------------------------------------------------------------------
 
 @router.get("/atlas")
-async def get_atlas() -> dict:
+async def get_atlas(request: Request) -> Response:
     """One map of every publicly listed library, plus artists' tracks placed on it."""
-    result = await run_in_threadpool(atlas.get)
-    result = dict(result)
-    result["artist_tracks"] = [
+    tracks = [
         {"id": t["id"], "title": t["title"], "artist": t["artist"], "owner": t["owner"],
          "position": t["position"], "galaxy": t["galaxy"]} for t in artist.public_tracks()]
-    return result
+    raw, gz = await run_in_threadpool(atlas.response_bytes, {"artist_tracks": tracks})
+    headers = {"Vary": "Accept-Encoding"}
+    if "gzip" in request.headers.get("accept-encoding", "").lower():
+        return Response(gz, media_type="application/json", headers={**headers, "Content-Encoding": "gzip"})
+    return Response(raw, media_type="application/json", headers=headers)
 
 
 class MineRequest(BaseModel):

@@ -194,3 +194,40 @@ def test_production_refuses_the_default_secret(monkeypatch):
         monkeypatch.delenv("SM_ENV")
         monkeypatch.delenv("JWT_SECRET_KEY")
         importlib.reload(auth)
+
+
+def test_stems_come_back_as_mp3_and_leave_no_work_files(monkeypatch, user_dir):
+    """The stem player downloads every stem: MP3 keeps that ~4x smaller than WAV."""
+    import shutil as sh
+    import subprocess
+
+    if not sh.which("ffmpeg"):
+        pytest.skip("needs ffmpeg")
+    from app.routes import stems as stems_routes
+
+    work_dirs = []
+
+    def fake(audio_path, out_dir=None, model="htdemucs"):
+        work_dirs.append(out_dir)
+        out = {}
+        for name in ("vocals", "bass"):
+            wav = out_dir / model / "song" / f"{name}.wav"
+            wav.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "sine=d=1", str(wav)], check=True)
+            out[name] = str(wav)
+        return out
+
+    monkeypatch.setattr(stems_routes, "run_separation", fake)
+    song = user_dir / "song.wav"
+    song.write_bytes(b"x")
+    job_id = client.post("/stems/separate", json={"audio_path": str(song)}).json()["id"]
+    for _ in range(100):
+        job = client.get(f"/stems/jobs/{job_id}").json()
+        if job["status"] in ("done", "error"):
+            break
+        time.sleep(0.1)
+    assert job["status"] == "done", job.get("error_detail")
+    arts = job["result"]["artifacts"]
+    assert set(arts) == {"vocals", "bass"}
+    assert all(p.endswith(".mp3") and Path(p).read_bytes()[:3] in (b"ID3", b"\xff\xfb", b"\xff\xf3") for p in arts.values())
+    assert work_dirs and work_dirs[0] is not None and not work_dirs[0].exists()

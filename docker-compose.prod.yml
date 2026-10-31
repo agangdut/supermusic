@@ -23,7 +23,6 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "443:443/udp"
     environment:
       - SITE_DOMAIN=${SITE_DOMAIN:?Set SITE_DOMAIN in .env}
       - REDIRECT_DOMAIN=${REDIRECT_DOMAIN:-www.${SITE_DOMAIN}}

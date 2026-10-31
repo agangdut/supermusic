@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Dict, Any, List
 
@@ -12,10 +14,14 @@ from ..utils.storage import job_store, output_name, save_artifact
 from ..utils.safe_paths import AUDIO, user_file
 from app.core import jobs
 from app.core.separator import separate_stems as run_separation
+from app.core.audio_converter import convert_audio_format
+from app.core.config import settings
 from app.core.progress import estimate_seconds, report, reporting, run_with_context
 
 
 router = APIRouter(prefix="/stems", tags=["stems"])
+
+STEM_BITRATE = "320k"
 
 
 class StemSeparationRequest(BaseModel):
@@ -45,24 +51,32 @@ async def separate_stems(req: StemSeparationRequest, bg: BackgroundTasks, owner:
                 pass
             report(f"Separating into stems with {req.model}…")
 
-            # Run separation in executor to avoid blocking
-            loop = asyncio.get_event_loop()
-            stems_dict = await loop.run_in_executor(
-                None, run_with_context(run_separation, str(audio_path), None, req.model)
-            )
-
-            report("Saving the stem files…")
-            j.progress = 90
-            
-            # Copy stems to artifacts
-            artifacts: Dict[str, str] = {}
-            for stem_name, stem_path in stems_dict.items():
-                stem_bytes = Path(stem_path).read_bytes()
-                artifact_path = save_artifact(
-                    j, output_name(audio_path, stem_name, ".wav"), stem_bytes
+            # Each job separates into a folder of its own, deleted afterwards, so two songs
+            # with the same file name can't mix their stems and the disk doesn't fill up
+            settings.INTERIM_DIR.mkdir(parents=True, exist_ok=True)
+            work = Path(tempfile.mkdtemp(prefix="stems-", dir=settings.INTERIM_DIR))
+            try:
+                loop = asyncio.get_event_loop()
+                stems_dict = await loop.run_in_executor(
+                    None, run_with_context(run_separation, str(audio_path), work, req.model)
                 )
-                artifacts[stem_name] = artifact_path
-            
+
+                report("Saving the stem files…")
+                j.progress = 90
+
+                # MP3 (320 kbps) instead of WAV: about 4x smaller, so the stem player in the
+                # browser loads a 4-minute song in ~40 MB instead of ~170 MB
+                artifacts: Dict[str, str] = {}
+                for stem_name, stem_path in stems_dict.items():
+                    mp3 = await loop.run_in_executor(
+                        None, convert_audio_format, stem_path, Path(stem_path).with_suffix(".mp3"), "mp3", STEM_BITRATE
+                    )
+                    artifacts[stem_name] = save_artifact(
+                        j, output_name(audio_path, stem_name, ".mp3"), mp3.read_bytes()
+                    )
+            finally:
+                shutil.rmtree(work, ignore_errors=True)
+
             j.mark_success(
                 {"artifacts": artifacts, "metrics": {"model": req.model, "stems": list(stems_dict.keys())}},
                 message="Stem separation complete",

@@ -1,5 +1,14 @@
 # HTTPS for the public site. Caddy fetches and renews the certificate itself;
 # SITE_DOMAIN must already point at this server (an A record) when it starts.
+
+# HTTP/1.1 and HTTP/2 only, no HTTP/3 (QUIC over UDP). Inside Docker, QUIC gets small
+# network buffers, and the server firewall only lets TCP in, so big downloads (the
+# Atlas, stem files) could stall in some browsers while small pages still loaded.
+{
+	servers {
+		protocols h1 h2
+	}
+}
 {$SITE_DOMAIN} {
 	encode zstd gzip
 

@@ -132,7 +132,17 @@ def create(result: Dict[str, Any], *, title: str, by: Optional[str], listed: boo
     except Exception:
         shutil.rmtree(folder, ignore_errors=True)
         raise
+    if listed:
+        _atlas_changed(meta)
     return {"id": share_id, "delete_token": token, **public_meta(meta)}
+
+
+def _atlas_changed(meta: Dict[str, Any]) -> None:
+    """Draw the community atlas again when a listed map with a song list comes or goes."""
+    if meta.get("has_library"):
+        from app.core import atlas  # atlas imports this module
+
+        atlas.changed()
 
 
 def _add_extras(folder: Path, meta: Dict[str, Any], m: Dict[str, Any]) -> None:
@@ -286,6 +296,8 @@ def delete(share_id: str, token: str, owner: Optional[str] = None) -> bool:
         return False
     shutil.rmtree(f, ignore_errors=True)
     store.connect().execute("DELETE FROM map_votes WHERE share_id = ?", (share_id,))
+    if meta.get("listed"):
+        _atlas_changed(meta)
     return True
 
 
@@ -358,8 +370,11 @@ def set_listed(share_id: str, owner: str, listed: bool) -> bool:
     meta = json.loads((f / "meta.json").read_text())
     if meta.get("owner") != owner:
         return False
+    was = bool(meta.get("listed"))
     meta["listed"] = listed
     (f / "meta.json").write_text(json.dumps(meta))
+    if was != listed:
+        _atlas_changed(meta)
     return True
 
 

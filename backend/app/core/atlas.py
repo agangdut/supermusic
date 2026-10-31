@@ -7,8 +7,12 @@ for its play count, so songs many people share glow brighter. No one's play
 counts, likes or dates go in: only what the song is (title, artist, genre, key,
 tempo, mood, sound).
 
-The atlas is rebuilt when the set of listed maps changes, at most every
-REBUILD_EVERY seconds, in a background thread; until then the last one is served.
+The atlas is rebuilt in a background thread as soon as a map is shared publicly,
+listed, unlisted or deleted (map_share calls `changed()`); until then the last one
+is served. Between rebuilds every visit gets the same finished answer, kept in
+memory already gzipped (`response_bytes`), so opening the atlas costs the server
+almost nothing. As a safety net, a change made some other way (a share folder
+copied in by hand) is noticed within REBUILD_EVERY seconds.
 
 People can pin a short note on any star (song). Notes hang off the song, not its
 position, so they survive rebuilds.
@@ -17,6 +21,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import threading
 import time
 from pathlib import Path
@@ -36,7 +41,12 @@ PIN_LENGTH = 200
 KEEP = ("title", "artist", "album", "genre", "key", "mode", "bpm", "year")
 
 _lock = threading.Lock()
+_build_lock = threading.Lock()  # one build at a time
 _building = [False]
+_dirty = [False]          # a change arrived while a rebuild was running: build again after
+_loaded: Dict[str, Any] = {"mtime": None, "data": None}
+_checked = [0.0]          # when the safety-net signature check last ran
+_response: Dict[str, Any] = {"key": None, "raw": b"", "gz": b""}
 
 
 def _dir() -> Path:
@@ -101,8 +111,21 @@ def collect() -> tuple:
     return allsongs, owners, used
 
 
+def _write(name: str, data: Any) -> None:
+    """Write a gzipped JSON file in one step, so a reader never sees half of it."""
+    tmp = _dir() / f".{name}.{threading.get_ident()}.tmp"
+    with gzip.open(tmp, "wt", encoding="utf-8") as f:
+        json.dump(data, f, separators=(",", ":"))
+    os.replace(tmp, _dir() / name)
+
+
 def build() -> Dict[str, Any]:
     """Draw the atlas now and save it."""
+    with _build_lock:
+        return _build()
+
+
+def _build() -> Dict[str, Any]:
     songs, owners, used = collect()
     sig = sorted(m["id"] for m in used)
     if len(songs) < 3:
@@ -112,8 +135,7 @@ def build() -> Dict[str, Any]:
         keys = songs["_key"].tolist()
         if "sound" in songs.columns:  # kept beside the map (too big to send to browsers)
             vecs = {k: v for k, v in zip(keys, songs["sound"]) if isinstance(v, str) and v}
-            with gzip.open(_dir() / "sound.json.gz", "wt", encoding="utf-8") as f:
-                json.dump(vecs, f)
+            _write("sound.json.gz", vecs)
         df = songs.drop(columns=["_key"]).rename(columns={"listeners": "play_count"})
         result = build_map(df, MapOptions(neighbors=4))
         for t, k in zip(result["tracks"], keys):
@@ -128,10 +150,8 @@ def build() -> Dict[str, Any]:
     names = {m["id"]: {"title": m.get("title"), "by": m.get("by"), "owner": m.get("owner")} for m in used}
     result["meta"] = {**result.get("meta", {}), "source": "community atlas", "built": time.time(),
                       "maps": len(used), "signature": sig, "has_listening_data": False}
-    with gzip.open(_dir() / "atlas.json.gz", "wt", encoding="utf-8") as f:
-        json.dump(result, f, separators=(",", ":"))
-    with gzip.open(_dir() / "owners.json.gz", "wt", encoding="utf-8") as f:
-        json.dump({"owners": {k: v for k, v in owners.items()}, "maps": names}, f, separators=(",", ":"))
+    _write("owners.json.gz", {"owners": {k: v for k, v in owners.items()}, "maps": names})
+    _write("atlas.json.gz", result)
     return result
 
 
@@ -149,34 +169,82 @@ def _load(name: str) -> Optional[Dict[str, Any]]:
 def _rebuild_later() -> None:
     with _lock:
         if _building[0]:
+            _dirty[0] = True
             return
         _building[0] = True
+        _dirty[0] = False
 
     def run():
         try:
-            build()
-        except Exception:
-            pass
-        finally:
+            while True:
+                try:
+                    build()
+                except Exception:
+                    pass
+                with _lock:
+                    if not _dirty[0]:
+                        _building[0] = False
+                        return
+                    _dirty[0] = False
+        except BaseException:
             _building[0] = False
+            raise
 
     threading.Thread(target=run, daemon=True).start()
 
 
+def changed() -> None:
+    """A map was shared, listed, unlisted or deleted: draw the atlas again (in the background)."""
+    _rebuild_later()
+
+
+def _current() -> Optional[Dict[str, Any]]:
+    """The saved atlas, read from disk only when the file is new."""
+    p = _dir() / "atlas.json.gz"
+    try:
+        mtime = p.stat().st_mtime_ns
+    except OSError:
+        return None
+    if _loaded["mtime"] != mtime:
+        data = _load("atlas.json.gz")
+        if data is None:
+            return None
+        _loaded.update(mtime=mtime, data=data)
+    return _loaded["data"]
+
+
 def get() -> Dict[str, Any]:
     """The atlas. Built on the spot the first time; afterwards refreshed in the background."""
-    current = _load("atlas.json.gz")
+    current = _current()
     if current is None:
         with _lock:
-            current = _load("atlas.json.gz")
+            current = _current()
             if current is None:
-                current = build()
+                build()
+                current = _current() or {}
         return current
-    meta = current.get("meta", {})
-    if meta.get("signature") != _signature() and time.time() - meta.get("built", 0) > REBUILD_EVERY:
-        _rebuild_later()
-        current["meta"]["refreshing"] = True
+    now = time.time()
+    if now - _checked[0] > REBUILD_EVERY:
+        _checked[0] = now
+        if current.get("meta", {}).get("signature") != _signature():
+            _rebuild_later()
     return current
+
+
+def response_bytes(extra: Dict[str, Any]) -> tuple[bytes, bytes]:
+    """The atlas plus `extra` (small, changing fields such as artists' tracks) as JSON,
+    plain and gzipped. Made once per atlas version and kept in memory."""
+    data = get()
+    extra_json = json.dumps(extra, separators=(",", ":"), sort_keys=True)
+    building = _building[0]
+    key = (_loaded["mtime"], extra_json, building)
+    if _response["key"] != key:
+        payload = {**data, **extra}
+        if building:  # the page says "Updating with new maps…"
+            payload["meta"] = {**data.get("meta", {}), "refreshing": True}
+        raw = json.dumps(payload, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        _response.update(key=key, raw=raw, gz=gzip.compress(raw, compresslevel=6))
+    return _response["raw"], _response["gz"]
 
 
 def sound_vectors() -> Dict[str, str]:
