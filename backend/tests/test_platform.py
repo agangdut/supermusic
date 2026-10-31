@@ -135,6 +135,42 @@ def test_atlas_pins_and_mine():
     assert client.delete(f"/atlas/pins/{pin['id']}", headers=h).status_code == 200
 
 
+def _wait_for_atlas_builds(timeout=60):
+    import time
+    end = time.time() + timeout
+    while atlas._building[0] and time.time() < end:
+        time.sleep(0.1)
+    assert not atlas._building[0]
+
+
+def test_atlas_rebuilds_when_a_map_is_shared_and_is_served_from_memory(monkeypatch):
+    import gzip
+    import json
+
+    _wait_for_atlas_builds()
+    atlas.build()
+    before = client.get("/atlas").json()["meta"]["maps"]
+    r = client.post("/map/share", json={"map": _sample_map(), "title": "Rebuild me", "listed": True, "sample": True}).json()
+    _wait_for_atlas_builds()
+    assert client.get("/atlas").json()["meta"]["maps"] == before + 1  # no manual build needed
+
+    # Between changes the answer comes from memory: no reading or re-encoding the file
+    loads = []
+    real = atlas._load
+    monkeypatch.setattr(atlas, "_load", lambda name: loads.append(name) or real(name))
+    a = client.get("/atlas", headers={"Accept-Encoding": "gzip"})
+    b = client.get("/atlas", headers={"Accept-Encoding": "identity"})
+    assert loads == []
+    assert a.headers.get("content-encoding") == "gzip" and "content-encoding" not in b.headers
+    assert a.json() == b.json() and "artist_tracks" in b.json()
+
+    # Unlisting (here: deleting) a map rebuilds it again
+    assert client.post(f"/map/shared/{r['id']}/delete", json={"delete_token": r["delete_token"]}).status_code == 200
+    _wait_for_atlas_builds()
+    monkeypatch.setattr(atlas, "_load", real)
+    assert client.get("/atlas").json()["meta"]["maps"] == before
+
+
 def test_quiz_scores_are_counted_on_the_server():
     client.post("/map/share", json={"map": _sample_map(), "title": "Quiz map", "listed": True, "sample": True})
     atlas.build()
