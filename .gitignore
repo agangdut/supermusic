@@ -112,6 +112,35 @@ search-history.json
 *.safetensors
 *.bin
 
+# --- Promo, video and captioning work ---------------------------------------
+# Promo videos, voice-overs and captions are made on your machine and shared
+# outside git. None of it is used by the site, Docker builds or deploy/.
+promo/
+promo-audio/
+promo-footage/
+voice-swap/
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.webm
+*.srt
+*.vtt
+*.ass
+*.drp
+*.ps1
+# Whisper (speech-to-text for captions): models, caches and transcripts
+whisper/
+whisper.cpp/
+whisper-models/
+.whisper/
+*whisper*/
+*.ggml
+*.gguf
+ffmpeg/
+ffmpeg*.exe
+*.exe
+
 # Papers and office files (redistribution rights unclear)
 *.pdf
 *.docx
