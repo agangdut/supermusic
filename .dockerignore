@@ -14,3 +14,13 @@ backups
 docs
 services
 deploy
+# Promo videos, voice-overs, captions and Whisper files (local only)
+promo*
+voice-swap
+*whisper*
+*.mp4
+*.mov
+*.mkv
+*.srt
+*.vtt
+*.wav
