@@ -20,6 +20,7 @@ position, so they survive rebuilds.
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import os
 import threading
@@ -46,7 +47,7 @@ _building = [False]
 _dirty = [False]          # a change arrived while a rebuild was running: build again after
 _loaded: Dict[str, Any] = {"mtime": None, "data": None}
 _checked = [0.0]          # when the safety-net signature check last ran
-_response: Dict[str, Any] = {"key": None, "raw": b"", "gz": b""}
+_response: Dict[str, Any] = {"key": None, "raw": b"", "gz": b"", "etag": ""}
 
 
 def _dir() -> Path:
@@ -231,9 +232,10 @@ def get() -> Dict[str, Any]:
     return current
 
 
-def response_bytes(extra: Dict[str, Any]) -> tuple[bytes, bytes]:
+def response_bytes(extra: Dict[str, Any]) -> tuple[bytes, bytes, str]:
     """The atlas plus `extra` (small, changing fields such as artists' tracks) as JSON,
-    plain and gzipped. Made once per atlas version and kept in memory."""
+    plain and gzipped, and a fingerprint of it (for the browser's cache). Made once per
+    atlas version and kept in memory."""
     data = get()
     extra_json = json.dumps(extra, separators=(",", ":"), sort_keys=True)
     building = _building[0]
@@ -243,8 +245,9 @@ def response_bytes(extra: Dict[str, Any]) -> tuple[bytes, bytes]:
         if building:  # the page says "Updating with new maps…"
             payload["meta"] = {**data.get("meta", {}), "refreshing": True}
         raw = json.dumps(payload, separators=(",", ":"), allow_nan=False).encode("utf-8")
-        _response.update(key=key, raw=raw, gz=gzip.compress(raw, compresslevel=6))
-    return _response["raw"], _response["gz"]
+        _response.update(key=key, raw=raw, gz=gzip.compress(raw, compresslevel=6),
+                         etag=hashlib.sha1(raw).hexdigest()[:20])
+    return _response["raw"], _response["gz"], _response["etag"]
 
 
 def sound_vectors() -> Dict[str, str]:

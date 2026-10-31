@@ -21,7 +21,7 @@ from app.core.progress import estimate_seconds, report, reporting, run_with_cont
 
 router = APIRouter(prefix="/stems", tags=["stems"])
 
-STEM_BITRATE = "320k"
+STEM_BITRATE = "192k"
 
 
 class StemSeparationRequest(BaseModel):
@@ -64,8 +64,8 @@ async def separate_stems(req: StemSeparationRequest, bg: BackgroundTasks, owner:
                 report("Saving the stem files…")
                 j.progress = 90
 
-                # MP3 (320 kbps) instead of WAV: about 4x smaller, so the stem player in the
-                # browser loads a 4-minute song in ~40 MB instead of ~170 MB
+                # MP3 (192 kbps) instead of WAV: about 7x smaller, so the stem player in the
+                # browser loads a 4-minute song in ~23 MB instead of ~170 MB
                 artifacts: Dict[str, str] = {}
                 for stem_name, stem_path in stems_dict.items():
                     mp3 = await loop.run_in_executor(

@@ -28,9 +28,15 @@ async def get_atlas(request: Request) -> Response:
     tracks = [
         {"id": t["id"], "title": t["title"], "artist": t["artist"], "owner": t["owner"],
          "position": t["position"], "galaxy": t["galaxy"]} for t in artist.public_tracks()]
-    raw, gz = await run_in_threadpool(atlas.response_bytes, {"artist_tracks": tracks})
-    headers = {"Vary": "Accept-Encoding"}
-    if "gzip" in request.headers.get("accept-encoding", "").lower():
+    raw, gz, tag = await run_in_threadpool(atlas.response_bytes, {"artist_tracks": tracks})
+    zipped = "gzip" in request.headers.get("accept-encoding", "").lower()
+    etag = f'"{tag}{"-gz" if zipped else ""}"'
+    # The browser keeps its copy and asks "still this one?" each visit: unchanged, it
+    # gets a tiny "304 Not Modified" instead of the whole atlas again
+    headers = {"Vary": "Accept-Encoding", "ETag": etag, "Cache-Control": "no-cache"}
+    if etag in request.headers.get("if-none-match", ""):
+        return Response(status_code=304, headers=headers)
+    if zipped:
         return Response(gz, media_type="application/json", headers={**headers, "Content-Encoding": "gzip"})
     return Response(raw, media_type="application/json", headers=headers)
 

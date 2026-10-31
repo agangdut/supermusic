@@ -164,6 +164,10 @@ def test_atlas_rebuilds_when_a_map_is_shared_and_is_served_from_memory(monkeypat
     assert a.headers.get("content-encoding") == "gzip" and "content-encoding" not in b.headers
     assert a.json() == b.json() and "artist_tracks" in b.json()
 
+    # The browser's copy is reused while nothing changed
+    again = client.get("/atlas", headers={"Accept-Encoding": "gzip", "If-None-Match": a.headers["etag"]})
+    assert again.status_code == 304 and not again.content
+
     # Unlisting (here: deleting) a map rebuilds it again
     assert client.post(f"/map/shared/{r['id']}/delete", json={"delete_token": r["delete_token"]}).status_code == 200
     _wait_for_atlas_builds()
