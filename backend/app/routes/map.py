@@ -105,6 +105,7 @@ from app.core import library_import, sound  # noqa: E402
 from app.core.config import settings  # noqa: E402
 
 _imports: Dict[str, "ImportJob"] = {}
+jobs.count_busy(lambda: sum(1 for j in list(_imports.values()) if j.status == "running"))
 
 # Until a few songs have been timed: a new song costs a Deezer search, a preview download and
 # analysis (~1-2 s) plus a MusicBrainz request for a new artist (1 s); a cached one costs ~nothing.
@@ -274,7 +275,7 @@ class ImportJob:
         }
 
 
-@router.post("/import", dependencies=[Depends(jobs.rate_limit("import", 20))])
+@router.post("/import", dependencies=[Depends(jobs.not_updating), Depends(jobs.rate_limit("import", 20))])
 async def import_library(
     files: List[UploadFile] = File(..., description="Spotify / Apple Music exports or CSVs; several at once is fine."),
     enrich: bool = Form(True, description="Look songs up online (genre from Last.fm/MusicBrainz tags, year from Deezer) and analyse 30 s previews for tempo/key/energy."),

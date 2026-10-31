@@ -82,6 +82,15 @@ def healthz():
     """
     return {"ok": True, "status": "healthy"}
 
+
+@app.get("/healthz/jobs")
+def healthz_jobs():
+    """How many jobs are waiting or running, and whether an update is waiting for them
+    (deploy/update.sh asks this before it restarts the backend)."""
+    from app.core import jobs
+
+    return {"busy": jobs.busy(), "updating": jobs.updating()}
+
 # ------------------------------------------------------------------------------
 # Include Routers
 # ------------------------------------------------------------------------------
