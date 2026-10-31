@@ -143,6 +143,8 @@ def friendly_error(err: str) -> str:
         return "MuScriptor needs a Hugging Face token: accept its licence on huggingface.co/MuScriptor/muscriptor-medium and set HF_TOKEN in .env."
     if "not found" in e and ("audio" in e or "csv" in e or "no such file" in e):
         return "The uploaded file is gone (the server may have been reset). Upload it again."
+    if "loadaudioerror" in e or "could not read the file" in e:
+        return "This audio file couldn't be read. It may be damaged or only partly downloaded; try the original file."
     if "demucs" in e:
         return "Separating the song into parts failed. Try again, or use Full band, which doesn't need it."
     if "basic-pitch" in e or "basic pitch" in e:

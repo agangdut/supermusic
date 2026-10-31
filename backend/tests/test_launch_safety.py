@@ -231,3 +231,32 @@ def test_stems_come_back_as_mp3_and_leave_no_work_files(monkeypatch, user_dir):
     assert set(arts) == {"vocals", "bass"}
     assert all(p.endswith(".mp3") and Path(p).read_bytes()[:3] in (b"ID3", b"\xff\xfb", b"\xff\xf3") for p in arts.values())
     assert work_dirs and work_dirs[0] is not None and not work_dirs[0].exists()
+
+
+def test_unreadable_audio_is_refused_at_upload():
+    """A cut-off download or an error page saved as .wav fails here, not minutes later in a job."""
+    import shutil as sh
+
+    if not sh.which("ffprobe"):
+        pytest.skip("needs ffprobe")
+    r = client.post("/upload/audio", files={"file": ("stem (other).wav", b'{"detail":"Not Found"}', "audio/wav")})
+    assert r.status_code == 400 and "damaged" in r.json()["detail"]
+
+
+def test_stems_are_never_bigger_files_than_the_song(tmp_path):
+    import shutil as sh
+    import subprocess
+
+    if not sh.which("ffmpeg"):
+        pytest.skip("needs ffmpeg")
+    from app.routes.stems import stem_bitrate
+
+    def song(kbps):
+        p = tmp_path / f"s{kbps}.mp3"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "sine=d=2", "-b:a", f"{kbps}k", str(p)], check=True)
+        return p
+
+    assert stem_bitrate(song(128)) == "128k"
+    assert stem_bitrate(song(320)) == "192k"   # capped
+    assert stem_bitrate(song(64)) == "96k"     # not below the floor
+    assert stem_bitrate(tmp_path / "missing.mp3") == "192k"
