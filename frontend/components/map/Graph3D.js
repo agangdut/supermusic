@@ -200,7 +200,8 @@ function textSprite(text, color) {
 // "Light up my songs": these stars turn bright gold, grow, and get a ring
 export const HIGHLIGHT_COLOR = "#fde047";
 
-export default function Graph3D({ data, selectedId, focusIds, focusCluster, picks, mode, onSelect, colorOf, highlightIds }) {
+export default function Graph3D({ data, selectedId, focusIds, focusCluster, picks, mode, onSelect, colorOf, highlightIds,
+  constellations, activeConstellation, draft, frame }) {
   const fgRef = useRef();
   const wrapRef = useRef();
   const [size, setSize] = useState({ width: 800, height: 600 });
@@ -383,6 +384,90 @@ export default function Graph3D({ data, selectedId, focusIds, focusCluster, pick
       labelSprites.current.clear();
     };
   }, [data]);
+
+  // ---- Song constellations: stars joined by glowing lines, with their name beside them ----
+  // Drawn as their own scene objects on top of the map, so they look the same on small maps
+  // (a sprite per star) and big ones (one point cloud). `draft` is the one being drawn now.
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg || !data) return undefined;
+    const shapes = (constellations || []).map((c) => ({ ...c, dim: activeConstellation != null && c.id !== activeConstellation }));
+    if (draft?.ids?.length) shapes.push({ id: "__draft", ids: draft.ids, color: draft.color, name: null, draft: true });
+    if (!shapes.length) return undefined;
+    const scene = fg.scene();
+    const group = new THREE.Group();
+    group.name = "constellations";
+    // Line thickness grows with the map, so it reads the same on a 50-song and a 20,000-song map
+    const radius = Math.max(0.3, libraryRadius(data.tracks) / 320);
+    const tube = new THREE.CylinderGeometry(radius, radius, 1, 6, 1, true); // one unit tall, stretched per line
+    const up = new THREE.Vector3(0, 1, 0);
+    const mats = [];
+    for (const c of shapes) {
+      const pts = c.ids.map((id) => data.tracks[id]).filter(Boolean).map((t) => new THREE.Vector3(t.x, t.y, t.z));
+      if (!pts.length) continue;
+      const opacity = c.dim ? 0.18 : c.draft ? 0.95 : 0.8;
+      const lineMat = new THREE.MeshBasicMaterial({ color: c.color, transparent: true, opacity, depthWrite: false });
+      const starMat = new THREE.SpriteMaterial({ map: getGlowTexture(), color: c.color, transparent: true, depthWrite: false,
+        blending: THREE.AdditiveBlending, opacity: c.dim ? 0.25 : 1 });
+      const ringMat = new THREE.SpriteMaterial({ map: getRingTexture(), color: c.color, transparent: true, depthWrite: false, opacity: c.dim ? 0.2 : 0.9 });
+      mats.push(lineMat, starMat, ringMat);
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        const len = a.distanceTo(b);
+        if (len < 0.01) continue;
+        const seg = new THREE.Mesh(tube, lineMat);
+        seg.position.copy(a).add(b).multiplyScalar(0.5);
+        seg.quaternion.setFromUnitVectors(up, b.clone().sub(a).normalize());
+        seg.scale.set(1, len, 1);
+        seg.renderOrder = 5;
+        group.add(seg);
+      }
+      pts.forEach((p, i) => {
+        const glow = new THREE.Sprite(starMat);
+        glow.position.copy(p);
+        glow.scale.set(9, 9, 1);
+        glow.renderOrder = 6;
+        const ring = new THREE.Sprite(ringMat);
+        ring.position.copy(p);
+        ring.scale.set(7, 7, 1);
+        ring.renderOrder = 6;
+        // While drawing, the last star you tapped gently pulses
+        if (c.draft && i === pts.length - 1) {
+          ring.onBeforeRender = () => { const k = 8 + 2.5 * Math.sin(performance.now() / 220); ring.scale.set(k, k, 1); };
+        }
+        group.add(glow, ring);
+      });
+      if (c.name) {
+        // Under the lowest star: galaxy names already float above each cluster
+        const low = pts.reduce((m, p) => (p.y < m.y ? p : m), pts[0]);
+        const label = textSprite(`✦ ${c.name}`, c.color);
+        label.material.opacity = c.dim ? 0.3 : 0.95;
+        label.position.set(low.x, low.y - 7, low.z);
+        label.renderOrder = 11;
+        mats.push(label.material);
+        group.add(label);
+      }
+    }
+    scene.add(group);
+    return () => {
+      scene.remove(group);
+      tube.dispose();
+      mats.forEach((m) => { if (m.map && m.map !== getGlowTexture() && m.map !== getRingTexture()) m.map.dispose(); m.dispose(); });
+    };
+  }, [data, constellations, activeConstellation, draft]);
+
+  // Fly to a constellation when you pick it from the list
+  const frameKey = frame?.key;
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg || !data || !frame?.ids?.length) return;
+    const pts = frame.ids.map((id) => data.tracks[id]).filter(Boolean);
+    if (!pts.length) return;
+    const c = ["x", "y", "z"].map((k) => pts.reduce((a, t) => a + t[k], 0) / pts.length);
+    const spread = pts.reduce((m, t) => Math.max(m, Math.hypot(t.x - c[0], t.y - c[1], t.z - c[2])), 20);
+    fg.cameraPosition({ x: c[0], y: c[1] + spread * 0.3, z: c[2] + spread * 2.8 }, { x: c[0], y: c[1], z: c[2] }, 1000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frameKey, data]);
 
   // Frame the whole map once it loads
   useEffect(() => {

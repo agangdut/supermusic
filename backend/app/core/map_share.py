@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
-from app.core import map_showcase, store
+from app.core import constellations, map_showcase, store
 from app.core.config import settings
 from app.core.music_map import ALIASES
 
@@ -78,6 +78,8 @@ def clean_map(result: Dict[str, Any], include_listening: bool) -> Dict[str, Any]
                 t.pop(k, None)
         clean_tracks.append(t)
     out["tracks"] = clean_tracks
+    # Song constellations drawn on the map travel with it (checked like everything else)
+    out["constellations"] = constellations.clean(result.get("constellations"))
     meta = dict(out.get("meta") or {})
     meta.pop("library_csv", None)  # a path on the sharer's server; visitors use the share's copy
     if not include_listening:

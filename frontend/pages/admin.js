@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/utils/fetcher";
 
 const num = (n) => (n ?? 0).toLocaleString();
-const KIND_LABEL = { map: "Shared map", profile: "Profile", pin: "Atlas note", track: "Artist track" };
+const KIND_LABEL = { map: "Shared map", profile: "Profile", pin: "Atlas note", track: "Artist track", constellation: "Atlas constellation" };
 const PAGE_NAMES = { "/": "Map (home)", "/maps": "Explore", "/atlas": "Atlas", "/play": "Play", "/feed": "Feed", "/artists": "Artists",
   "/upload": "Studio", "/u/[username]": "Profiles", "/s/[id]": "Shared map pages", "/login": "Sign in", "/forgot": "Forgot password",
   "/reset": "Password reset", "/account": "Account", "/privacy": "Privacy", "/terms": "Terms" };

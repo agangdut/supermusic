@@ -25,6 +25,8 @@ import SongStatsEditor from "@/components/map/SongStatsEditor";
 import QuickCheck from "@/components/map/QuickCheck";
 import PeoplePanel from "@/components/map/PeoplePanel";
 import { isLibraryFile, NOT_LIBRARY_FILE } from "@/components/upload/accept";
+import ConstellationsPanel, { DrawingBar } from "@/components/map/ConstellationsPanel";
+import { CONSTELLATION_COLORS, MAX_STARS, resolveConstellations, useConstellations } from "@/lib/constellations";
 
 const Graph3D = dynamic(() => import("@/components/map/Graph3D"), {
   ssr: false,
@@ -46,6 +48,7 @@ const TABS = [
   { id: "hidden", label: "Hidden links" },
   { id: "picks", label: "For you" },
   { id: "search", label: "Search", needsSound: true },
+  { id: "stars", label: "Constellations", noBlend: true },
   { id: "radio", label: "Radio" },
   { id: "people", label: "People" },
 ];
@@ -457,6 +460,62 @@ export default function MapExplorer() {
   const blend = data?.blend;
   const isSample = data?.meta?.source === "sample" && !shared && !blend;
   const [sheetOpen, setSheetOpen] = useState(false); // phones: the side panel is a sheet at the bottom
+
+  // Song constellations: stars you join with lines and name (lib/constellations.js)
+  const constWhere = blend ? null : shared ? "shared" : isSample ? "sample" : data ? "mine" : null;
+  const sharedConsts = shared ? data?.constellations : null;
+  const consts = useConstellations({ where: constWhere, user, shared: sharedConsts });
+  const drawnConsts = useMemo(() => resolveConstellations(consts.list, data?.tracks), [consts.list, data]);
+  const [activeConst, setActiveConst] = useState(null);
+  const [showConsts, setShowConsts] = useState(true);
+  const [constFrame, setConstFrame] = useState(null); // { key, ids }: fly the camera to these stars
+  const [drawing, setDrawing] = useState(null); // { editId, ids, name, color, naming }
+  useEffect(() => { setActiveConst(null); setDrawing(null); }, [data]);
+  const startDrawing = (fromId = null, edit = null) => {
+    setSelectedId(null);
+    setClusterFocus(null);
+    setActiveConst(null);
+    setSheetOpen(false);
+    setTab("stars");
+    setDrawing(edit
+      ? { editId: edit.id, ids: [...edit.ids], name: edit.name, color: edit.color, naming: false }
+      : { editId: null, ids: fromId != null ? [fromId] : [], name: "", color: CONSTELLATION_COLORS[consts.list.length % CONSTELLATION_COLORS.length], naming: false });
+  };
+  // While drawing, tapping a star adds it to the shape instead of opening the song
+  const tapStar = (id) => {
+    if (id == null) return;
+    setDrawing((d) => {
+      if (!d || d.naming || d.ids[d.ids.length - 1] === id || d.ids.length >= MAX_STARS) return d;
+      return { ...d, ids: [...d.ids, id] };
+    });
+  };
+  const finishDrawing = async () => {
+    const d = drawing;
+    if (!d || d.ids.length < 2) return;
+    const stars = d.ids.map((id) => byId[id]).filter(Boolean).map((t) => ({ artist: t.artist || "", title: t.title }));
+    const name = d.name.trim() || `Constellation ${consts.list.length + 1}`;
+    const id = d.editId || Math.random().toString(36).slice(2, 10);
+    const old = consts.list.find((c) => c.id === id);
+    const entry = { id, name, color: d.color, stars, created: old?.created || Date.now() / 1000 };
+    const next = old ? consts.list.map((c) => (c.id === id ? entry : c)) : [...consts.list, entry];
+    setDrawing(null);
+    setShowConsts(true);
+    await consts.save(next);
+    setActiveConst(id);
+  };
+  const activeShape = drawnConsts.find((c) => c.id === activeConst);
+  const mapFocus = useMemo(
+    () => (tab === "stars" && activeShape && selectedId == null && clusterFocus == null ? new Set(activeShape.ids) : focusIds),
+    [tab, activeShape, selectedId, clusterFocus, focusIds],
+  );
+  const pickConst = (c) => {
+    setSelectedId(null);
+    setClusterFocus(null);
+    if (activeConst === c.id) { setActiveConst(null); return; }
+    setActiveConst(c.id);
+    setShowConsts(true);
+    setConstFrame({ key: `${c.id}:${Date.now()}`, ids: c.ids });
+  };
   const [welcomeHidden, setWelcomeHidden] = useState(true);
   useEffect(() => {
     try { setWelcomeHidden(!!window.localStorage.getItem("sm-welcome-hidden")); } catch { setWelcomeHidden(false); }
@@ -496,7 +555,7 @@ export default function MapExplorer() {
 
       {sharing && data && (
         <ShareDialog
-          data={data}
+          data={consts.list.length ? { ...data, constellations: consts.list } : data}
           weights={mapWeightsRef.current}
           source={source || {}}
           defaultTitle={shared ? shared.title : undefined}
@@ -515,12 +574,16 @@ export default function MapExplorer() {
           <Graph3D
             data={data}
             selectedId={selectedId ?? (tab === "radio" ? playingId : null)}
-            focusIds={focusIds}
+            focusIds={mapFocus}
             focusCluster={clusterFocus}
             picks={picks}
             mode={tab}
             colorOf={lens.colorOf}
-            onSelect={(id) => { setSelectedId(id); if (id != null) setClusterFocus(null); }}
+            constellations={showConsts || drawing ? drawnConsts.filter((c) => c.id !== drawing?.editId) : null}
+            activeConstellation={tab === "stars" ? activeConst : null}
+            draft={drawing ? { ids: drawing.ids, color: drawing.color } : null}
+            frame={constFrame}
+            onSelect={(id) => { if (drawing) { tapStar(id); return; } setSelectedId(id); if (id != null) setClusterFocus(null); }}
           />
         )}
         {loading && !importJob && !uploading && <Centered><BuildProgress estimate={buildEstimate} /></Centered>}
@@ -574,7 +637,7 @@ export default function MapExplorer() {
 
           {/* Colour by */}
           {data && lenses.length > 1 && (
-            <div className={`absolute bottom-3 right-3 z-20 max-h-[40%] w-[170px] overflow-y-auto md:bottom-auto md:top-3 md:right-[400px] md:block md:max-h-none md:w-[220px] ${selected || (isSample && !welcomeHidden) ? "hidden" : sheetOpen ? "max-md:hidden" : ""} rounded-xl bg-black/30 px-3 py-2 text-[11px] text-gray-300 backdrop-blur`}>
+            <div className={`absolute bottom-3 right-3 z-20 max-h-[40%] w-[170px] overflow-y-auto md:bottom-auto md:top-3 md:right-[400px] md:block md:max-h-none md:w-[220px] ${selected || drawing || (isSample && !welcomeHidden) ? "hidden" : sheetOpen ? "max-md:hidden" : ""} rounded-xl bg-black/30 px-3 py-2 text-[11px] text-gray-300 backdrop-blur`}>
               <label className="flex items-center justify-between gap-2">
                 <span className="shrink-0 text-gray-400">Colour by</span>
                 <select value={lens.lens.id} onChange={(e) => setLensId(e.target.value)}
@@ -609,7 +672,7 @@ export default function MapExplorer() {
 
 
         {/* Legend */}
-        {data && !selected && !(isSample && !welcomeHidden) && (
+        {data && !selected && !drawing && !(isSample && !welcomeHidden) && (
           <div className="pointer-events-none absolute bottom-3 left-3 hidden space-y-1 rounded-xl bg-black/30 px-3 py-2 text-[11px] text-gray-300 backdrop-blur md:block">
             <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-violet-400" /> song (bigger = played more)</div>
             <div className="flex items-center gap-2"><span className="h-0.5 w-4 bg-fuchsia-300" /> hidden connection</div>
@@ -619,7 +682,7 @@ export default function MapExplorer() {
         )}
 
         {/* First visit: what am I looking at? */}
-        {isSample && !welcomeHidden && !pending && !importJob && !gate && !selected && (
+        {isSample && !welcomeHidden && !pending && !importJob && !gate && !selected && !drawing && (
           <div className="absolute bottom-3 left-3 z-20 w-[min(360px,calc(100%-24px))] rounded-2xl border border-fuchsia-400/25 bg-[#0b1121]/90 p-4 shadow-2xl backdrop-blur md:bottom-24">
             <div className="flex items-start justify-between gap-2">
               <div className="text-sm font-semibold text-white">This is someone else&apos;s music</div>
@@ -781,6 +844,14 @@ export default function MapExplorer() {
               >
                 ▶ Start radio from this song
               </button>
+              {consts.editable && (
+                <button
+                  onClick={() => startDrawing(selected.id)}
+                  className="ml-1.5 mt-2 rounded-md border border-sky-300/30 px-2 py-0.5 text-[11px] text-sky-200 hover:bg-sky-300/10"
+                >
+                  ✦ Start a constellation here
+                </button>
+              )}
               <div className="mt-2 flex flex-wrap gap-1">
                 {selected.genre && <Chip>{selected.genre}</Chip>}
                 {selected.key && <Chip>{selected.camelot ? `${selected.key} · ${selected.camelot}` : selected.key}</Chip>}
@@ -825,8 +896,19 @@ export default function MapExplorer() {
             </div>
           )}
 
+        {drawing && (
+          <DrawingBar
+            drawing={drawing}
+            byId={byId}
+            onChange={(patch) => setDrawing((d) => ({ ...d, ...patch }))}
+            onUndo={() => setDrawing((d) => ({ ...d, ids: d.ids.slice(0, -1) }))}
+            onSave={finishDrawing}
+            onCancel={() => setDrawing(null)}
+          />
+        )}
+
         {/* Phones: the panel is a small pop-up box behind this button */}
-        {data && !selected && !(isSample && !welcomeHidden) && (
+        {data && !selected && !drawing && !(isSample && !welcomeHidden) && (
           <button
             onClick={() => setSheetOpen((o) => !o)}
             aria-expanded={sheetOpen}
@@ -841,11 +923,11 @@ export default function MapExplorer() {
         {/* Side panel (desktop) / small pop-up box above its button (phones) */}
         <aside
           className={`absolute bottom-[3.75rem] left-3 z-30 h-[min(300px,45%)] w-[min(272px,calc(100%-24px))] flex-col rounded-2xl border border-white/10 bg-[#0b1121]/95 shadow-2xl shadow-black/50 backdrop-blur-md
-                      md:bottom-3 md:left-auto md:right-3 md:top-3 md:flex md:h-auto md:w-[380px] md:shadow-none ${sheetOpen && !selected ? "flex" : "hidden"}`}
+                      md:bottom-3 md:left-auto md:right-3 md:top-3 md:flex md:h-auto md:w-[380px] md:shadow-none ${sheetOpen && !selected && !drawing ? "flex" : "hidden"}`}
         >
           <div className="flex shrink-0 items-center border-b border-white/10">
           <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto p-1.5 [scrollbar-width:none]">
-            {TABS.filter((t) => (!t.needsSound || hasSound) && (!t.needsBlend || blend)).map((t) => (
+            {TABS.filter((t) => (!t.needsSound || hasSound) && (!t.needsBlend || blend) && (!t.noBlend || !blend)).map((t) => (
               <button
                 key={t.id}
                 onClick={() => { setTab(t.id); setSelectedId(null); setClusterFocus(null); setSheetOpen(true); }}
@@ -969,6 +1051,26 @@ export default function MapExplorer() {
               </>
             )}
 
+            {tab === "stars" && data && (
+              <ConstellationsPanel
+                shapes={drawnConsts}
+                total={consts.list.length}
+                editable={consts.editable}
+                where={constWhere}
+                signedIn={!!user}
+                error={consts.error}
+                active={activeConst}
+                show={showConsts}
+                byId={byId}
+                onShow={setShowConsts}
+                onPick={pickConst}
+                onSong={(id) => setSelectedId(id)}
+                onNew={() => startDrawing()}
+                onEdit={(c) => startDrawing(null, c)}
+                onDelete={(c) => { if (activeConst === c.id) setActiveConst(null); consts.save(consts.list.filter((x) => x.id !== c.id)); }}
+              />
+            )}
+
             {/* Kept mounted so the music keeps playing while you look at other tabs */}
             <div className={tab === "radio" ? "" : "hidden"}>
               {data && (
@@ -1090,7 +1192,7 @@ export default function MapExplorer() {
         </aside>
 
         {/* There's more below the map: say so until they scroll */}
-        {data && atTop && !pending && !importJob && !gate && (
+        {data && atTop && !pending && !importJob && !gate && !drawing && (
           <button
             onClick={() => document.getElementById("map-facts")?.scrollIntoView({ behavior: "smooth" })}
             className={`hidden md:flex absolute bottom-[84px] left-3 z-20 items-center md:-translate-x-1/2 gap-2 rounded-full border border-white/15 bg-[#0b1121]/80 px-4 py-2 text-xs font-medium text-gray-100 shadow-lg shadow-black/40 backdrop-blur transition hover:border-fuchsia-400/50 hover:text-white md:bottom-5 md:left-[calc((100%-400px)/2)]`}

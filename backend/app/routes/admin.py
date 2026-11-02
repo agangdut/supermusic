@@ -22,7 +22,7 @@ def require_admin(me: str = Depends(require_username)) -> str:
 # ---- reporting (anyone) -------------------------------------------------------------------
 
 class ReportRequest(BaseModel):
-    kind: str = Field(..., description="map, profile, pin or track")
+    kind: str = Field(..., description="map, profile, pin, track or constellation")
     target: str = Field(..., min_length=1, max_length=100, description="Share id, username, pin id or track id")
     reason: str = Field(..., description=", ".join(admin.REASONS))
     details: Optional[str] = Field(None, max_length=1000)

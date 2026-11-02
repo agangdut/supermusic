@@ -6,7 +6,7 @@ nothing extra to install or run. It survives restarts, unlike the old
 in-memory dictionaries.
 
 Tables:
-  users       accounts (username, bcrypt password hash, email)
+  users       accounts (username, bcrypt password hash, email, own-map constellations)
   songs       one row per song anyone has looked up or described (artist, title)
   song_facts  what an online lookup found for a song (BPM, key, energy, ...)
   song_votes  what listeners said a song's stats are (one row per listener per stat)
@@ -14,6 +14,7 @@ Tables:
   follows     who follows whom (usernames)
   events      what people did, for the feed (shared a map, a fix was agreed, ...)
   atlas_pins  notes people pinned on songs in the community atlas
+  atlas_constellations  constellations people proposed on the atlas (and the votes on them)
   artist_tracks  songs artists uploaded to see where they land on the atlas
   radio_plays stations people started, for the radio charts
   quiz_scores rounds of the music quiz, for its leaderboard
@@ -96,6 +97,22 @@ CREATE TABLE IF NOT EXISTS atlas_pins (
     created_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS atlas_pins_song ON atlas_pins (song_key);
+CREATE TABLE IF NOT EXISTS atlas_constellations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL,
+    song_keys TEXT NOT NULL,      -- JSON list of atlas song keys, in drawing order
+    author TEXT NOT NULL,         -- "user:<name>"
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS atlas_constellation_votes (
+    constellation_id INTEGER NOT NULL,
+    voter TEXT NOT NULL,          -- "user:<name>" or "anon:<browser id>"
+    ip_hash TEXT,
+    up INTEGER NOT NULL,          -- 1 yes, 0 no
+    created_at REAL NOT NULL,
+    PRIMARY KEY (constellation_id, voter)
+);
 CREATE TABLE IF NOT EXISTS artist_tracks (
     id TEXT PRIMARY KEY,
     owner TEXT,                   -- username, or NULL when uploaded signed out
@@ -168,6 +185,7 @@ _COLUMNS = [
     ("users", "library_csv", "TEXT"),   # the library behind "my map", for the digest and compare
     ("users", "library_title", "TEXT"),
     ("users", "is_artist", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "constellations", "TEXT"),  # JSON list of song constellations on their own map
 ]
 
 

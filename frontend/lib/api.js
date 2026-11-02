@@ -358,6 +358,10 @@ export const atlasSong = (song_key) => apiFetch(`/atlas/song?song_key=${encodeUR
 export const atlasPins = () => apiFetch("/atlas/pins");
 export const addAtlasPin = ({ song_key, text, title }) => postJSON("/atlas/pins", { song_key, text, title });
 export const deleteAtlasPin = (id) => apiFetch(`/atlas/pins/${id}`, { method: "DELETE" });
+export const atlasConstellations = () => apiFetch("/atlas/constellations");
+export const proposeConstellation = ({ name, color, song_keys }) => postJSON("/atlas/constellations", { name, color, song_keys });
+export const voteConstellation = (id, up) => postJSON(`/atlas/constellations/${id}/vote`, { up });
+export const withdrawConstellation = (id) => apiFetch(`/atlas/constellations/${id}`, { method: "DELETE" });
 
 // --- Artists -----------------------------------------------------------------
 
