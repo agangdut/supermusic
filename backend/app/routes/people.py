@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from app.core import artist, checks, digest, games, map_share, social
+from app.core import artist, checks, constellations, digest, games, map_share, social
 from app.middleware.auth import current_username, require_username
 from app.routes.community import listener
 
@@ -123,6 +123,21 @@ async def set_my_library(req: LibraryRequest, me: str = Depends(require_username
         raise HTTPException(status_code=400, detail="That library can't be used.")
     social.set_library(me, str(path), req.title)
     return {"ok": True, "has_library": True}
+
+
+class ConstellationsRequest(BaseModel):
+    constellations: list = Field(default_factory=list, description="The whole list; it replaces the saved one.")
+
+
+@router.get("/me/constellations")
+async def my_constellations(me: str = Depends(require_username)) -> dict:
+    """Song constellations drawn on your own map, so every device you sign in on shows them."""
+    return {"constellations": await run_in_threadpool(constellations.for_user, me)}
+
+
+@router.put("/me/constellations")
+async def save_my_constellations(req: ConstellationsRequest, me: str = Depends(require_username)) -> dict:
+    return {"constellations": await run_in_threadpool(constellations.save_for_user, me, req.constellations)}
 
 
 @router.get("/leaderboards")

@@ -60,6 +60,28 @@ Press **Share** above the map to get a short link like `/?share=ASRLnVJ2`. Anyon
 - **Stopping.** There are no accounts yet, so the browser that shared a map keeps a secret key for it. *Shared maps* lists the maps shared from this browser with a **Stop sharing** button. Clearing the browser's site data loses that key.
 - **Where they're kept.** Each share is a folder in `data/shared_maps/` (the map, its settings, and a copy of the song list), so shares survive a restart. Only the sample, another share, or a CSV SuperMusic wrote itself can be copied into a share.
 
+## Constellations
+
+Join songs on your map with lines into a named shape, like a star sign: a mood, a memory,
+a playlist. Open the **Constellations** tab, tap **New constellation** (or **Start a
+constellation here** on a song's card), tap stars one after another, then **Done**, pick
+a name and a colour and **Save**. Tap a saved one to fly to it; **Edit** and **Delete**
+are under it. Up to 30 constellations of 2 to 40 stars each.
+
+- Songs are kept by artist and title, so a constellation survives re-importing or Remap.
+- Signed in, your own map's constellations are saved on your account (`GET/PUT
+  /me/constellations`), so every device shows them. Signed out, and on the sample map,
+  they stay in that browser.
+- Sharing a map includes its constellations; visitors see them but can't change them.
+
+**On the community atlas** anyone signed in can **Propose a constellation** across
+everyone's music (3 a day). Listeners vote yes or no, one vote each (signed in or this
+browser, at most 3 votes per network per proposal). With at least 5 votes and 80% yes it
+becomes **official** and is drawn on the atlas for everyone. The status follows the votes,
+so one that drops below 80% goes back to being a proposal. The proposer can take it down;
+anyone can report it to the admins. Code: `backend/app/core/constellations.py`,
+`frontend/components/map/ConstellationsPanel.js`, `frontend/lib/constellations.js`.
+
 ## Fix a song's stats (shared with everyone)
 
 Online lookups get songs wrong sometimes: a tempo read at double speed (180 BPM for a 90 BPM song), the wrong key, an artist's genre stamped on every song. Click a star, then **✎ Fix stats or add a vibe** to correct its tempo (with ½ and ×2 buttons), key, genre, energy, happiness, danceability, how acoustic it is and its year, or to tag its **vibe** ("late night", "gym", "rainy day"). For each stat the panel shows what the lookup found and where from, what other listeners agreed on, and your own answer, with **Undo** to take yours back.

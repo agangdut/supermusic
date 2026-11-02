@@ -11,11 +11,11 @@ const REASONS = [
   { id: "other", label: "Something else" },
 ];
 
-const NAMES = { map: "map", profile: "profile", pin: "note", track: "track" };
+const NAMES = { map: "map", profile: "profile", pin: "note", track: "track", constellation: "constellation" };
 
 /**
  * A small "Report" link that opens a box to tell the site's admins something breaks the rules.
- * kind: map | profile | pin | track; target: its id (share id, username, pin id, track id).
+ * kind: map | profile | pin | track | constellation; target: its id (share id, username, pin id, track id).
  */
 export default function ReportButton({ kind, target, className = "", label = "Report" }) {
   const [open, setOpen] = useState(false);

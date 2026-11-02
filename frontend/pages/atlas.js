@@ -8,7 +8,10 @@ import PageShell from "@/components/layout/PageShell";
 import { clusterName, colorFor } from "@/components/map/colors";
 import { ago } from "@/components/social/EventLine";
 import ReportButton from "@/components/social/ReportButton";
-import { addAtlasPin, atlasMine, atlasPins, atlasSong, deleteAtlasPin, getAtlas, myMap } from "@/lib/api";
+import { addAtlasPin, atlasConstellations, atlasMine, atlasPins, atlasSong, deleteAtlasPin, getAtlas, myMap,
+  proposeConstellation, voteConstellation, withdrawConstellation } from "@/lib/api";
+import { AtlasConstellationsPanel, DrawingBar } from "@/components/map/ConstellationsPanel";
+import { CONSTELLATION_COLORS, MAX_STARS } from "@/lib/constellations";
 import { listenerId } from "@/utils/fetcher";
 import { useAuth } from "@/lib/auth";
 
@@ -16,6 +19,7 @@ const Graph3D = dynamic(() => import("@/components/map/Graph3D"), { ssr: false }
 
 const TABS = [
   { id: "galaxies", label: "Galaxies" },
+  { id: "stars", label: "Constellations" },
   { id: "notes", label: "Notes" },
   { id: "artists", label: "New from artists" },
 ];
@@ -109,6 +113,85 @@ export default function Atlas() {
   }, [data, router.query.track]);
 
   const byKey = useMemo(() => Object.fromEntries((data?.tracks || []).map((t) => [t.song_key, t])), [data]);
+
+  // Constellations: official ones are drawn for everyone; proposals show when you pick them
+  const [consts, setConsts] = useState({ constellations: [], rule: null });
+  const [constError, setConstError] = useState(null);
+  const [activeConst, setActiveConst] = useState(null);
+  const [showConsts, setShowConsts] = useState(true);
+  const [constFrame, setConstFrame] = useState(null);
+  const [drawing, setDrawing] = useState(null);
+  const [proposing, setProposing] = useState(false);
+  const loadConsts = () => atlasConstellations().then(setConsts).catch(() => {});
+  useEffect(() => { loadConsts(); }, []);
+  const constItems = useMemo(() => consts.constellations
+    .map((c) => ({ ...c, ids: c.song_keys.map((k) => byKey[k]?.id).filter((id) => id != null) }))
+    .filter((c) => c.ids.length >= 2), [consts, byKey]);
+  const pickConst = (c) => {
+    setSelectedId(null);
+    setClusterFocus(null);
+    setMine(null);
+    if (activeConst === c.id) { setActiveConst(null); return; }
+    setActiveConst(c.id);
+    setConstFrame({ key: `${c.id}:${Date.now()}`, ids: c.ids });
+  };
+  // /atlas?constellation=<id> (from the feed): open it
+  useEffect(() => {
+    const id = Number(router.query.constellation);
+    const c = id && constItems.find((x) => x.id === id);
+    if (c && activeConst == null) { setTab("stars"); pickConst(c); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [constItems, router.query.constellation]);
+  const voteOn = async (c, up) => {
+    setConstError(null);
+    try {
+      const r = await voteConstellation(c.id, up);
+      setConsts((s) => ({ ...s, constellations: s.constellations.map((x) => (x.id === c.id ? r : x)) }));
+    } catch (e) {
+      setConstError(e.message || String(e));
+    }
+  };
+  const withdraw = async (c) => {
+    if (!window.confirm(`Take down "${c.name}"? Its votes go with it.`)) return;
+    try {
+      await withdrawConstellation(c.id);
+      if (activeConst === c.id) setActiveConst(null);
+      loadConsts();
+    } catch (e) {
+      setConstError(e.message || String(e));
+    }
+  };
+  const startProposing = () => {
+    setSelectedId(null); setClusterFocus(null); setMine(null); setActiveConst(null); setSheetOpen(false);
+    setDrawing({ ids: [], name: "", color: CONSTELLATION_COLORS[consts.constellations.length % CONSTELLATION_COLORS.length], naming: false, title: "Propose a constellation" });
+  };
+  const tapStar = (id) => {
+    if (id == null) return;
+    setDrawing((d) => (!d || d.naming || d.ids[d.ids.length - 1] === id || d.ids.length >= MAX_STARS ? d : { ...d, ids: [...d.ids, id] }));
+  };
+  const submitProposal = async () => {
+    const d = drawing;
+    if (!d || d.ids.length < 2 || !d.name.trim()) { setConstError("Give your constellation a name."); return; }
+    setProposing(true);
+    setConstError(null);
+    try {
+      const made = await proposeConstellation({ name: d.name.trim(), color: d.color, song_keys: d.ids.map((id) => data.tracks[id].song_key) });
+      setDrawing(null);
+      setTab("stars");
+      setSheetOpen(true);
+      setConsts((s) => ({ ...s, constellations: [...s.constellations, made] }));
+      setActiveConst(made.id);
+    } catch (e) {
+      setConstError(e.message || String(e));
+    } finally {
+      setProposing(false);
+    }
+  };
+  const shownConsts = useMemo(
+    () => constItems.filter((c) => (showConsts && c.status === "official") || (tab === "stars" && c.id === activeConst)),
+    [constItems, showConsts, tab, activeConst],
+  );
+  const activeShape = tab === "stars" ? constItems.find((c) => c.id === activeConst) : null;
   const selected = selectedId != null ? data?.tracks[selectedId] : null;
   const focusIds = useMemo(() => {
     if (!data) return null;
@@ -119,8 +202,9 @@ export default function Atlas() {
     }
     if (clusterFocus != null) return new Set(data.tracks.filter((t) => t.cluster === clusterFocus).map((t) => t.id));
     if (mine?.ids.size) return mine.ids;
+    if (activeShape) return new Set(activeShape.ids);
     return null;
-  }, [data, selectedId, clusterFocus, mine]);
+  }, [data, selectedId, clusterFocus, mine, activeShape]);
 
   // Light up a library's songs: the sample, or the one you imported on the map
   const lightUp = async (which) => {
@@ -152,7 +236,9 @@ export default function Atlas() {
       <section className="relative h-[calc(100svh-3.25rem-env(safe-area-inset-bottom))] min-h-[420px] overflow-hidden bg-[radial-gradient(ellipse_at_center,_#1a1440_0%,_#0b1121_55%,_#05070f_100%)] md:h-[calc(100vh-3.5rem)]">
         {data && !empty && (
           <Graph3D data={data} selectedId={selectedId} focusIds={focusIds} highlightIds={mine?.ids} focusCluster={clusterFocus} picks={[]} mode="clusters"
-            onSelect={(id) => { setSelectedId(id); if (id != null) { setClusterFocus(null); setSheetOpen(false); } }} />
+            constellations={shownConsts} activeConstellation={activeShape?.id ?? null} frame={constFrame}
+            draft={drawing ? { ids: drawing.ids, color: drawing.color } : null}
+            onSelect={(id) => { if (drawing) { tapStar(id); return; } setSelectedId(id); if (id != null) { setClusterFocus(null); setSheetOpen(false); } }} />
         )}
         {!data && !error && <div className="absolute inset-0 grid place-items-center text-sm text-gray-400">Drawing everyone&apos;s music…</div>}
         {empty && (
@@ -208,8 +294,22 @@ export default function Atlas() {
 
         {selected && <SongCard t={selected} onClose={() => setSelectedId(null)} />}
 
+        {drawing && (
+          <DrawingBar
+            drawing={drawing}
+            byId={data.tracks}
+            onChange={(patch) => setDrawing((d) => ({ ...d, ...patch }))}
+            onUndo={() => setDrawing((d) => ({ ...d, ids: d.ids.slice(0, -1) }))}
+            onSave={submitProposal}
+            onCancel={() => { setDrawing(null); setConstError(null); }}
+            saveLabel="Propose it"
+            busy={proposing}
+            saveNote={constError || `Everyone can vote on it. With ${consts.rule?.min_votes ?? 5}+ votes and ${Math.round((consts.rule?.approve_share ?? 0.8) * 100)}% yes, it becomes official.`}
+          />
+        )}
+
         {/* Phones: the panel is a small pop-up box behind this button */}
-        {data && !empty && !selected && (
+        {data && !empty && !selected && !drawing && (
           <button
             onClick={() => setSheetOpen((o) => !o)}
             aria-expanded={sheetOpen}
@@ -222,7 +322,7 @@ export default function Atlas() {
         )}
 
         {data && !empty && (
-          <aside className={`absolute bottom-[3.75rem] left-3 z-20 h-[min(300px,45%)] w-[min(272px,calc(100%-24px))] flex-col rounded-2xl border border-white/10 bg-[#0b1121]/95 shadow-2xl shadow-black/50 backdrop-blur-md md:bottom-3 md:left-auto md:right-3 md:top-3 md:flex md:h-auto md:w-[340px] md:shadow-none ${sheetOpen && !selected ? "flex" : "hidden"}`}>
+          <aside className={`absolute bottom-[3.75rem] left-3 z-20 h-[min(300px,45%)] w-[min(272px,calc(100%-24px))] flex-col rounded-2xl border border-white/10 bg-[#0b1121]/95 shadow-2xl shadow-black/50 backdrop-blur-md md:bottom-3 md:left-auto md:right-3 md:top-3 md:flex md:h-auto md:w-[340px] md:shadow-none ${sheetOpen && !selected && !drawing ? "flex" : "hidden"}`}>
             <div className="flex items-center border-b border-white/10">
             <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto p-1.5 [scrollbar-width:none]">
               {TABS.map((t) => (
@@ -249,6 +349,22 @@ export default function Atlas() {
                   {c.top_artists?.length > 0 && <div className="truncate text-[11px] text-gray-500">{c.top_artists.slice(0, 3).map((a) => a.name).join(", ")}</div>}
                 </button>
               ))}
+              {tab === "stars" && (
+                <AtlasConstellationsPanel
+                  items={constItems}
+                  rule={consts.rule}
+                  active={activeConst}
+                  me={user?.username}
+                  signedIn={!!user}
+                  show={showConsts}
+                  onShow={setShowConsts}
+                  onPick={pickConst}
+                  onVote={voteOn}
+                  onPropose={startProposing}
+                  onWithdraw={withdraw}
+                  error={drawing ? null : constError}
+                />
+              )}
               {tab === "notes" && (
                 <>
                   {pins?.length === 0 && <p className="text-xs text-gray-500">No notes yet. Click a star and pin one.</p>}

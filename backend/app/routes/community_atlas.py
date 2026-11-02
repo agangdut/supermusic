@@ -10,9 +10,9 @@ from app.core import jobs
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from app.core import artist, atlas, checks, games, social
+from app.core import artist, atlas, checks, community, constellations, games, social
 from app.middleware.auth import current_username, require_username
-from app.routes.community import listener
+from app.routes.community import client_ip, listener
 
 router = APIRouter(tags=["atlas"])
 
@@ -100,6 +100,59 @@ async def delete_pin(pin_id: int, voter: Optional[str] = Depends(listener)) -> d
     if not voter or not atlas.delete_pin(pin_id, voter):
         raise HTTPException(status_code=403, detail="You can only remove your own notes.")
     return {"deleted": pin_id}
+
+
+# ---- constellations people propose and vote on ---------------------------------------------
+
+@router.get("/atlas/constellations")
+async def atlas_constellations(voter: Optional[str] = Depends(listener)) -> dict:
+    """Official constellations and open proposals, with yes/no counts and your own vote."""
+    return {
+        "constellations": await run_in_threadpool(constellations.proposals, voter),
+        "rule": {"min_votes": constellations.MIN_VOTES, "approve_share": constellations.APPROVE_SHARE},
+    }
+
+
+class ProposeRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=constellations.NAME_MAX)
+    color: Optional[str] = None
+    song_keys: list = Field(..., description="Atlas song keys, in the order the lines join them.")
+
+
+@router.post("/atlas/constellations", dependencies=[Depends(jobs.rate_limit("constellations", 20))])
+async def propose_constellation(req: ProposeRequest, me: str = Depends(require_username)) -> dict:
+    """Propose a constellation. It becomes official once enough listeners vote yes."""
+    try:
+        made = await run_in_threadpool(constellations.propose, f"user:{me}", req.name, req.color, req.song_keys)
+    except constellations.ProposalError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    social.log(me, "proposed_constellation", None, {"id": made["id"], "name": made["name"]})
+    return made
+
+
+class ConstellationVote(BaseModel):
+    up: Optional[bool] = Field(None, description="true = yes, false = no, null = take your vote back")
+
+
+@router.post("/atlas/constellations/{proposal_id}/vote", dependencies=[Depends(jobs.rate_limit("votes", 120))])
+async def vote_constellation(proposal_id: int, req: ConstellationVote, request: Request,
+                             voter: Optional[str] = Depends(listener)) -> dict:
+    if not voter:
+        raise HTTPException(status_code=400, detail="Sign in or send an X-Listener-Id header to vote.")
+    try:
+        return await run_in_threadpool(constellations.vote, proposal_id, voter,
+                                       community.ip_hash(client_ip(request)), req.up)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="That constellation is gone.")
+    except constellations.ProposalError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/atlas/constellations/{proposal_id}")
+async def withdraw_constellation(proposal_id: int, me: str = Depends(require_username)) -> dict:
+    if not await run_in_threadpool(constellations.withdraw, proposal_id, f"user:{me}"):
+        raise HTTPException(status_code=403, detail="You can only take down your own constellations.")
+    return {"deleted": proposal_id}
 
 
 # ---- artists -------------------------------------------------------------------------------

@@ -22,9 +22,9 @@ import time
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-from app.core import artist, map_share, social, store
+from app.core import artist, constellations, map_share, social, store
 
-KINDS = ("map", "profile", "pin", "track")
+KINDS = ("map", "profile", "pin", "track", "constellation")
 REASONS = {
     "spam": "Spam or advertising",
     "offensive": "Hateful, abusive or sexual",
@@ -75,6 +75,15 @@ def _target(kind: str, target: str) -> Optional[Dict[str, Any]]:
             return None
         return {"title": t.get("title"), "by": t.get("artist"), "owner": t.get("owner"),
                 "listed": bool(t.get("public")), "link": f"/atlas?track={target}"}
+    if kind == "constellation":
+        if not str(target).isdigit():
+            return None
+        r = store.connect().execute("SELECT * FROM atlas_constellations WHERE id = ?", (int(target),)).fetchone()
+        if not r:
+            return None
+        a = r["author"]
+        return {"title": r["name"], "owner": a[5:] if a.startswith("user:") else None, "author": a,
+                "link": f"/atlas?constellation={target}"}
     return None
 
 
@@ -147,6 +156,8 @@ def remove(kind: str, target: str) -> bool:
         return str(target).isdigit() and c.execute("DELETE FROM atlas_pins WHERE id = ?", (int(target),)).rowcount > 0
     if kind == "track":
         return c.execute("DELETE FROM artist_tracks WHERE id = ?", (target,)).rowcount > 0
+    if kind == "constellation":
+        return str(target).isdigit() and constellations.remove(int(target))
     return False
 
 

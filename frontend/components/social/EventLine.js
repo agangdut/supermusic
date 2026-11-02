@@ -49,6 +49,10 @@ export default function EventLine({ e, me }) {
       icon = "📌";
       text = <>{you(e.actor)} pinned a note on <Link href="/atlas" className="text-fuchsia-200 hover:underline">{d.title || "a song"}</Link>: <span className="text-gray-300">&ldquo;{d.text}&rdquo;</span></>;
       break;
+    case "proposed_constellation":
+      icon = "✦";
+      text = <>{you(e.actor)} proposed a constellation on the atlas: <Link href={`/atlas?constellation=${d.id}`} className="text-sky-200 hover:underline">{d.name}</Link>. Vote on it!</>;
+      break;
     case "artist_track":
       icon = "🎤";
       text = <>{you(e.actor)} put a new track on the atlas: <b className="text-white">{d.title}</b>{d.galaxy ? <> in <span className="text-fuchsia-200">{d.galaxy}</span></> : null}</>;
